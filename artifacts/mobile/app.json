@@ -3,6 +3,11 @@
     "name": "Mabhazi.com",
     "slug": "mabhazicom",
     "owner": "herrts-team",
+    "extra": {
+      "eas": {
+        "projectId": "64c1d97a-2f93-4807-b87f-25eaff7d32d8"
+      }
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
