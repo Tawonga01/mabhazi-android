@@ -1,0 +1,17 @@
+{
+  "name": "@workspace/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "hello": "tsx ./src/hello.ts",
+    "build:preflight": "node ../artifacts/mobile/scripts/release-preflight.js --release",
+    "runtime:preflight": "tsx ../artifacts/api-server/src/preflight.ts",
+    "release:test": "tsx ./src/release-regressions.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}

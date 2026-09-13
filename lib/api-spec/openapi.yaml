@@ -1,0 +1,1394 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: journeys
+    description: Bus journey operations
+  - name: Legal
+    description: Public privacy, terms, support, and account deletion surfaces.
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success or /api/login on failure.
+
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token did not contain usable claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  /journeys:
+    get:
+      operationId: searchJourneys
+      tags: [journeys]
+      summary: Search for bus journeys
+      parameters:
+        - name: fromCity
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: toCity
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: day
+          in: query
+          required: false
+          description: Filter by day of week, e.g. "Mon"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of matching journeys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneysEnvelope"
+    post:
+      operationId: createJourney
+      tags: [journeys]
+      summary: Contribute a new bus journey
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJourneyBody"
+      responses:
+        "201":
+          description: Journey created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Journey"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /journeys/{id}/rate:
+    post:
+      operationId: rateJourney
+      tags: [journeys]
+      summary: Rate the accuracy of a bus journey
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RateJourneyBody"
+      responses:
+        "200":
+          description: Rating saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateJourneyResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /journeys/{id}/confirm:
+    post:
+      operationId: confirmJourney
+      tags: [journeys]
+      summary: Confirm that a journey is currently operating
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Community confirmation recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfirmJourneyResult"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Journey not found
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /journeys/{id}/claims:
+    post:
+      operationId: submitJourneyClaim
+      tags: [journeys]
+      summary: Submit a structured correction or observation about a journey
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyClaimInput"
+      responses:
+        "201":
+          description: Journey claim recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyClaimResult"
+        "400":
+          description: Invalid claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Journey not found
+
+  /journeys/{id}/details:
+    get:
+      operationId: getJourneyDetails
+      tags: [journeys]
+      summary: Get community details for a bus journey
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Community comments and aggregate trip reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyDetails"
+        "404":
+          description: Journey not found
+
+  /journeys/{id}/reports:
+    post:
+      operationId: submitJourneyReport
+      tags: [journeys]
+      summary: Submit a trip observation about a journey
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitJourneyReportBody"
+      responses:
+        "201":
+          description: Trip observation recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "400":
+          description: Invalid report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /journeys/{id}/abuse-reports:
+    post:
+      operationId: submitAbuseReport
+      tags: [journeys]
+      summary: Report objectionable journey, comment, or contributor content
+      description: Safety exception — abuse reports remain available to authenticated users without accepting the current community-contribution terms.
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AbuseReportBody"
+      responses:
+        "201":
+          description: Abuse report recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbuseReportResult"
+        "400":
+          description: Invalid abuse report or target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized
+        "404":
+          description: Journey, comment, or contributor not found
+
+  /users/display-name:
+    patch:
+      operationId: updateDisplayName
+      tags: [Auth]
+      summary: Update the current user's display name (once per 30 days)
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDisplayNameBody"
+      responses:
+        "200":
+          description: Display name updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateDisplayNameResult"
+        "400":
+          description: Invalid name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit — changed too recently
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateDisplayNameRateLimitError"
+
+  /privacy:
+    get:
+      operationId: getPrivacyNotice
+      tags: [Legal]
+      summary: Get the public Mabhazi privacy notice
+      responses:
+        "200":
+          description: Privacy notice
+          content:
+            text/html:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalSummary"
+
+  /terms:
+    get:
+      operationId: getTerms
+      tags: [Legal]
+      summary: Get the public Mabhazi terms of use
+      responses:
+        "200":
+          description: Terms of use
+          content:
+            text/html:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalSummary"
+
+  /terms/status:
+    get:
+      operationId: getTermsAcceptanceStatus
+      tags: [Legal]
+      summary: Get the current terms version and this user's acceptance status
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        "200":
+          description: Current terms version and acceptance status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsAcceptanceStatus"
+
+  /terms/accept:
+    post:
+      operationId: acceptTerms
+      tags: [Legal]
+      summary: Accept the current version of the Mabhazi Terms
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TermsAcceptanceBody"
+      responses:
+        "200":
+          description: Current terms accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TermsAcceptanceStatus"
+        "400":
+          description: Missing terms version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Submitted version is obsolete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /support:
+    get:
+      operationId: getSupport
+      tags: [Legal]
+      summary: Get public Mabhazi support and reporting guidance
+      responses:
+        "200":
+          description: Support guidance
+          content:
+            text/html:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportSummary"
+
+  /delete-account:
+    get:
+      operationId: getDeleteAccountPage
+      tags: [Legal]
+      summary: Get the public account deletion page
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        "200":
+          description: Account deletion page or sign-in prompt
+          content:
+            text/html:
+              schema:
+                type: string
+    post:
+      operationId: deleteMabhaziAccount
+      tags: [Legal]
+      summary: Permanently delete the authenticated Mabhazi account and account-linked data
+      description: Requires an explicit confirmation phrase. Browser-cookie requests also require the same-origin CSRF token issued by GET /delete-account. Shared route records can remain only after contributor attribution is anonymized.
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountBody"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountBody"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteAccountResult"
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Confirmation phrase missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Browser CSRF token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Deletion failed and was rolled back
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /cities:
+    get:
+      operationId: listCities
+      tags: [journeys]
+      summary: Search known cities (OSM-seeded reference data)
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Search query — returns cities whose name starts with or contains this string (case-insensitive). Returns up to 10 results.
+      responses:
+        "200":
+          description: List of matching city names
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CitiesEnvelope"
+
+  /associations/pending:
+    get:
+      operationId: getPendingAssociations
+      tags: [journeys]
+      summary: Get pending route association proposals for the current user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        "200":
+          description: List of pending proposals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposedAssociationsEnvelope"
+        "401":
+          description: Unauthorized
+
+  /associations/resolved:
+    get:
+      operationId: getResolvedAssociations
+      tags: [journeys]
+      summary: Get confirmed route associations for the current user's routes
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        "200":
+          description: Confirmed proposals that can be reversed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProposedAssociationsEnvelope"
+        "401":
+          description: Unauthorized
+
+  /associations/{id}/confirm:
+    post:
+      operationId: confirmAssociation
+      tags: [journeys]
+      summary: Confirm a proposed route association
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Association confirmed and stop added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Proposal not found
+        "409":
+          description: Proposal already resolved
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /associations/{id}/reject:
+    post:
+      operationId: rejectAssociation
+      tags: [journeys]
+      summary: Reject a proposed route association
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Association rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Proposal not found
+        "409":
+          description: Proposal already resolved
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /associations/{id}/reverse:
+    post:
+      operationId: reverseAssociation
+      tags: [journeys]
+      summary: Reverse a previously confirmed route association
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Association reversed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessEnvelope"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Proposal not found
+        "409":
+          description: Association is not confirmed
+        "428":
+          description: Current terms acceptance required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /bus-companies:
+    get:
+      operationId: listBusCompanies
+      tags: [journeys]
+      summary: List all active bus companies
+      responses:
+        "200":
+          description: List of active bus companies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusCompaniesEnvelope"
+
+components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      description: Opaque session token — Bearer <sid>.
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      description: Browser session cookie.
+      schema:
+        type: string
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl, displayName, lastNameChange]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+        displayName:
+          type: [string, 'null']
+        lastNameChange:
+          type: [string, 'null']
+          format: date-time
+
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        currentVersion:
+          type: string
+
+    TermsAcceptanceBody:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    TermsAcceptanceStatus:
+      type: object
+      required: [currentVersion, acceptedVersion, acceptedAt, requiresAcceptance]
+      properties:
+        currentVersion:
+          type: string
+        acceptedVersion:
+          type: [string, 'null']
+        acceptedAt:
+          type: [string, 'null']
+          format: date-time
+        requiresAcceptance:
+          type: boolean
+
+    LegalSummary:
+      type: object
+      required: [title, operator, contactEmail, country, content]
+      properties:
+        title:
+          type: string
+        version:
+          type: string
+        operator:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        country:
+          type: [string, 'null']
+        content:
+          type: string
+
+    SupportSummary:
+      type: object
+      required: [title, operator, contactEmail, reportContent, reportUsers, blockUsers]
+      properties:
+        title:
+          type: string
+        operator:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        reportContent:
+          type: boolean
+        reportUsers:
+          type: boolean
+        blockUsers:
+          type: boolean
+
+    DeleteAccountBody:
+      type: object
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          description: Must equal DELETE MY ACCOUNT.
+          enum: ["DELETE MY ACCOUNT"]
+        csrfToken:
+          type: string
+
+    DeleteAccountResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    JourneyStop:
+      type: object
+      required: [id, city, sequence]
+      properties:
+        id:
+          type: integer
+        city:
+          type: string
+        arrivalTime:
+          type: [string, 'null']
+        departureTime:
+          type: [string, 'null']
+        sequence:
+          type: integer
+        sourceAssociationId:
+          type: [integer, 'null']
+
+    CreateJourneyStop:
+      type: object
+      required: [city]
+      properties:
+        city:
+          type: string
+          minLength: 1
+        arrivalTime:
+          type: string
+        departureTime:
+          type: string
+
+    Journey:
+      type: object
+      required: [id, fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price, contributorId, contributorName, dataStatus, confidenceScore, confirmationCount, lastConfirmedAt, createdAt, averageRating, ratingCount, userRating, stops]
+      properties:
+        id:
+          type: integer
+        fromCity:
+          type: string
+        toCity:
+          type: string
+        departureTime:
+          type: string
+        arrivalTime:
+          type: string
+        scheduledDays:
+          type: string
+        busCompany:
+          type: string
+        pickupPoint:
+          type: string
+        dropoffPoint:
+          type: string
+        price:
+          type: number
+        contributorId:
+          type: [string, 'null']
+        contributorName:
+          type: string
+        dataStatus:
+          type: string
+          enum: [active, uncertain, inactive]
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confirmationCount:
+          type: integer
+          minimum: 0
+        lastConfirmedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+        averageRating:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+        userRating:
+          type: [integer, 'null']
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/JourneyStop"
+
+    JourneysEnvelope:
+      type: object
+      required: [journeys]
+      properties:
+        journeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/Journey"
+
+    CreateJourneyBody:
+      type: object
+      required: [fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price]
+      properties:
+        fromCity:
+          type: string
+          minLength: 1
+        toCity:
+          type: string
+          minLength: 1
+        departureTime:
+          type: string
+          minLength: 1
+        arrivalTime:
+          type: string
+          minLength: 1
+        scheduledDays:
+          type: string
+          minLength: 1
+        busCompany:
+          type: string
+          minLength: 1
+        pickupPoint:
+          type: string
+          minLength: 1
+        dropoffPoint:
+          type: string
+          minLength: 1
+        price:
+          type: number
+          minimum: 0
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateJourneyStop"
+
+    JourneyComment:
+      type: object
+      required: [id, userId, authorName, content, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: [string, 'null']
+        authorName:
+          type: [string, 'null']
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    JourneyDetails:
+      type: object
+      required: [comments, priceToday, priceYesterday, badTreatmentCount, breakdownCount, delays]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/JourneyComment"
+        priceToday:
+          type: [number, 'null']
+        priceYesterday:
+          type: [number, 'null']
+        badTreatmentCount:
+          type: integer
+        breakdownCount:
+          type: integer
+        delays:
+          type: object
+          required: [count, avgMinutes]
+          properties:
+            count:
+              type: integer
+            avgMinutes:
+              type: [number, 'null']
+
+    SubmitJourneyReportBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [comment, bad_treatment, breakdown, departure_delay, price]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 500
+        minutesLate:
+          type: integer
+          minimum: 0
+          maximum: 999
+        reportedPrice:
+          type: number
+          minimum: 0
+
+    AbuseReportBody:
+      type: object
+      required: [targetType, targetId, reason]
+      properties:
+        targetType:
+          type: string
+          enum: [journey, comment, user]
+        targetId:
+          oneOf:
+            - type: string
+            - type: integer
+        reason:
+          type: string
+          enum: [sexual_content, violent_content, harassment, hate_speech, spam, personal_information, misleading, other]
+        details:
+          type: string
+          maxLength: 1000
+
+    AbuseReportResult:
+      type: object
+      required: [success, reportId]
+      properties:
+        success:
+          type: boolean
+          const: true
+        reportId:
+          type: integer
+
+    RateJourneyBody:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+
+    RateJourneyResult:
+      type: object
+      required: [averageRating, ratingCount, userRating]
+      properties:
+        averageRating:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+        userRating:
+          type: integer
+
+    ConfirmJourneyResult:
+      type: object
+      required: [success, confidenceScore, confirmationCount, lastConfirmedAt]
+      properties:
+        success:
+          type: boolean
+          const: true
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confirmationCount:
+          type: integer
+          minimum: 0
+        lastConfirmedAt:
+          type: string
+          format: date-time
+
+    JourneyClaimInput:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
+        value:
+          type: object
+          required: [text]
+          properties:
+            text:
+              type: string
+              minLength: 1
+              maxLength: 240
+            reportedPrice:
+              type: number
+              minimum: 0
+
+    JourneyClaimResult:
+      type: object
+      required: [success, claimId, type, status, createdAt]
+      properties:
+        success:
+          type: boolean
+          const: true
+        claimId:
+          type: integer
+        type:
+          type: string
+          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
+        status:
+          type: string
+          enum: [active, disputed, superseded]
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateDisplayNameBody:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 30
+
+    UpdateDisplayNameResult:
+      type: object
+      required: [displayName, lastNameChange, nextChangeAvailable]
+      properties:
+        displayName:
+          type: string
+        lastNameChange:
+          type: string
+          format: date-time
+        nextChangeAvailable:
+          type: string
+          format: date-time
+
+    UpdateDisplayNameRateLimitError:
+      type: object
+      required: [error, nextChangeAvailable]
+      properties:
+        error:
+          type: string
+        nextChangeAvailable:
+          type: string
+          format: date-time
+
+    CitiesEnvelope:
+      type: object
+      required: [cities]
+      properties:
+        cities:
+          type: array
+          items:
+            type: string
+
+    BusCompany:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    BusCompaniesEnvelope:
+      type: object
+      required: [companies]
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusCompany"
+
+    SuccessEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    ProposedAssociation:
+      type: object
+      required: [id, candidateJourneyId, parentJourneyId, proposedStopCity, relationType, confidenceScore, evidence, status, proposedAt, resolvedAt, parentFromCity, parentToCity, parentDepartureTime, parentArrivalTime, parentBusCompany]
+      properties:
+        id:
+          type: integer
+        candidateJourneyId:
+          type: integer
+        parentJourneyId:
+          type: integer
+        proposedStopCity:
+          type: string
+        proposedStopTime:
+          type: [string, 'null']
+        relationType:
+          type: string
+          enum: [contains_stop, same_service, duplicate, correction]
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        evidence:
+          type: [object, 'null']
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, confirmed, rejected, reversed]
+        proposedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: [string, 'null']
+          format: date-time
+        parentFromCity:
+          type: string
+        parentToCity:
+          type: string
+        parentDepartureTime:
+          type: string
+        parentArrivalTime:
+          type: string
+        parentBusCompany:
+          type: string
+
+    ProposedAssociationsEnvelope:
+      type: object
+      required: [proposals]
+      properties:
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedAssociation"
