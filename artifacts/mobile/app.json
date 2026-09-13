@@ -2,6 +2,7 @@
   "expo": {
     "name": "Mabhazi.com",
     "slug": "mabhazicom",
+    "owner": "herrts-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

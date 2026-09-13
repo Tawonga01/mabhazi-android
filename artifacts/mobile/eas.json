@@ -1,0 +1,23 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "production": {
+      "distribution": "store",
+      "developmentClient": false,
+      "credentialsSource": "remote",
+      "autoIncrement": false,
+      "environment": "production",
+      "pnpm": "10.26.1",
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://mabhaziv-2.replit.app",
+        "EXPO_PUBLIC_REPL_ID": "fe7a35db-ee35-4fb1-ad14-8119fd506ab1"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "image": "latest"
+      }
+    }
+  }
+}
