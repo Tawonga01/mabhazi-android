@@ -64,9 +64,7 @@ function ClassicTabLayout() {
             borderTopWidth: 1,
             borderTopColor: colors.border,
             elevation: 8,
-            height: 60,
-            paddingBottom: 8,
-            paddingTop: 8,
+            // Let the navigator size the bar and reserve the Android system inset.
           }
         }),
         tabBarBackground: () =>
