@@ -1,7 +1,8 @@
 import pg from "pg";
 
 import { getAllowedOrigins } from "./lib/origins";
-const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "REPL_ID", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
+import { supabaseConfiguration } from "./lib/supabaseAuth";
+const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
 
 const requiredColumns: Record<string, readonly string[]> = {
   abuse_reports: [
@@ -82,6 +83,7 @@ export async function runProductionPreflight(
   }
 
   validateProductionOrigins(env);
+  supabaseConfiguration(env);
   await verifyDatabaseSchema(env.DATABASE_URL as string);
 }
 
