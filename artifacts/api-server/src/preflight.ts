@@ -1,7 +1,7 @@
 import pg from "pg";
 
-const PRODUCTION_ORIGIN = "https://mabhaziv-2.replit.app";
-const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "REPL_ID", "ADMIN_SECRET"] as const;
+import { getAllowedOrigins } from "./lib/origins";
+const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "REPL_ID", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
 
 const requiredColumns: Record<string, readonly string[]> = {
   abuse_reports: [
@@ -34,53 +34,9 @@ export function getMissingProductionEnvironment(
   return REQUIRED_ENVIRONMENT.filter((name) => !hasValue(env[name]));
 }
 
-function validateOrigin(value: string, name: string): void {
-  const candidate = /^[a-z][a-z\d+\-.]*:\/\//i.test(value)
-    ? value
-    : `https://${value}`;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
-  }
-
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username ||
-    parsed.password ||
-    parsed.pathname !== "/" ||
-    parsed.search ||
-    parsed.hash
-  ) {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
-  }
-}
-
-/**
- * Validate origin inputs without printing their values. The fixed production
- * origin remains the server fallback; any platform-provided origin is checked
- * so a malformed deployment cannot start with unusable OAuth redirects.
- */
-export function validateProductionOrigins(
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  validateOrigin(PRODUCTION_ORIGIN, "production origin");
-
-  for (const name of [
-    "PUBLIC_ORIGIN",
-    "EXPO_PUBLIC_API_BASE_URL",
-    "REPLIT_DEV_DOMAIN",
-    "REPLIT_EXPO_DEV_DOMAIN",
-  ] as const) {
-    const value = env[name]?.trim();
-    if (value) validateOrigin(value, name);
-  }
-
-  for (const value of env.REPLIT_DOMAINS?.split(",") ?? []) {
-    if (value.trim()) validateOrigin(value.trim(), "REPLIT_DOMAINS");
-  }
+/** Validate the exact same origin configuration used by callbacks and CORS. */
+export function validateProductionOrigins(env: NodeJS.ProcessEnv = process.env): void {
+  getAllowedOrigins({ ...env, NODE_ENV: "production" });
 }
 
 async function verifyDatabaseSchema(connectionString: string): Promise<void> {
