@@ -37,7 +37,7 @@ const canonicalDocuments: Record<
 > = {
   Privacy: {
     intro:
-      "This notice explains how Mabhazi uses information in its app and API. Mabhazi is separate from the Replit account that you may use to sign in.",
+      "This notice explains how Mabhazi uses information in its app and API. Mabhazi is separate from the Google account that you may use to sign in.",
     sections: [
       {
         title: "Operator and contact",
@@ -46,7 +46,7 @@ const canonicalDocuments: Record<
       {
         title: "Identity, hosting, and sign-in",
         body:
-          "Mabhazi is hosted on Replit and uses Replit Auth through OpenID Connect (OIDC) for sign-in. Replit supplies sign-in claims such as an account identifier, email address, name, and profile-image URL when available. Mabhazi creates and maintains a separate Mabhazi account record from those claims; deleting a Mabhazi account does not delete the separate Replit account.",
+          "Mabhazi uses Render for API hosting and Supabase for PostgreSQL and authentication. Google sign-in supplies an account identifier, email address, name, and profile-image URL when available. Mabhazi creates and maintains a separate Mabhazi account record from those claims; deleting a Mabhazi account does not delete the separate Google account.",
       },
       {
         title: "Information Mabhazi uses",
@@ -66,7 +66,7 @@ const canonicalDocuments: Record<
       {
         title: "Service providers and security",
         body:
-          "Replit hosts Mabhazi and provides Replit Auth/OIDC sign-in; the PostgreSQL application database is part of the deployed service. The current application has no advertising SDK or third-party analytics integration, and Mabhazi does not sell personal information. API traffic uses HTTPS/TLS. Browser sessions use Secure, HttpOnly, SameSite cookies; native mobile session tokens use the operating system-backed expo-secure-store, while the web version uses browser local storage.",
+          "Render hosts the API. Supabase provides PostgreSQL and authentication, with Google providing sign-in. The current application has no advertising SDK or third-party analytics integration, and Mabhazi does not sell personal information. API traffic uses HTTPS/TLS. Browser sessions use Secure, HttpOnly, SameSite cookies; native mobile session tokens use the operating system-backed expo-secure-store, while the web version uses browser local storage.",
       },
       {
         title: "Local block settings",
@@ -81,7 +81,7 @@ const canonicalDocuments: Record<
       {
         title: "Account deletion",
         body:
-          "Use the public Delete account page while signed in, or email support if you cannot sign in. Deletion removes your Mabhazi user record, sessions, signed-in search events, ratings, route reports and comments, claims or corrections, contributions, and abuse reports that you filed. A shared route may remain when useful to the community, but its contributor link and name are removed and shown as Anonymous. Moderation references can remain only in de-identified audit form. Deletion does not delete the separate Replit account, this device's block list, or copies that may already exist in operational logs or backups.",
+          "Use the public Delete account page while signed in, or email support if you cannot sign in. Deletion also removes your Supabase login identity, retrying if needed while sign-in is blocked. Deletion removes your Mabhazi user record, sessions, signed-in search events, ratings, route reports and comments, claims or corrections, contributions, and abuse reports that you filed. A shared route may remain when useful to the community, but its contributor link and name are removed and shown as Anonymous. Moderation references can remain only in de-identified audit form. Deletion does not delete the separate Google account, this device's block list, or copies that may already exist in operational logs or backups.",
       },
       {
         title: "Privacy requests and safety",
@@ -122,7 +122,7 @@ const canonicalDocuments: Record<
       {
         title: "Account deletion",
         body:
-          "You can delete your Mabhazi account from Profile or through the public Delete account page. Account deletion removes account-linked Mabhazi records as described in the Privacy notice; shared routes may remain only without your account attribution. Deleting Mabhazi does not delete your separate Replit account.",
+          "You can delete your Mabhazi account from Profile or through the public Delete account page. Account deletion removes account-linked Mabhazi records as described in the Privacy notice; shared routes may remain only without your account attribution. Deleting Mabhazi does not delete your separate Google account.",
       },
     ],
   },
@@ -142,7 +142,7 @@ const canonicalDocuments: Record<
       {
         title: "Account deletion",
         body:
-          "Delete your Mabhazi account from Profile or at https://mabhaziv-2.replit.app/api/delete-account after signing in. This removes Mabhazi sessions, searches linked to your account, ratings, route reports and comments, corrections, contributions, and abuse reports that you filed. Shared route records may remain only anonymized. Your separate Replit account and this device's local block list are unaffected.",
+          "Delete your Mabhazi account from Profile or at https://api.mabhazi.com/api/delete-account after signing in. This removes Mabhazi sessions, searches linked to your account, ratings, route reports and comments, corrections, contributions, and abuse reports that you filed. Shared route records may remain only anonymized. Your separate Google account and this device's local block list are unaffected.",
       },
       {
         title: "Moderation",
