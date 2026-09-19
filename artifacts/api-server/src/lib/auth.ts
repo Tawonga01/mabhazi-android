@@ -24,9 +24,10 @@ export function getOrigin(_req: Request): string {
   return getPublicOrigin();
 }
 
-export async function createSession(data: SessionData): Promise<string> {
+type SessionDatabase = Pick<typeof db, "insert">;
+export async function createSession(data: SessionData, database: SessionDatabase = db): Promise<string> {
   const sid = crypto.randomBytes(32).toString("hex");
-  await db.insert(sessionsTable).values({
+  await database.insert(sessionsTable).values({
     sid,
     sess: data as unknown as Record<string, unknown>,
     expire: new Date(Date.now() + SESSION_TTL),
