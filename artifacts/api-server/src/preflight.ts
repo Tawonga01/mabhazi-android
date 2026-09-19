@@ -42,7 +42,7 @@ export function validateProductionOrigins(env: NodeJS.ProcessEnv = process.env):
 }
 
 async function verifyDatabaseSchema(connectionString: string): Promise<void> {
-  const pool = new pg.Pool({ connectionString });
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10000, query_timeout: 15000 });
   try {
     const result = await pool.query<{ table_name: string; column_name: string }>(
       `
@@ -63,11 +63,15 @@ async function verifyDatabaseSchema(connectionString: string): Promise<void> {
     );
 
     if (missing.length > 0) {
-      throw new Error("missing schema");
+      throw new Error("MABHAZI_SCHEMA_MISSING");
     }
-  } catch {
-    // Never include a driver error: it may contain the DATABASE_URL.
-    throw new Error("Production database schema readiness check failed.");
+  } catch (error: unknown) {
+    // Allow only a machine code, never a driver message or connection string.
+    const candidate = error as { code?: unknown; message?: unknown };
+    const code = typeof candidate?.code === "string" && /^[A-Z0-9_]{2,64}$/.test(candidate.code)
+      ? candidate.code : candidate?.message === "MABHAZI_SCHEMA_MISSING" ? "SCHEMA_MISSING" : "UNKNOWN";
+    throw new Error(`Production database schema readiness check failed (${code}).`);
+  }
   } finally {
     await pool.end().catch(() => undefined);
   }
