@@ -19,7 +19,7 @@ const result = spawnSync(
       ...process.env,
       ...resolved,
       EXPO_PUBLIC_DOMAIN:
-        process.env.EXPO_PUBLIC_DOMAIN?.trim() || "mabhaziv-2.replit.app",
+        new URL(resolved.EXPO_PUBLIC_API_BASE_URL).host,
     },
     stdio: "inherit",
   },
