@@ -97,11 +97,12 @@ function sendHtml(res: Response, title: string, body: string): void {
 }
 
 const privacyBody = `
-  <p>This notice explains how Mabhazi uses information in its app and API. Mabhazi is separate from the Replit account that you may use to sign in.</p>
+  <p>The Mabhazi authentication identity in Supabase is also deleted. If the provider is temporarily unavailable, sign-in for that identity is blocked while deletion is retried.</p>
+  <p>This notice explains how Mabhazi uses information in its app and API. Mabhazi is separate from the Google account that you may use to sign in.</p>
   <h2>Operator and contact</h2>
   <p>Mabhazi is operated by <strong>Tawonga Tsokodayi</strong>. For privacy, account, or safety questions, email <a href="mailto:tawongatsokodayi@gmail.com">tawongatsokodayi@gmail.com</a>.</p>
   <h2>Identity, hosting, and sign-in</h2>
-  <p>Mabhazi is hosted on Replit and uses Replit Auth through OpenID Connect (OIDC) for sign-in. Replit supplies sign-in claims such as an account identifier, email address, name, and profile-image URL when available. Mabhazi creates and maintains a separate Mabhazi account record from those claims; deleting a Mabhazi account does not delete the separate Replit account.</p>
+  <p>Mabhazi uses Render for API hosting and Supabase for PostgreSQL and authentication. Google sign-in supplies an account identifier, email address, name, and profile-image URL when available. Mabhazi creates and maintains a separate Mabhazi account record from those claims; deleting a Mabhazi account does not delete the separate Google account.</p>
   <h2>Information Mabhazi uses</h2>
   <ul>
     <li><strong>Account and profile data:</strong> the Mabhazi account identifier, email, first and last name, profile-image URL supplied by sign-in, chosen display-name changes, and account timestamps. An account is needed for sign-in, contributions, ratings, and reports; searching can be used without signing in.</li>
@@ -114,13 +115,13 @@ const privacyBody = `
   </ul>
   <h2>What is public and what is shared</h2>
   <p>Route details, stops, ratings and route observations, comments, and the contributor display name can be shown to other Mabhazi users. A public comment is shown with its author display name (or the available sign-in name); do not treat a comment as private. The route API can also expose a contributor identifier to support route attribution, reporting, and blocking; it is not an email address or credential. Your email address, profile-image URL, session credentials, signed-in search link, and abuse-report details are not intended to be public community content. Abuse reports are shared with the operator and moderators who need them to review safety issues, and may be retained as moderation records.</p>
-  <p>Replit processes information as the Mabhazi hosting and authentication provider, and the PostgreSQL application database is part of the deployed service. The current Mabhazi application has no advertising SDK or third-party analytics integration. Mabhazi does not sell personal information. Mabhazi does not share private account information for advertising. Public community submissions are shared because that is the purpose of the community route service.</p>
+  <p>Render processes API requests as the hosting provider. Supabase stores the application database and manages authentication, with Google providing sign-in. The current Mabhazi application has no advertising SDK or third-party analytics integration. Mabhazi does not sell personal information. Mabhazi does not share private account information for advertising. Public community submissions are shared because that is the purpose of the community route service.</p>
   <h2>Security</h2>
   <p>API traffic is sent over HTTPS/TLS. Browser sessions use Secure, HttpOnly, SameSite cookies, and native mobile session tokens are stored with the operating system-backed <code>expo-secure-store</code>; the web version uses browser local storage because that native store is unavailable on web. Server-side sessions and OAuth token material are kept in the application's session store. These measures reduce risk but no online service or storage system can guarantee absolute security.</p>
   <h2>Retention</h2>
   <p>We retain active account and community records while they are needed to provide the service and its safety features. Mabhazi sessions are configured to expire after seven days and expired sessions are removed when encountered. There is no fixed public deletion interval currently configured for search events, moderation records, or operational logs; they may be retained as needed for operation, security, abuse review, and legal obligations. If the hosting environment creates operational backups, limited copies may persist until that provider's ordinary backup lifecycle expires. We do not promise a fixed backup or log-retention period.</p>
   <h2>Account deletion</h2>
-  <p>Use <a href="/api/delete-account">Delete account</a> while signed in, or email <a href="mailto:tawongatsokodayi@gmail.com">tawongatsokodayi@gmail.com</a> if you cannot sign in. The deletion transaction removes your Mabhazi user record, all Mabhazi sessions, signed-in search events, ratings, route reports and comments, claims or corrections, contributions, and abuse reports that you filed. A shared route may remain when it is useful to the community, but its contributor link and contributor name are removed and shown as Anonymous. Moderation references to a deleted account can remain only in de-identified audit form. Deletion does not delete the separate Replit account, the on-device block list, or copies that may already exist in operational logs or backups.</p>
+  <p>Use <a href="/api/delete-account">Delete account</a> while signed in, or email <a href="mailto:tawongatsokodayi@gmail.com">tawongatsokodayi@gmail.com</a> if you cannot sign in. The deletion transaction removes your Mabhazi user record, all Mabhazi sessions, signed-in search events, ratings, route reports and comments, claims or corrections, contributions, and abuse reports that you filed. A shared route may remain when it is useful to the community, but its contributor link and contributor name are removed and shown as Anonymous. Moderation references to a deleted account can remain only in de-identified audit form. Deletion does not delete the separate Google account, the on-device block list, or copies that may already exist in operational logs or backups.</p>
   <h2>Your choices and privacy requests</h2>
   <p>Depending on where you live, you may have rights to request access to, correction of, deletion of, restriction of, or a copy of your personal information, or to object to a use. Email <a href="mailto:tawongatsokodayi@gmail.com">tawongatsokodayi@gmail.com</a> with the request and enough information for us to verify the Mabhazi account, without sending a password or session token. You can edit your display name where the app provides that control, delete your account at any time through the deletion page, and unblock a contributor from the app's blocked-contributor settings.</p>
   <h2>Community safety</h2>
@@ -141,7 +142,7 @@ const termsBody = `
   <h2>Availability and route accuracy</h2>
   <p>Mabhazi is a community information tool. Service availability, route accuracy, and the completeness of moderation cannot be guaranteed. Nothing in these terms changes your rights under applicable law.</p>
   <h2>Account deletion</h2>
-  <p>You can delete your Mabhazi account through the public <a href="/api/delete-account">Delete account</a> page or ask support for help. Account deletion removes account-linked Mabhazi records as described in the <a href="/api/privacy">Privacy notice</a>; shared routes may remain only without your account attribution. Deleting Mabhazi does not delete your separate Replit account.</p>
+  <p>You can delete your Mabhazi account through the public <a href="/api/delete-account">Delete account</a> page or ask support for help. Account deletion removes account-linked Mabhazi records as described in the <a href="/api/privacy">Privacy notice</a>; shared routes may remain only without your account attribution. Deleting Mabhazi does not delete your separate Google account.</p>
 `;
 
 const supportBody = `
@@ -149,7 +150,7 @@ const supportBody = `
   <h2>Safety and community reports</h2>
   <p>Use <strong>Report content</strong> for a comment, route detail, or other submission; use <strong>Report user</strong> for an account; and use <strong>Block user</strong> to stop seeing a person's community activity on your device where that control is available. Reports can identify a route, comment, or user and include a reason such as harassment, hate speech, violence, sexual content, spam, personal information, misleading content, or other. Include the route or profile link and a short explanation. Do not include passwords, session tokens, or unnecessary personal information.</p>
   <h2>Account deletion support</h2>
-  <p>You can delete your Mabhazi account at <a href="/api/delete-account">/api/delete-account</a> after signing in. This removes Mabhazi sessions, searches linked to your account, ratings, route reports and comments, corrections, contributions, and abuse reports that you filed. Shared route records may remain only anonymized. Your separate Replit account and your device's local block list are unaffected. Contact support without sending a password or session token if you cannot sign in.</p>
+  <p>You can delete your Mabhazi account at <a href="/api/delete-account">/api/delete-account</a> after signing in. This removes Mabhazi sessions, searches linked to your account, ratings, route reports and comments, corrections, contributions, and abuse reports that you filed. Shared route records may remain only anonymized. Your separate Google account and your device's local block list are unaffected. Contact support without sending a password or session token if you cannot sign in.</p>
   <h2>Moderation</h2>
   <p>Mabhazi reviews safety reports through its available moderation tools and may remove or hide objectionable routes, comments, or contributor activity. Reports are not guaranteed to receive an individual response, and no moderation system catches every inaccurate or objectionable submission immediately.</p>
 `;
@@ -401,7 +402,7 @@ function deleteAccountForm(csrfToken: string): string {
     <div class="card warning">
       <h2>Permanently delete your Mabhazi account</h2>
   <p>This action cannot be undone. It deletes your Mabhazi account, all Mabhazi sessions, signed-in search events, ratings, reports you submitted, corrections, and contributions.</p>
-  <p>Shared route information can remain for other travelers only after your contributor link and name are removed. Reports submitted by you are deleted; a minimal moderation record may remain when your account was the report target. Your separate Replit account is not deleted.</p>
+  <p>Shared route information can remain for other travelers only after your contributor link and name are removed. Reports submitted by you are deleted; a minimal moderation record may remain when your account was the report target. Your separate Google account is not deleted.</p>
       <form method="post" action="/api/delete-account">
         <input type="hidden" name="csrfToken" value="${escapeHtml(csrfToken)}">
         <label for="confirmation">Type <code>${DELETION_CONFIRMATION}</code> to confirm</label>
@@ -479,7 +480,7 @@ router.post("/delete-account", async (req: Request, res: Response) => {
       sendHtml(
         res,
         "Account deleted",
-         `<div class="card success"><h2>Your Mabhazi account was deleted</h2><p>Your Mabhazi account-linked data and sessions were permanently deleted. Shared route information may remain only in anonymized form. A minimal moderation record may remain when your account was the report target, with free-text details removed. Your separate Replit account is unaffected.</p></div>`,
+         `<div class="card success"><h2>Your Mabhazi account was deleted</h2><p>Your Mabhazi account-linked data and sessions were permanently deleted. Shared route information may remain only in anonymized form. A minimal moderation record may remain when your account was the report target, with free-text details removed. Your separate Google account is unaffected.</p></div>`,
       );
       return;
     }
