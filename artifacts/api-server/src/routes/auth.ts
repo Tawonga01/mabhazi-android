@@ -6,8 +6,8 @@ import {
   ExchangeMobileAuthorizationCodeResponse,
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
-import { db, usersTable, journeysTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, journeysTable, authDeletionJobsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import {
   clearSession,
   getSessionId,
@@ -116,7 +116,14 @@ async function saveProviderSession(tokens: SupabaseTokens): Promise<string> {
     lastName: text(metadata.family_name),
     profileImageUrl: text(metadata.avatar_url) ?? text(metadata.picture),
   };
-  const [user] = await db.insert(usersTable).values(profile).onConflictDoUpdate({
+  return db.transaction(async tx => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${identity.id}))`);
+  const [deletion] = await tx.select().from(authDeletionJobsTable).where(eq(authDeletionJobsTable.userId, identity.id));
+  if (deletion) throw new Error("Account deletion is pending.");
+  // Recheck inside the lock: deletion may have completed after code exchange.
+  const verified = await createSupabaseAuth().verifyUser(tokens.access_token);
+  if (verified.id !== identity.id) throw new Error("Identity mismatch.");
+  const [user] = await tx.insert(usersTable).values(profile).onConflictDoUpdate({
     target: usersTable.id,
     set: { ...profile, updatedAt: new Date() },
   }).returning();
@@ -129,6 +136,7 @@ async function saveProviderSession(tokens: SupabaseTokens): Promise<string> {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: tokens.expires_at,
+  }, tx);
   });
 }
 
