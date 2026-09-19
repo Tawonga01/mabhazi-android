@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, eq, sql } from "drizzle-orm";
 import {
   abuseReportsTable,
+  authDeletionJobsTable,
   db,
   journeyClaimsTable,
   journeyContributionsTable,
@@ -19,6 +20,7 @@ import {
   clearSession,
   getSessionId,
 } from "../lib/auth";
+import { finishIdentityDeletion } from "../lib/identityDeletion";
 import { CURRENT_TERMS_VERSION } from "../lib/terms";
 
 const router: IRouter = Router();
@@ -388,6 +390,8 @@ export async function deleteMabhaziAccountInTransaction(
 
 export async function deleteMabhaziAccount(userId: string): Promise<void> {
   await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+    await tx.insert(authDeletionJobsTable).values({ userId }).onConflictDoNothing();
     await deleteMabhaziAccountInTransaction(tx, userId);
   });
 }
@@ -460,6 +464,8 @@ router.post("/delete-account", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
   try {
     await deleteMabhaziAccount(req.user.id);
+    // Local account and sessions are gone. A durable job retries provider deletion.
+    await finishIdentityDeletion(req.user.id);
     await clearSession(res, sid);
     res.cookie(CSRF_COOKIE, "", {
       httpOnly: false,
@@ -479,8 +485,8 @@ router.post("/delete-account", async (req: Request, res: Response) => {
     }
     res.json({ success: true });
   } catch (error) {
-    req.log.error({ err: error }, "Mabhazi account deletion failed");
-    res.status(500).json({ error: "We could not delete your account. No data was changed; please try again." });
+    req.log.error("Mabhazi account deletion failed");
+    res.status(500).json({ error: "We could not delete your account. Please try again or contact support." });
   }
 });
 
