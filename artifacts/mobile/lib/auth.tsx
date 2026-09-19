@@ -5,11 +5,9 @@ import React, {
   useEffect,
   useCallback,
   useRef,
-  useMemo,
   type ReactNode,
 } from "react";
 import { Platform } from "react-native";
-import * as AuthSession from "expo-auth-session";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import * as SecureStore from "expo-secure-store";
@@ -17,9 +15,7 @@ import { resolveApiBaseUrl } from "@/lib/api-base";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const AUTH_TOKEN_KEY = "auth_session_token";
-const ISSUER_URL =
-  process.env.EXPO_PUBLIC_ISSUER_URL ?? "https://replit.com/oidc";
+const AUTH_TOKEN_KEY = "mabhazi_session_v2";
 
 // expo-secure-store does not work on web — use localStorage there instead.
 const storage = {
@@ -79,12 +75,7 @@ function getApiBaseUrl(): string {
   return resolveApiBaseUrl();
 }
 
-function getClientId(): string | null {
-  const value = process.env.EXPO_PUBLIC_REPL_ID?.trim();
-  return value || null;
-}
-
-// ─── Web auth provider (uses server-side OIDC redirect flow) ─────────────────
+// ─── Web auth provider (uses server-side Google redirect flow) ─────────────────
 
 function WebAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -130,7 +121,7 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
 
       // Attempt to exchange the session cookie → Bearer token.
       // This only succeeds when the browser is on the same origin as the API
-      // (i.e. right after the OAuth redirect lands at REPLIT_DEV_DOMAIN/).
+      // (i.e. right after the OAuth redirect lands at the configured API origin).
       if (apiBase) {
         try {
           const res = await fetch(
@@ -238,159 +229,96 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ─── Native auth provider (uses expo-auth-session PKCE flow) ─────────────────
+// ─── Native auth provider (uses Google via Supabase with PKCE) ─────────────────
 
 function NativeAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const exchangingRef = useRef(false);
-
-  const discovery = AuthSession.useAutoDiscovery(ISSUER_URL);
-  const redirectUri = AuthSession.makeRedirectUri();
-  const nonce = useMemo(() => Crypto.randomUUID(), []);
-  const clientId = getClientId();
-  const configurationError = clientId
-    ? null
-    : "Sign-in is unavailable because EXPO_PUBLIC_REPL_ID is not configured for this release.";
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      // expo-auth-session requires a non-empty value while hooks are
-      // initialised. Never invoke the provider with an empty client ID:
-      // login() below turns this sentinel into an explicit configuration
-      // error instead of attempting a broken OAuth request.
-      clientId: clientId || "missing-replit-client-id",
-      scopes: ["openid", "email", "profile", "offline_access"],
-      redirectUri,
-      prompt: AuthSession.Prompt.Login,
-      // expo-auth-session does not expose nonce as a first-class config field.
-      // Supplying it as an extra parameter keeps the exact secure value that
-      // the server later validates against the signed ID token.
-      extraParams: { nonce },
-    },
-    discovery,
-  );
-
+  const loginInProgress = useRef(false);
   const apiBase = getApiBaseUrl();
 
   const fetchUser = useCallback(async () => {
+    const token = await storage.getItem(AUTH_TOKEN_KEY);
+    if (!token) { setUser(null); setIsLoading(false); return; }
     try {
-      const token = await storage.getItem(AUTH_TOKEN_KEY);
-      if (!token) {
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-      const res = await fetch(`${apiBase}/api/auth/user`, {
+      const response = await fetch(`${apiBase}/api/auth/user`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      if (data.user) {
-        setUser(data.user);
-      } else {
-        await storage.removeItem(AUTH_TOKEN_KEY);
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+      if (!response.ok) throw new Error("Account lookup failed");
+      const data = await response.json();
+      setUser(data.user ?? null);
+      if (!data.user) await storage.removeItem(AUTH_TOKEN_KEY);
+    } finally { setIsLoading(false); }
   }, [apiBase]);
 
   useEffect(() => {
-    fetchUser();
+    fetchUser().catch(() => setUser(null));
   }, [fetchUser]);
 
-  useEffect(() => {
-    if (response?.type !== "success" || !request?.codeVerifier) return;
-    if (exchangingRef.current) return;
-    exchangingRef.current = true;
-
-    const { code, state } = response.params;
-
-    (async () => {
-      try {
-        if (!apiBase || !code || !state || state !== request.state) {
-          setIsLoading(false);
-          return;
-        }
-        const exchangeRes = await fetch(
-          `${apiBase}/api/mobile-auth/token-exchange`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code,
-              code_verifier: request.codeVerifier,
-              redirect_uri: redirectUri,
-              state,
-              nonce,
-            }),
-          },
-        );
-
-        if (!exchangeRes.ok) {
-          setIsLoading(false);
-          return;
-        }
-
-        const data = await exchangeRes.json();
-        if (data.token) {
-          await storage.setItem(AUTH_TOKEN_KEY, data.token);
-          setIsLoading(true);
-          await fetchUser();
-        }
-      } catch {
-        console.error("Token exchange failed");
-        setIsLoading(false);
-      } finally {
-        exchangingRef.current = false;
-      }
-    })();
-  }, [response, request, redirectUri, nonce, apiBase, fetchUser]);
-
   const login = useCallback(async () => {
-    if (configurationError) {
-      throw new Error(configurationError);
-    }
-    exchangingRef.current = false;
+    if (loginInProgress.current) return;
+    loginInProgress.current = true;
+    const redirectUri = "mabhazicom://auth/callback";
+    // Fresh verifier per attempt. It never leaves this device except over HTTPS
+    // to the backend during the single-use code exchange.
+    const verifier = (Crypto.randomUUID() + Crypto.randomUUID()).replace(/-/g, "");
     try {
-      await promptAsync();
-    } catch {
-      console.error("Login failed");
-      throw new Error("Unable to start sign-in.");
+      const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier, {
+        encoding: Crypto.CryptoEncoding.BASE64,
+      });
+      const challenge = digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const started = await fetch(`${apiBase}/api/mobile-auth/start`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code_challenge: challenge }),
+      });
+      if (!started.ok) throw new Error("Unable to start Google sign-in.");
+      const { url } = await started.json();
+      if (typeof url !== "string" || new URL(url).protocol !== "https:") {
+        throw new Error("Invalid sign-in configuration.");
+      }
+      const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
+      if (result.type !== "success") return;
+      const callback = new URL(result.url);
+      if (callback.protocol !== "mabhazicom:" || callback.hostname !== "auth" ||
+          callback.pathname !== "/callback" || callback.username || callback.password ||
+          callback.searchParams.has("error")) {
+        throw new Error("Google sign-in was not completed.");
+      }
+      const code = callback.searchParams.get("code");
+      if (!code) throw new Error("Sign-in expired. Please try again.");
+      const exchanged = await fetch(`${apiBase}/api/mobile-auth/token-exchange`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, code_verifier: verifier }),
+      });
+      if (!exchanged.ok) throw new Error("Sign-in failed. Please try again.");
+      const data = await exchanged.json();
+      if (typeof data.token !== "string" || !/^[a-f0-9]{64}$/.test(data.token)) {
+        throw new Error("Sign-in failed. Please try again.");
+      }
+      await storage.setItem(AUTH_TOKEN_KEY, data.token);
+      setIsLoading(true);
+      await fetchUser();
+    } finally {
+      loginInProgress.current = false;
+      setIsLoading(false);
     }
-  }, [configurationError, promptAsync]);
+  }, [apiBase, fetchUser]);
 
   const logout = useCallback(async () => {
     const token = await storage.getItem(AUTH_TOKEN_KEY);
     try {
-      if (token && apiBase) {
-        await fetch(`${apiBase}/api/mobile-auth/logout`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        });
-      }
-    } catch {}
-    await storage.removeItem(AUTH_TOKEN_KEY);
-    setUser(null);
+      if (token) await fetch(`${apiBase}/api/mobile-auth/logout`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+    } finally {
+      await storage.removeItem(AUTH_TOKEN_KEY);
+      setUser(null);
+    }
   }, [apiBase]);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated: !!user,
-        configurationError,
-        login,
-        logout,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{
+    user, isLoading, isAuthenticated: !!user, configurationError: null, login, logout,
+  }}>{children}</AuthContext.Provider>;
 }
 
 // ─── Unified AuthProvider ─────────────────────────────────────────────────────

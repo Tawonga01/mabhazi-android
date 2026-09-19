@@ -1,9 +1,10 @@
-import * as oidc from "openid-client";
+import { createSupabaseAuth } from "../lib/supabaseAuth";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { type Request, type Response, type NextFunction } from "express";
 import type { AuthUser } from "@workspace/api-zod";
 import {
   clearSession,
-  getOidcConfig,
   getSessionId,
   getSession,
   updateSession,
@@ -36,16 +37,11 @@ async function refreshIfExpired(
   if (!session.refresh_token) return null;
 
   try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(
-      config,
-      session.refresh_token,
-    );
+    const tokens = await createSupabaseAuth().refresh(session.refresh_token);
+    if (tokens.user.id !== session.user.id) return null;
     session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
+    session.refresh_token = tokens.refresh_token;
+    session.expires_at = tokens.expires_at;
     await updateSession(sid, session);
     return session;
   } catch {
@@ -82,6 +78,17 @@ export async function authMiddleware(
     return;
   }
 
-  req.user = refreshed.user;
+  // A deleted account must never remain authenticated through a stale snapshot.
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, refreshed.user.id));
+  if (!user) {
+    await clearSession(res, sid);
+    next();
+    return;
+  }
+  req.user = {
+    id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName,
+    profileImageUrl: user.profileImageUrl, displayName: user.displayName ?? null,
+    lastNameChange: user.lastNameChange ?? null,
+  };
   next();
 }

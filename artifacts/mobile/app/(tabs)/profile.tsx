@@ -758,7 +758,7 @@ export default function ProfileScreen() {
                   Account deleted
                 </Text>
                 <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Your Mabhazi account-linked data and sessions were permanently deleted. Shared routes may remain only anonymized. Your separate Replit account is unaffected.
+                  Your Mabhazi account-linked data and sessions were permanently deleted. Shared routes may remain only anonymized. Your separate Google account is unaffected.
                 </Text>
                 <TouchableOpacity
                   style={[styles.deleteCancelBtn, { backgroundColor: colors.primary }]}
@@ -779,7 +779,7 @@ export default function ProfileScreen() {
                   Delete your Mabhazi account?
                 </Text>
                 <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  This permanently deletes your Mabhazi account, all sessions, signed-in searches, ratings, reports, corrections, and contributions. Shared route information can remain only without your attribution. This does not delete your separate Replit account.
+                  This permanently deletes your Mabhazi account, all sessions, signed-in searches, ratings, reports, corrections, and contributions. Shared route information can remain only without your attribution. This does not delete your separate Google account.
                 </Text>
                 <Text style={[styles.deleteLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                   Type DELETE MY ACCOUNT to confirm

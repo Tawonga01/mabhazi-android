@@ -1,16 +1,16 @@
-import * as oidc from "openid-client";
+import crypto from "node:crypto";
+import { createSupabaseAuth, type SupabaseTokens } from "../lib/supabaseAuth";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetCurrentAuthUserResponse,
-  ExchangeMobileAuthorizationCodeBody,
   ExchangeMobileAuthorizationCodeResponse,
+  ExchangeMobileAuthorizationCodeBody,
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
-import { db, usersTable, journeysTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, usersTable, journeysTable, authDeletionJobsTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import {
   clearSession,
-  getOidcConfig,
   getSessionId,
   createSession,
   getSession,
@@ -18,8 +18,6 @@ import {
   deleteSession,
   SESSION_COOKIE,
   SESSION_TTL,
-  ISSUER_URL,
-  type SessionData,
   getOrigin,
   isAllowedOrigin,
 } from "../lib/auth";
@@ -108,61 +106,39 @@ function getPostMessageOrigin(req: Request): string {
   return getOrigin(req);
 }
 
-function isSafeMobileRedirectUri(value: string): boolean {
-  try {
-    const redirectUri = new URL(value);
-    if (
-      redirectUri.username ||
-      redirectUri.password ||
-      redirectUri.hash ||
-      redirectUri.search
-    ) {
-      return false;
-    }
-
-    if (redirectUri.protocol === "https:") {
-      return isAllowedOrigin(redirectUri.origin);
-    }
-    if (redirectUri.protocol === "http:") {
-      return ["localhost", "127.0.0.1", "[::1]"].includes(
-        redirectUri.hostname,
-      );
-    }
-
-    // Expo Go and standalone builds use these registered native schemes.
-    return ["exp:", "exps:", "mabhazicom:"].includes(redirectUri.protocol);
-  } catch {
-    return false;
-  }
-}
-
-async function upsertUser(claims: Record<string, unknown>) {
-  const userData = {
-    id: claims.sub as string,
-    email: (claims.email as string) || null,
-    firstName: (claims.first_name as string) || null,
-    lastName: (claims.last_name as string) || null,
-    profileImageUrl: (claims.profile_image_url || claims.picture) as
-      | string
-      | null,
+async function saveProviderSession(tokens: SupabaseTokens): Promise<string> {
+  const identity = tokens.user;
+  const metadata = identity.user_metadata ?? {};
+  const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;
+  const profile = {
+    id: identity.id,
+    email: identity.email,
+    firstName: text(metadata.given_name) ?? text(metadata.full_name),
+    lastName: text(metadata.family_name),
+    profileImageUrl: text(metadata.avatar_url) ?? text(metadata.picture),
   };
-
-  const [user] = await db
-    .insert(usersTable)
-    .values(userData)
-    .onConflictDoUpdate({
-      target: usersTable.id,
-      // Never overwrite displayName or lastNameChange — user controls those
-      set: {
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        profileImageUrl: userData.profileImageUrl,
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  return user;
+  return db.transaction(async tx => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${identity.id}))`);
+  const [deletion] = await tx.select().from(authDeletionJobsTable).where(eq(authDeletionJobsTable.userId, identity.id));
+  if (deletion) throw new Error("Account deletion is pending.");
+  // Recheck inside the lock: deletion may have completed after code exchange.
+  const verified = await createSupabaseAuth().verifyUser(tokens.access_token);
+  if (verified.id !== identity.id) throw new Error("Identity mismatch.");
+  const [user] = await tx.insert(usersTable).values(profile).onConflictDoUpdate({
+    target: usersTable.id,
+    set: { ...profile, updatedAt: new Date() },
+  }).returning();
+  return createSession({
+    user: {
+      id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName,
+      profileImageUrl: user.profileImageUrl, displayName: user.displayName ?? null,
+      lastNameChange: user.lastNameChange ?? null,
+    },
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: tokens.expires_at,
+  }, tx);
+  });
 }
 
 router.get("/auth/user", (req: Request, res: Response) => {
@@ -181,98 +157,42 @@ router.get("/auth/user", (req: Request, res: Response) => {
 });
 
 router.get("/login", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-
-  const state = oidc.randomState();
-  const nonce = oidc.randomNonce();
-  const codeVerifier = oidc.randomPKCECodeVerifier();
-  const codeChallenge = await oidc.calculatePKCECodeChallenge(codeVerifier);
-
-  const redirectTo = oidc.buildAuthorizationUrl(config, {
-    redirect_uri: callbackUrl,
-    scope: "openid email profile offline_access",
-    code_challenge: codeChallenge,
-    code_challenge_method: "S256",
-    prompt: "login consent",
-    state,
-    nonce,
-  });
-
-  setOidcCookie(res, "code_verifier", codeVerifier);
-  setOidcCookie(res, "nonce", nonce);
-  setOidcCookie(res, "state", state);
-  setOidcCookie(res, "return_to", returnTo);
-
-  res.redirect(redirectTo.href);
+  res.setHeader("Cache-Control", "no-store");
+  // Policy pages are also served on the website domain. Start OAuth on the
+  // canonical API host so the verifier cookie reaches the registered callback.
+  const origin = getOrigin(req);
+  if (req.get("host") !== new URL(origin).host) {
+    const login = new URL("/api/login", origin);
+    login.searchParams.set("returnTo", getSafeReturnTo(req.query.returnTo));
+    res.redirect(login.href);
+    return;
+  }
+  const verifier = crypto.randomBytes(32).toString("base64url");
+  const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+  setOidcCookie(res, "code_verifier", verifier);
+  setOidcCookie(res, "return_to", getSafeReturnTo(req.query.returnTo));
+  res.setHeader("Cache-Control", "no-store");
+  res.redirect(createSupabaseAuth().authorizeUrl(`${getOrigin(req)}/api/callback`, challenge));
 });
 
 router.get("/callback", async (req: Request, res: Response) => {
-  const config = await getOidcConfig();
-  const callbackUrl = `${getOrigin(req)}/api/callback`;
-
-  const codeVerifier = req.cookies?.code_verifier;
-  const nonce = req.cookies?.nonce;
-  const expectedState = req.cookies?.state;
-
-  if (!codeVerifier || !nonce || !expectedState) {
-    clearOidcCookies(res);
-    res.redirect("/api/login");
-    return;
-  }
-
-  const currentUrl = new URL(callbackUrl);
-  currentUrl.search = new URL(req.originalUrl || req.url, callbackUrl).search;
-
-  let tokens: oidc.TokenEndpointResponse & oidc.TokenEndpointResponseHelpers;
-  try {
-    tokens = await oidc.authorizationCodeGrant(config, currentUrl, {
-      pkceCodeVerifier: codeVerifier,
-      expectedNonce: nonce,
-      expectedState,
-      idTokenExpected: true,
-    });
-  } catch {
-    clearOidcCookies(res);
-    res.redirect("/api/login");
-    return;
-  }
-
+  const verifier = req.cookies?.code_verifier;
+  const code = req.query.code;
   const returnTo = getSafeReturnTo(req.cookies?.return_to);
-
   clearOidcCookies(res);
-
-  const claims = tokens.claims();
-  if (!claims) {
-    res.redirect("/api/login");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  if (typeof verifier !== "string" || typeof code !== "string" || req.query.error) {
+    res.status(400).send("Sign-in was cancelled or expired. Please start again.");
     return;
   }
-
-  const dbUser = await upsertUser(
-    claims as unknown as Record<string, unknown>,
-  );
-
-  const now = Math.floor(Date.now() / 1000);
-  const sessionData: SessionData = {
-    user: {
-      id: dbUser.id,
-      email: dbUser.email,
-      firstName: dbUser.firstName,
-      lastName: dbUser.lastName,
-      profileImageUrl: dbUser.profileImageUrl,
-      displayName: dbUser.displayName ?? null,
-      lastNameChange: dbUser.lastNameChange ?? null,
-    },
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-  };
-
-  const sid = await createSession(sessionData);
-  setSessionCookie(res, sid);
-  res.redirect(returnTo);
+  try {
+    const tokens = await createSupabaseAuth().exchangeCode(code, verifier);
+    setSessionCookie(res, await saveProviderSession(tokens));
+    res.redirect(returnTo);
+  } catch {
+    res.status(401).send("Unable to complete sign-in. Please start again.");
+  }
 });
 
 router.get("/auth/done", (req: Request, res: Response) => {
@@ -297,89 +217,35 @@ router.get("/logout", async (req: Request, res: Response) => {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
-
-  const config = await getOidcConfig();
-  const origin = getOrigin(req);
-  const returnTo = getSafeReturnTo(req.query.returnTo);
-
-  const sid = getSessionId(req);
-  await clearSession(res, sid);
-
-  const endSessionUrl = oidc.buildEndSessionUrl(config, {
-    client_id: process.env.REPL_ID!,
-    post_logout_redirect_uri: new URL(returnTo, origin).href,
-  });
-
-  res.redirect(endSessionUrl.href);
+  await clearSession(res, getSessionId(req));
+  res.redirect(getSafeReturnTo(req.query.returnTo));
 });
 
-router.post(
-  "/mobile-auth/token-exchange",
-  async (req: Request, res: Response) => {
-    const parsed = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
-    if (!parsed.success || !parsed.data.nonce) {
-      res.status(400).json({ error: "Missing or invalid required parameters" });
-      return;
-    }
+router.post("/mobile-auth/start", (req: Request, res: Response) => {
+  const challenge = req.body?.code_challenge;
+  if (typeof challenge !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) {
+    res.status(400).json({ error: "Invalid sign-in request" });
+    return;
+  }
+  // Only the registered application callback is accepted, never client input.
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ url: createSupabaseAuth().authorizeUrl("mabhazicom://auth/callback", challenge) });
+});
 
-    const { code, code_verifier, redirect_uri, state, nonce } = parsed.data;
-
-    if (!isSafeMobileRedirectUri(redirect_uri)) {
-      res.status(400).json({ error: "Invalid redirect URI" });
-      return;
-    }
-
-    try {
-      const config = await getOidcConfig();
-
-      const callbackUrl = new URL(redirect_uri);
-      callbackUrl.searchParams.set("code", code);
-      callbackUrl.searchParams.set("state", state);
-      callbackUrl.searchParams.set("iss", ISSUER_URL);
-
-      const tokens = await oidc.authorizationCodeGrant(config, callbackUrl, {
-        pkceCodeVerifier: code_verifier,
-        expectedNonce: nonce,
-        expectedState: state,
-        idTokenExpected: true,
-      });
-
-      const claims = tokens.claims();
-      if (!claims) {
-        res.status(401).json({ error: "No claims in ID token" });
-        return;
-      }
-
-      const dbUser = await upsertUser(
-        claims as unknown as Record<string, unknown>,
-      );
-
-      const now = Math.floor(Date.now() / 1000);
-      const sessionData: SessionData = {
-        user: {
-          id: dbUser.id,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          profileImageUrl: dbUser.profileImageUrl,
-          displayName: dbUser.displayName ?? null,
-          lastNameChange: dbUser.lastNameChange ?? null,
-        },
-        access_token: tokens.access_token,
-        refresh_token: tokens.refresh_token,
-        expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,
-      };
-
-      const sid = await createSession(sessionData);
-      res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: sid }));
-    } catch {
-      // Do not log OIDC errors: providers may include authorization codes,
-      // redirect URIs, or token material in their error details.
-      req.log.error("Mobile token exchange failed");
-      res.status(500).json({ error: "Token exchange failed" });
-    }
-  },
-);
+router.post("/mobile-auth/token-exchange", async (req: Request, res: Response) => {
+  const body = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Invalid sign-in request" });
+    return;
+  }
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const tokens = await createSupabaseAuth().exchangeCode(body.data.code, body.data.code_verifier);
+    res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: await saveProviderSession(tokens) }));
+  } catch {
+    res.status(401).json({ error: "Sign-in failed or expired. Please try again." });
+  }
+});
 
 router.post("/mobile-auth/logout", async (req: Request, res: Response) => {
   const sid = getSessionId(req);
@@ -458,7 +324,7 @@ router.patch("/users/display-name", async (req: Request, res: Response) => {
 
 /**
  * Web-to-mobile token bridge.
- * After the standard web OIDC flow sets a session cookie, the Expo web app
+ * After the server-side Google login flow sets a session cookie, the Expo web app
  * calls this endpoint (same-origin, so the cookie is sent) to receive the
  * session ID as a Bearer token that can be stored in expo-secure-store.
  */

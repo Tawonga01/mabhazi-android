@@ -1,4 +1,4 @@
-const PRODUCTION_API_BASE_URL = "https://mabhaziv-2.replit.app";
+const PRODUCTION_API_BASE_URL = "https://api.mabhazi.com";
 
 /**
  * Resolve the API origin used by both the generated API client and auth.

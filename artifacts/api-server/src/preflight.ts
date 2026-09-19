@@ -1,7 +1,8 @@
 import pg from "pg";
 
-const PRODUCTION_ORIGIN = "https://mabhaziv-2.replit.app";
-const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "REPL_ID", "ADMIN_SECRET"] as const;
+import { getAllowedOrigins } from "./lib/origins";
+import { supabaseConfiguration } from "./lib/supabaseAuth";
+const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
 
 const requiredColumns: Record<string, readonly string[]> = {
   abuse_reports: [
@@ -21,6 +22,7 @@ const requiredColumns: Record<string, readonly string[]> = {
   journey_reports: ["id", "journey_id", "user_id", "content", "moderation_status"],
   journeys: ["id", "contributed_by", "moderation_status"],
   sessions: ["sid", "sess", "expire"],
+  auth_deletion_jobs: ["user_id", "created_at"],
   users: ["id", "terms_accepted_version", "terms_accepted_at"],
 };
 
@@ -34,57 +36,13 @@ export function getMissingProductionEnvironment(
   return REQUIRED_ENVIRONMENT.filter((name) => !hasValue(env[name]));
 }
 
-function validateOrigin(value: string, name: string): void {
-  const candidate = /^[a-z][a-z\d+\-.]*:\/\//i.test(value)
-    ? value
-    : `https://${value}`;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(candidate);
-  } catch {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
-  }
-
-  if (
-    parsed.protocol !== "https:" ||
-    parsed.username ||
-    parsed.password ||
-    parsed.pathname !== "/" ||
-    parsed.search ||
-    parsed.hash
-  ) {
-    throw new Error(`${name} must be a valid HTTPS origin.`);
-  }
-}
-
-/**
- * Validate origin inputs without printing their values. The fixed production
- * origin remains the server fallback; any platform-provided origin is checked
- * so a malformed deployment cannot start with unusable OAuth redirects.
- */
-export function validateProductionOrigins(
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  validateOrigin(PRODUCTION_ORIGIN, "production origin");
-
-  for (const name of [
-    "PUBLIC_ORIGIN",
-    "EXPO_PUBLIC_API_BASE_URL",
-    "REPLIT_DEV_DOMAIN",
-    "REPLIT_EXPO_DEV_DOMAIN",
-  ] as const) {
-    const value = env[name]?.trim();
-    if (value) validateOrigin(value, name);
-  }
-
-  for (const value of env.REPLIT_DOMAINS?.split(",") ?? []) {
-    if (value.trim()) validateOrigin(value.trim(), "REPLIT_DOMAINS");
-  }
+/** Validate the exact same origin configuration used by callbacks and CORS. */
+export function validateProductionOrigins(env: NodeJS.ProcessEnv = process.env): void {
+  getAllowedOrigins({ ...env, NODE_ENV: "production" });
 }
 
 async function verifyDatabaseSchema(connectionString: string): Promise<void> {
-  const pool = new pg.Pool({ connectionString });
+  const pool = new pg.Pool({ connectionString, connectionTimeoutMillis: 10000, query_timeout: 15000 });
   try {
     const result = await pool.query<{ table_name: string; column_name: string }>(
       `
@@ -105,11 +63,14 @@ async function verifyDatabaseSchema(connectionString: string): Promise<void> {
     );
 
     if (missing.length > 0) {
-      throw new Error("missing schema");
+      throw new Error("MABHAZI_SCHEMA_MISSING");
     }
-  } catch {
-    // Never include a driver error: it may contain the DATABASE_URL.
-    throw new Error("Production database schema readiness check failed.");
+  } catch (error: unknown) {
+    // Allow only a machine code, never a driver message or connection string.
+    const candidate = error as { code?: unknown; message?: unknown };
+    const code = typeof candidate?.code === "string" && /^[A-Z0-9_]{2,64}$/.test(candidate.code)
+      ? candidate.code : candidate?.message === "MABHAZI_SCHEMA_MISSING" ? "SCHEMA_MISSING" : "UNKNOWN";
+    throw new Error(`Production database schema readiness check failed (${code}).`);
   } finally {
     await pool.end().catch(() => undefined);
   }
@@ -126,6 +87,7 @@ export async function runProductionPreflight(
   }
 
   validateProductionOrigins(env);
+  supabaseConfiguration(env);
   await verifyDatabaseSchema(env.DATABASE_URL as string);
 }
 

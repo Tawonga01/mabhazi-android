@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import website from "./routes/website";
 import { logger } from "./lib/logger";
 import { isAllowedOrigin } from "./lib/auth";
 import { authMiddleware } from "./middlewares/authMiddleware";
@@ -47,6 +48,7 @@ app.use(
     maxAge: 600,
   }),
 );
+app.use(website);
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

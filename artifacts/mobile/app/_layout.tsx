@@ -20,7 +20,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/lib/auth";
 import { resolveApiBaseUrl } from "@/lib/api-base";
 
-const AUTH_TOKEN_KEY = "auth_session_token";
+const AUTH_TOKEN_KEY = "mabhazi_session_v2";
 
 setBaseUrl(resolveApiBaseUrl());
 

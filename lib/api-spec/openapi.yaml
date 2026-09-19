@@ -51,7 +51,7 @@ paths:
     get:
       tags: [Auth]
       operationId: beginBrowserLogin
-      summary: Start the browser OIDC login flow
+      summary: Start the browser Google login flow through Supabase
       parameters:
         - name: returnTo
           in: query
@@ -60,51 +60,40 @@ paths:
             type: string
       responses:
         '302':
-          description: Redirect to the OIDC authorization endpoint.
+          description: Redirect to the Supabase Google authorization endpoint.
 
   /callback:
     get:
       tags: [Auth]
       operationId: handleBrowserLoginCallback
-      summary: Complete the browser OIDC login flow
+      summary: Complete the browser Google login flow through Supabase
       parameters:
         - name: code
           in: query
           required: false
           schema:
             type: string
-        - name: state
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: iss
-          in: query
-          required: false
-          schema:
-            type: string
-            format: uri
       responses:
         '302':
-          description: Redirect to the returnTo path on success or /api/login on failure.
+          description: Redirect to the validated returnTo path on success.
 
   /logout:
     get:
       tags: [Auth]
       operationId: logoutBrowserSession
-      summary: Clear the session and begin OIDC logout
+      summary: Clear the Mabhazi browser session
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
       responses:
         '302':
-          description: Redirect to the OIDC provider logout URL.
+          description: Redirect to the validated local return path.
 
   /mobile-auth/token-exchange:
     post:
       tags: [Auth]
       operationId: exchangeMobileAuthorizationCode
-      summary: Exchange a mobile OIDC code for a session token
+      summary: Exchange a Supabase PKCE code for a Mabhazi session token
       requestBody:
         required: true
         content:
@@ -858,24 +847,532 @@ components:
 
     MobileTokenExchangeRequest:
       type: object
-      required: [code, code_verifier, redirect_uri, state]
+      required: [code, code_verifier]
       properties:
         code:
           type: string
           minLength: 1
+          maxLength: 2048
         code_verifier:
           type: string
-          minLength: 1
-        redirect_uri:
+          minLength: 43
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._~-]+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        currentVersion:
+          type: string
+
+    TermsAcceptanceBody:
+      type: object
+      required: [version]
+      properties:
+        version:
           type: string
           minLength: 1
-          format: uri
-        state:
+          maxLength: 64
+
+    TermsAcceptanceStatus:
+      type: object
+      required: [currentVersion, acceptedVersion, acceptedAt, requiresAcceptance]
+      properties:
+        currentVersion:
+          type: string
+        acceptedVersion:
+          type: [string, 'null']
+        acceptedAt:
+          type: [string, 'null']
+          format: date-time
+        requiresAcceptance:
+          type: boolean
+
+    LegalSummary:
+      type: object
+      required: [title, operator, contactEmail, country, content]
+      properties:
+        title:
+          type: string
+        version:
+          type: string
+        operator:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        country:
+          type: [string, 'null']
+        content:
+          type: string
+
+    SupportSummary:
+      type: object
+      required: [title, operator, contactEmail, reportContent, reportUsers, blockUsers]
+      properties:
+        title:
+          type: string
+        operator:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        reportContent:
+          type: boolean
+        reportUsers:
+          type: boolean
+        blockUsers:
+          type: boolean
+
+    DeleteAccountBody:
+      type: object
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          description: Must equal DELETE MY ACCOUNT.
+          enum: ["DELETE MY ACCOUNT"]
+        csrfToken:
+          type: string
+
+    DeleteAccountResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    JourneyStop:
+      type: object
+      required: [id, city, sequence]
+      properties:
+        id:
+          type: integer
+        city:
+          type: string
+        arrivalTime:
+          type: [string, 'null']
+        departureTime:
+          type: [string, 'null']
+        sequence:
+          type: integer
+        sourceAssociationId:
+          type: [integer, 'null']
+
+    CreateJourneyStop:
+      type: object
+      required: [city]
+      properties:
+        city:
           type: string
           minLength: 1
-        nonce:
+        arrivalTime:
+          type: string
+        departureTime:
+          type: string
+
+    Journey:
+      type: object
+      required: [id, fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price, contributorId, contributorName, dataStatus, confidenceScore, confirmationCount, lastConfirmedAt, createdAt, averageRating, ratingCount, userRating, stops]
+      properties:
+        id:
+          type: integer
+        fromCity:
+          type: string
+        toCity:
+          type: string
+        departureTime:
+          type: string
+        arrivalTime:
+          type: string
+        scheduledDays:
+          type: string
+        busCompany:
+          type: string
+        pickupPoint:
+          type: string
+        dropoffPoint:
+          type: string
+        price:
+          type: number
+        contributorId:
+          type: [string, 'null']
+        contributorName:
+          type: string
+        dataStatus:
+          type: string
+          enum: [active, uncertain, inactive]
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confirmationCount:
+          type: integer
+          minimum: 0
+        lastConfirmedAt:
+          type: [string, 'null']
+          format: date-time
+        createdAt:
+          type: string
+        averageRating:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+        userRating:
+          type: [integer, 'null']
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/JourneyStop"
+
+    JourneysEnvelope:
+      type: object
+      required: [journeys]
+      properties:
+        journeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/Journey"
+
+    CreateJourneyBody:
+      type: object
+      required: [fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price]
+      properties:
+        fromCity:
           type: string
           minLength: 1
+        toCity:
+          type: string
+          minLength: 1
+        departureTime:
+          type: string
+          minLength: 1
+        arrivalTime:
+          type: string
+          minLength: 1
+        scheduledDays:
+          type: string
+          minLength: 1
+        busCompany:
+          type: string
+          minLength: 1
+        pickupPoint:
+          type: string
+          minLength: 1
+        dropoffPoint:
+          type: string
+          minLength: 1
+        price:
+          type: number
+          minimum: 0
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateJourneyStop"
+
+    JourneyComment:
+      type: object
+      required: [id, userId, authorName, content, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: [string, 'null']
+        authorName:
+          type: [string, 'null']
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    JourneyDetails:
+      type: object
+      required: [comments, priceToday, priceYesterday, badTreatmentCount, breakdownCount, delays]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/JourneyComment"
+        priceToday:
+          type: [number, 'null']
+        priceYesterday:
+          type: [number, 'null']
+        badTreatmentCount:
+          type: integer
+        breakdownCount:
+          type: integer
+        delays:
+          type: object
+          required: [count, avgMinutes]
+          properties:
+            count:
+              type: integer
+            avgMinutes:
+              type: [number, 'null']
+
+    SubmitJourneyReportBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [comment, bad_treatment, breakdown, departure_delay, price]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 500
+        minutesLate:
+          type: integer
+          minimum: 0
+          maximum: 999
+        reportedPrice:
+          type: number
+          minimum: 0
+
+    AbuseReportBody:
+      type: object
+      required: [targetType, targetId, reason]
+      properties:
+        targetType:
+          type: string
+          enum: [journey, comment, user]
+        targetId:
+          oneOf:
+            - type: string
+            - type: integer
+        reason:
+          type: string
+          enum: [sexual_content, violent_content, harassment, hate_speech, spam, personal_information, misleading, other]
+        details:
+          type: string
+          maxLength: 1000
+
+    AbuseReportResult:
+      type: object
+      required: [success, reportId]
+      properties:
+        success:
+          type: boolean
+          const: true
+        reportId:
+          type: integer
+
+    RateJourneyBody:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+
+    RateJourneyResult:
+      type: object
+      required: [averageRating, ratingCount, userRating]
+      properties:
+        averageRating:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+        userRating:
+          type: integer
+
+    ConfirmJourneyResult:
+      type: object
+      required: [success, confidenceScore, confirmationCount, lastConfirmedAt]
+      properties:
+        success:
+          type: boolean
+          const: true
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        confirmationCount:
+          type: integer
+          minimum: 0
+        lastConfirmedAt:
+          type: string
+          format: date-time
+
+    JourneyClaimInput:
+      type: object
+      required: [type, value]
+      properties:
+        type:
+          type: string
+          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
+        value:
+          type: object
+          required: [text]
+          properties:
+            text:
+              type: string
+              minLength: 1
+              maxLength: 240
+            reportedPrice:
+              type: number
+              minimum: 0
+
+    JourneyClaimResult:
+      type: object
+      required: [success, claimId, type, status, createdAt]
+      properties:
+        success:
+          type: boolean
+          const: true
+        claimId:
+          type: integer
+        type:
+          type: string
+          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
+        status:
+          type: string
+          enum: [active, disputed, superseded]
+        createdAt:
+          type: string
+          format: date-time
+
+    UpdateDisplayNameBody:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 30
+
+    UpdateDisplayNameResult:
+      type: object
+      required: [displayName, lastNameChange, nextChangeAvailable]
+      properties:
+        displayName:
+          type: string
+        lastNameChange:
+          type: string
+          format: date-time
+        nextChangeAvailable:
+          type: string
+          format: date-time
+
+    UpdateDisplayNameRateLimitError:
+      type: object
+      required: [error, nextChangeAvailable]
+      properties:
+        error:
+          type: string
+        nextChangeAvailable:
+          type: string
+          format: date-time
+
+    CitiesEnvelope:
+      type: object
+      required: [cities]
+      properties:
+        cities:
+          type: array
+          items:
+            type: string
+
+    BusCompany:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    BusCompaniesEnvelope:
+      type: object
+      required: [companies]
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/BusCompany"
+
+    SuccessEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+
+    ProposedAssociation:
+      type: object
+      required: [id, candidateJourneyId, parentJourneyId, proposedStopCity, relationType, confidenceScore, evidence, status, proposedAt, resolvedAt, parentFromCity, parentToCity, parentDepartureTime, parentArrivalTime, parentBusCompany]
+      properties:
+        id:
+          type: integer
+        candidateJourneyId:
+          type: integer
+        parentJourneyId:
+          type: integer
+        proposedStopCity:
+          type: string
+        proposedStopTime:
+          type: [string, 'null']
+        relationType:
+          type: string
+          enum: [contains_stop, same_service, duplicate, correction]
+        confidenceScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+        evidence:
+          type: [object, 'null']
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, confirmed, rejected, reversed]
+        proposedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: [string, 'null']
+          format: date-time
+        parentFromCity:
+          type: string
+        parentToCity:
+          type: string
+        parentDepartureTime:
+          type: string
+        parentArrivalTime:
+          type: string
+        parentBusCompany:
+          type: string
+
+    ProposedAssociationsEnvelope:
+      type: object
+      required: [proposals]
+      properties:
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProposedAssociation"
+
 
     MobileTokenExchangeSuccess:
       type: object

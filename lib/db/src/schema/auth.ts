@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Application-owned account/session data; preserve during provider migrations.
 export const sessionsTable = pgTable(
   "sessions",
   {
@@ -12,7 +12,7 @@ export const sessionsTable = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
+// Application-owned account/session data; preserve during provider migrations.
 export const usersTable = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
@@ -31,3 +31,9 @@ export const usersTable = pgTable("users", {
 
 export type UpsertUser = typeof usersTable.$inferInsert;
 export type User = typeof usersTable.$inferSelect;
+
+/** Durable retry queue. No FK: survives deletion of the application account. */
+export const authDeletionJobsTable = pgTable("auth_deletion_jobs", {
+  userId: varchar("user_id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
