@@ -28,6 +28,7 @@ async function start(): Promise<void> {
     }
 
     logger.info({ port }, "Server listening");
+    void import("./lib/identityDeletion").then(({ startIdentityDeletionWorker }) => startIdentityDeletionWorker());
   });
 }
 
