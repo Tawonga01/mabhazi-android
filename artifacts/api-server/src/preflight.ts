@@ -71,7 +71,6 @@ async function verifyDatabaseSchema(connectionString: string): Promise<void> {
     const code = typeof candidate?.code === "string" && /^[A-Z0-9_]{2,64}$/.test(candidate.code)
       ? candidate.code : candidate?.message === "MABHAZI_SCHEMA_MISSING" ? "SCHEMA_MISSING" : "UNKNOWN";
     throw new Error(`Production database schema readiness check failed (${code}).`);
-  }
   } finally {
     await pool.end().catch(() => undefined);
   }
