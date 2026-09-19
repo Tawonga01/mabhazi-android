@@ -12,7 +12,7 @@ router.get("/healthz", (_req, res) => {
 router.get("/readyz", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
-    await pool.query({ text: "SELECT 1 FROM public.users LIMIT 1", query_timeout: 5000 });
+    await pool.query("SELECT 1 FROM public.users LIMIT 1");
     res.json({ status: "ready" });
   } catch {
     res.status(503).json({ status: "unavailable" });
