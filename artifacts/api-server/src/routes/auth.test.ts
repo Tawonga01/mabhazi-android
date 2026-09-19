@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createServer, type Server } from "node:http";
+import { createServer, request as httpRequest, type Server } from "node:http";
 import { after, before, test } from "node:test";
 
 let server: Server;
@@ -22,19 +22,31 @@ after(async () => {
   await pool.end();
 });
 
-test("website login redirects to the API before setting its verifier cookie", async () => {
-  const response = await fetch(baseUrl + "/api/login?returnTo=%2Fapi%2Fdelete-account", {
-    redirect: "manual", headers: { host: "mabhazi.com" },
+function requestLogin(host: string, query: string) {
+  // Node fetch reserves Host; use the HTTP client to model each actual host.
+  return new Promise<{ status: number; headers: Headers }>((resolve, reject) => {
+    const request = httpRequest(baseUrl + "/api/login" + query, { headers: { host } }, response => {
+      const headers = new Headers();
+      for (let i = 0; i < response.rawHeaders.length; i += 2) {
+        headers.append(response.rawHeaders[i], response.rawHeaders[i + 1]);
+      }
+      response.resume();
+      response.on("end", () => resolve({ status: response.statusCode!, headers }));
+    });
+    request.on("error", reject);
+    request.end();
   });
+}
+
+test("website login redirects to the API before setting its verifier cookie", async () => {
+  const response = await requestLogin("mabhazi.com", "?returnTo=%2Fapi%2Fdelete-account");
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "https://api.mabhazi.com/api/login?returnTo=%2Fapi%2Fdelete-account");
   assert.equal(response.headers.get("set-cookie"), null);
 });
 
 test("API login binds a secure PKCE cookie to the registered callback", async () => {
-  const response = await fetch(baseUrl + "/api/login?returnTo=https://attacker.invalid", {
-    redirect: "manual", headers: { host: "api.mabhazi.com" },
-  });
+  const response = await requestLogin("api.mabhazi.com", "?returnTo=https://attacker.invalid");
   assert.equal(response.status, 302);
   const target = new URL(response.headers.get("location")!);
   assert.equal(target.origin, "https://example.supabase.co");
