@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Inter Africa",
+    "active": true,
+    "created_at": "2026-06-13T14:46:42.512095+00:00"
+  },
+  {
+    "id": 2,
+    "name": "C.A.G",
+    "active": true,
+    "created_at": "2026-06-13T14:47:05.581251+00:00"
+  },
+  {
+    "id": 3,
+    "name": "Eagleliner",
+    "active": false,
+    "created_at": "2026-06-13T14:47:42.776459+00:00"
+  }
+]
