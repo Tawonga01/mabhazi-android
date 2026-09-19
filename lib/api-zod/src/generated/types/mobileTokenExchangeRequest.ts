@@ -7,14 +7,15 @@
  */
 
 export interface MobileTokenExchangeRequest {
-  /** @minLength 1 */
+  /**
+   * @minLength 1
+   * @maxLength 2048
+   */
   code: string;
-  /** @minLength 1 */
+  /**
+   * @minLength 43
+   * @maxLength 128
+   * @pattern ^[A-Za-z0-9._~-]+$
+   */
   code_verifier: string;
-  /** @minLength 1 */
-  redirect_uri: string;
-  /** @minLength 1 */
-  state: string;
-  /** @minLength 1 */
-  nonce?: string;
 }
