@@ -2,7 +2,7 @@ import pg from "pg";
 
 import { getAllowedOrigins } from "./lib/origins";
 import { supabaseConfiguration } from "./lib/supabaseAuth";
-const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
+const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
 
 const requiredColumns: Record<string, readonly string[]> = {
   abuse_reports: [
@@ -22,6 +22,7 @@ const requiredColumns: Record<string, readonly string[]> = {
   journey_reports: ["id", "journey_id", "user_id", "content", "moderation_status"],
   journeys: ["id", "contributed_by", "moderation_status"],
   sessions: ["sid", "sess", "expire"],
+  auth_deletion_jobs: ["user_id", "created_at"],
   users: ["id", "terms_accepted_version", "terms_accepted_at"],
 };
 
