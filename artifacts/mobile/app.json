@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.mabhazicom.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon-foreground.png",
         "backgroundColor": "#F97316"
