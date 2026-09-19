@@ -157,6 +157,16 @@ router.get("/auth/user", (req: Request, res: Response) => {
 });
 
 router.get("/login", async (req: Request, res: Response) => {
+  res.setHeader("Cache-Control", "no-store");
+  // Policy pages are also served on the website domain. Start OAuth on the
+  // canonical API host so the verifier cookie reaches the registered callback.
+  const origin = getOrigin(req);
+  if (req.get("host") !== new URL(origin).host) {
+    const login = new URL("/api/login", origin);
+    login.searchParams.set("returnTo", getSafeReturnTo(req.query.returnTo));
+    res.redirect(login.href);
+    return;
+  }
   const verifier = crypto.randomBytes(32).toString("base64url");
   const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
   setOidcCookie(res, "code_verifier", verifier);
