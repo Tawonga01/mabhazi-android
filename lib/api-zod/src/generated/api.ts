@@ -71,11 +71,8 @@ export const LogoutBrowserSessionHeader = zod.object({
  */
 
 export const ExchangeMobileAuthorizationCodeBody = zod.object({
-  code: zod.string().min(1),
-  code_verifier: zod.string().min(1),
-  redirect_uri: zod.string().url().min(1),
-  state: zod.string().min(1),
-  nonce: zod.string().min(1).optional(),
+  code: zod.string().min(1).max(2048),
+  code_verifier: zod.string().min(43).max(128).regex(/^[A-Za-z0-9._~-]+$/),
 });
 
 export const ExchangeMobileAuthorizationCodeResponse = zod.object({
