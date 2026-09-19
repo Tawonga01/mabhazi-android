@@ -45,11 +45,21 @@ for (const feature of geoJson.features) {
   cities.push({ name, placeType: place });
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
 
 try {
-  console.log(`Clearing old cities...`);
-  await pool.query("DELETE FROM cities");
+  await pool.query("BEGIN");
+  await pool.query("LOCK TABLE cities IN EXCLUSIVE MODE");
+  const existing = await pool.query("SELECT name, place_type FROM cities ORDER BY lower(name)");
+  if (existing.rows.length > 0) {
+    const expected = new Map(cities.map(city => [city.name, city.placeType]));
+    if (existing.rows.length !== cities.length || existing.rows.some(row => expected.get(row.name) !== row.place_type)) {
+      throw new Error("Existing city reference data differs; review before replacing it.");
+    }
+    await pool.query("COMMIT");
+    console.log("City reference data already matches.");
+    process.exitCode = 0;
+  } else {
 
   console.log(`Inserting ${cities.length} cities...`);
   const BATCH = 100;
@@ -65,7 +75,12 @@ try {
     );
   }
 
+  await pool.query("COMMIT");
   console.log(`Done — ${cities.length} cities seeded.`);
+  }
+} catch (error) {
+  await pool.query("ROLLBACK");
+  throw error;
 } finally {
   await pool.end();
 }

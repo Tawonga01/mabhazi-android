@@ -9,7 +9,7 @@ export default function PrivacyScreen() {
       sections={[
         {
           title: "Operator",
-          body: "Mabhazi is operated by Tawonga Tsokodayi. Country: not specified. Your separate Replit account is not the same as your Mabhazi account.",
+          body: "Mabhazi is operated by Tawonga Tsokodayi. Country: not specified. Your separate Google account is not the same as your Mabhazi account.",
         },
         {
           title: "What Mabhazi uses",
@@ -29,7 +29,7 @@ export default function PrivacyScreen() {
         },
         {
           title: "Deletion",
-          body: "Use Delete account from your signed-in profile to permanently delete Mabhazi account-linked data. This action does not delete your separate Replit account. If you cannot sign in, contact support without sending a password or session token.",
+          body: "Use Delete account from your signed-in profile to permanently delete Mabhazi account-linked data. This action does not delete your separate Google account. If you cannot sign in, contact support without sending a password or session token.",
         },
       ]}
     />

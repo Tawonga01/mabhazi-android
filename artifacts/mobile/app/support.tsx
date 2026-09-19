@@ -17,7 +17,7 @@ export default function SupportScreen() {
         },
         {
           title: "Account deletion",
-          body: "Delete your Mabhazi account from Profile. The deletion permanently removes Mabhazi sessions, signed-in searches, ratings, reports, corrections, and contributions. Shared route records may remain only anonymized. Your separate Replit account is unaffected.",
+          body: "Delete your Mabhazi account from Profile. The deletion permanently removes Mabhazi sessions, signed-in searches, ratings, reports, corrections, and contributions. Shared route records may remain only anonymized. Your separate Google account is unaffected.",
         },
         {
           title: "Moderation limitations",

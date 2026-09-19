@@ -24,5 +24,4 @@ jobs:
       - run: pnpm --dir artifacts/mobile run typecheck
       - run: pnpm --dir artifacts/mobile run android:export
         env:
-          EXPO_PUBLIC_API_BASE_URL: https://mabhaziv-2.replit.app
-          EXPO_PUBLIC_REPL_ID: fe7a35db-ee35-4fb1-ad14-8119fd506ab1
+          EXPO_PUBLIC_API_BASE_URL: https://api.mabhazi.com

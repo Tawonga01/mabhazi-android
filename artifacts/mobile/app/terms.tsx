@@ -25,7 +25,7 @@ export default function TermsScreen() {
         },
         {
           title: "Account deletion",
-          body: "You can permanently delete your Mabhazi account from your profile. Shared route records may remain only without your account attribution. Deleting Mabhazi does not delete your separate Replit account.",
+          body: "You can permanently delete your Mabhazi account from your profile. Shared route records may remain only without your account attribution. Deleting Mabhazi does not delete your separate Google account.",
         },
       ]}
     />
