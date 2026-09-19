@@ -4,6 +4,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import {
   GetCurrentAuthUserResponse,
   ExchangeMobileAuthorizationCodeResponse,
+  ExchangeMobileAuthorizationCodeBody,
   LogoutMobileSessionResponse,
 } from "@workspace/api-zod";
 import { db, usersTable, journeysTable, authDeletionJobsTable } from "@workspace/db";
@@ -222,15 +223,14 @@ router.post("/mobile-auth/start", (req: Request, res: Response) => {
 });
 
 router.post("/mobile-auth/token-exchange", async (req: Request, res: Response) => {
-  const code = req.body?.code;
-  const verifier = req.body?.code_verifier;
-  if (typeof code !== "string" || typeof verifier !== "string") {
+  const body = ExchangeMobileAuthorizationCodeBody.safeParse(req.body);
+  if (!body.success) {
     res.status(400).json({ error: "Invalid sign-in request" });
     return;
   }
   res.setHeader("Cache-Control", "no-store");
   try {
-    const tokens = await createSupabaseAuth().exchangeCode(code, verifier);
+    const tokens = await createSupabaseAuth().exchangeCode(body.data.code, body.data.code_verifier);
     res.json(ExchangeMobileAuthorizationCodeResponse.parse({ token: await saveProviderSession(tokens) }));
   } catch {
     res.status(401).json({ error: "Sign-in failed or expired. Please try again." });
