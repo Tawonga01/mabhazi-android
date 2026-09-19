@@ -40,6 +40,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck:libs
       - run: pnpm --dir artifacts/api-server run typecheck
+      - name: Generate reproducible initial schema
+        run: pnpm --dir lib/db exec drizzle-kit generate --config ./drizzle.config.ts --out ./migrations
+      - name: Report generated schema for migration review
+        run: |
+          node -e 'const fs=require("fs"); for(const f of fs.readdirSync("lib/db/migrations").filter(f=>f.endsWith(".sql"))) { console.log("MIGRATION_SQL_BEGIN"); console.log(fs.readFileSync("lib/db/migrations/"+f,"utf8")); console.log("MIGRATION_SQL_END"); }'
       - run: pnpm --dir lib/db run push
       - run: pnpm --dir artifacts/api-server exec tsx --test src/lib/origins.test.ts src/lib/supabaseAuth.test.ts src/lib/identityDeletion.test.ts src/routes/adminAuth.test.ts
       - run: pnpm --dir artifacts/api-server run test
