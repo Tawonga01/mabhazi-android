@@ -21,7 +21,7 @@ API validation must additionally validate supported ISO currencies/precision, se
 
 ## Validation
 
-Backend CI runs all migrations on a fresh PostgreSQL 17 database, then repeats the runner. `pnpm --dir lib/db run test:intake` creates a separately named disposable database with the prior migration ledger, seeds a synthetic legacy journey, runs the real migration runner twice and checks unchanged legacy data. It checks required fields, typed payloads/references, retry isolation, correction history, privacy, erasure, rollback, lease/deduplication constraints and RLS grants. Its DATABASE_URL role needs CREATEDB; it does not mutate rows in the supplied database. Run only with isolated development/CI credentials.
+Backend CI runs all migrations on a fresh PostgreSQL 17 database, then repeats the runner. `pnpm --dir lib/db run test:intake` creates a separately named disposable database with the prior migration ledger, seeds a synthetic legacy journey, runs the real migration runner twice and checks unchanged legacy data. It checks required fields, typed payloads/references, retry isolation, correction history, privacy, erasure, rollback, lease/deduplication constraints and RLS grants, including removal of inherited client-role grants. Its DATABASE_URL role needs CREATEDB/CREATEROLE on an isolated test cluster. The test reuses an existing backend role because PostgreSQL roles span databases; it removes any temporary client roles it creates after dropping the fixture database. It does not mutate rows in the supplied database. Run only with isolated development/CI credentials.
 
 `pnpm --dir lib/db run verify-schema` is read-only column verification, not a substitute for behavioural tests. No runtime dependency or lockfile change is required.
 

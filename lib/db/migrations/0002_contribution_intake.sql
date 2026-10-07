@@ -332,7 +332,7 @@ BEGIN
   -- FK erasure of a superseded observation is permitted; all content stays fixed.
   IF TG_TABLE_NAME='v2_observations' THEN
     -- Generated fields are computed after BEFORE triggers. Compare their inputs.
-    IF NEW.supersedes_id IS NULL AND
+    IF pg_trigger_depth()>1 AND NEW.supersedes_id IS NULL AND OLD.supersedes_id IS NOT NULL AND
       (to_jsonb(NEW)-ARRAY['supersedes_id','operator_ref','place_city_ref','fare_origin_ref','fare_destination_ref'])=
       (to_jsonb(OLD)-ARRAY['supersedes_id','operator_ref','place_city_ref','fare_origin_ref','fare_destination_ref']) THEN RETURN NEW; END IF;
   END IF;

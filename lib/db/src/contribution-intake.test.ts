@@ -10,7 +10,7 @@ import pg from "pg";
 import { intakeTables } from "./schema/contributionIntake";
 
 // Disposable database only. Never run mutation tests in the supplied database.
-// CI credentials need CREATEDB; production service credentials should not have it.
+// Isolated test-cluster credentials need CREATEDB/CREATEROLE.
 const databaseName = `mabhazi_intake_test_${randomUUID().replaceAll("-", "")}`;
 const admin = new pg.Client({ connectionString: process.env.DATABASE_URL });
 let db: pg.Client;
@@ -24,6 +24,7 @@ let origin: number;
 let destination: number;
 let corridor: string;
 let legacySnapshot: unknown;
+const createdRoles: string[] = [];
 
 async function migrate() {
   const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(new URL("./migrate.ts", import.meta.url))], {
@@ -63,6 +64,16 @@ before(async () => {
   await db.query(`INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price)
     VALUES ('Harare','Bulawayo','08:00','14:00','2026-10-07','Synthetic legacy company','A','B',25.50)`);
   legacySnapshot = (await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows;
+  // Model hosted defaults granting client roles access to newly created tables.
+  // 0002 must actively revoke these grants, not merely rely on fresh PG defaults.
+  for (const role of ["anon", "authenticated"]) {
+    if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
+      await db.query(`CREATE ROLE ${role} NOLOGIN`);
+      createdRoles.push(role);
+    }
+    await db.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${role}`);
+  }
+  await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
   assert.match(await migrate(), /Applied 0002_contribution_intake.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
@@ -70,6 +81,7 @@ before(async () => {
 after(async () => {
   if (db) await db.end();
   if (databaseCreated) await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+  for (const role of createdRoles) await admin.query(`DROP ROLE ${role}`);
   await admin.end();
 });
 beforeEach(async () => {
@@ -246,6 +258,7 @@ test("corrections append history and cannot supersede another account or field",
   const next = await contribution(c.subjectId);
   const corrected = await observation(next, "departure.reported", { time: "09:00", basis: "scheduled" }, {}, original.id);
   assert.equal(corrected.supersedes_id, original.id);
+  await rejectQuery("UPDATE v2_observations SET supersedes_id=NULL WHERE id=$1", [corrected.id]);
   await rejectQuery("UPDATE v2_observations SET value=$1 WHERE id=$2", [{ time: "10:00", basis: "scheduled" }, original.id]);
   const theirs = await contribution(c.subjectId, other);
   await rejectQuery(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope_key,value_key,supersedes_id)
@@ -311,7 +324,7 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
   const tables = intakeTables.map(getTableName);
-  const policies = (await db.query("SELECT tablename,roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
+  const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
   for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
@@ -320,7 +333,6 @@ test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while perm
     WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY($1::text[]) AND a.grantee=0`, [tables]);
   assert.equal(publicGrants.rowCount, 0);
   for (const role of ["anon", "authenticated"]) {
-    if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) await db.query(`CREATE ROLE ${role} NOLOGIN`);
     await db.query(`SET LOCAL ROLE ${role}`);
     for (const table of tables) await rejectQuery(`SELECT * FROM ${table}`, [], ["42501"]);
     await db.query("RESET ROLE");
