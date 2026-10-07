@@ -48,7 +48,16 @@ before(async () => {
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
   for (const name of ["0000_initial.sql", "0001_api_role.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
-    await db.query(sql);
+    // 0001 predates multi-database tests and creates a cluster-wide role.
+    // Reuse that role in this isolated database without changing the shipped
+    // migration or its recorded checksum; all database-local grants still run.
+    let fixtureSql = sql;
+    if (name === "0001_api_role.sql" && (await db.query("SELECT 1 FROM pg_roles WHERE rolname='mabhazi_api'")).rowCount) {
+      const roleStatement = "CREATE ROLE mabhazi_api NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;";
+      assert.ok(sql.includes(roleStatement));
+      fixtureSql = sql.replace(roleStatement, "");
+    }
+    await db.query(fixtureSql);
     await db.query("INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)", [name, createHash("sha256").update(sql).digest("hex")]);
   }
   await db.query(`INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price)
