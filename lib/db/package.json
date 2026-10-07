@@ -12,7 +12,8 @@
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
     "verify-schema": "tsx ./src/verify-schema.ts",
     "seed-cities": "tsx ./src/seed-cities.ts",
-    "migrate": "tsx ./src/migrate.ts"
+    "migrate": "tsx ./src/migrate.ts",
+    "test:intake": "tsx --test src/contribution-intake.test.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

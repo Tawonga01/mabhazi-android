@@ -8,3 +8,4 @@ export * from "./journeyContributions";
 export * from "./cities";
 export * from "./busCompanies";
 export * from "./abuseReports";
+export * from "./contributionIntake";
