@@ -221,7 +221,7 @@ export function registerTransportTests(context: () => Context) {
     await query("RESET ROLE");
   });
 
-  test("transport: overlapping stop-parent edits cannot commit a cycle at repeatable read", { timeout: 20_000 }, async () => {
+  for (const isolation of ["READ COMMITTED", "REPEATABLE READ"]) test(`transport: overlapping stop-parent edits cannot commit a cycle at ${isolation}`, { timeout: 20_000 }, async () => {
     // The main fixture holds the transport guard. Release its rollback-only rows
     // before exercising two committed transactions in this disposable database.
     await query("ROLLBACK");
@@ -234,16 +234,18 @@ export function registerTransportTests(context: () => Context) {
     const right = new pg.Client({ connectionString: context().connectionString });
     await left.connect(); await right.connect();
     try {
-      await left.query("BEGIN ISOLATION LEVEL REPEATABLE READ"); await right.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      await left.query(`BEGIN ISOLATION LEVEL ${isolation}`); await right.query(`BEGIN ISOLATION LEVEL ${isolation}`);
       await right.query("SET LOCAL statement_timeout='5s'");
       await right.query("SELECT * FROM v2_stops WHERE subject_id=$1", [b]); // Fix right's snapshot before left changes it.
       await left.query("UPDATE v2_stops SET parent_stop_id=$1 WHERE subject_id=$2", [b, a]);
-      const outcome = right.query("UPDATE v2_stops SET parent_stop_id=$1 WHERE subject_id=$2", [a, b]).then(() => "committed", (e: { code: string }) => e.code);
+      const outcome = right.query("UPDATE v2_stops SET parent_stop_id=$1 WHERE subject_id=$2", [a, b]).then(() => "updated", (e: { code: string }) => e.code);
       await left.query("COMMIT");
-      assert.equal(await outcome, "40001");
-      await right.query("ROLLBACK");
-      await right.query("BEGIN");
-      await right.query("UPDATE v2_stops SET parent_stop_id=$1 WHERE subject_id=$2", [a, b]);
+      if (isolation === "REPEATABLE READ") {
+        assert.equal(await outcome, "40001");
+        await right.query("ROLLBACK");
+        await right.query("BEGIN");
+        await right.query("UPDATE v2_stops SET parent_stop_id=$1 WHERE subject_id=$2", [a, b]);
+      } else assert.equal(await outcome, "updated");
       await assert.rejects(right.query("COMMIT"), (e: unknown) => e instanceof Error && "code" in e && e.code === "23514");
     } finally {
       await left.query("ROLLBACK"); await right.query("ROLLBACK"); await left.end(); await right.end();

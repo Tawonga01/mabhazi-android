@@ -26,7 +26,7 @@ Future reviewer/worker transactions must acquire this guard before subject locks
 
 ## Validation and deployment boundary
 
-The existing `test:intake` suite now tests both storage steps in a disposable PostgreSQL database. Its upgrade fixture starts with 0000–0002 and actual synthetic legacy/intake rows, applies the real runner through 0003 twice, verifies original values, then runs isolated rollback cases. Fresh application of all migrations remains a separate CI step. Drizzle column/type/primary-key/generated-column checks and client-grant tests include all new tables. The concurrency case uses two real database connections and an overlapping stop-parent edit, followed by a retry that must reject the resulting cycle.
+The existing `test:intake` suite now tests both storage steps in a disposable PostgreSQL database. Its upgrade fixture starts with 0000–0002 and actual synthetic legacy/intake rows, applies the real runner through 0003 twice, verifies original values, then runs isolated rollback cases. Fresh application of all migrations remains a separate CI step. Drizzle column/type/primary-key/generated-column checks and client-grant tests include all new tables. Concurrency cases use two real database connections and overlapping stop-parent edits at both READ COMMITTED and REPEATABLE READ. The latter must serialize/retry; neither may commit the resulting cycle.
 
 Use checked-in SQL migrations; never schema push. Live migration/deployment remains gated on authenticated baseline/ledger inspection and backup/restore rehearsal. The migration performs no live-data import or legacy backfill. No mobile/native/signing configuration changes. Keep the draft PR unmerged while WP02 storage remains incomplete.
 
