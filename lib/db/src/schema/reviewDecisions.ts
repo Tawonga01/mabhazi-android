@@ -3,7 +3,7 @@ import { bigint, boolean, pgTable, primaryKey, text, timestamp, uuid, varchar } 
 // Internal query mappings. SQL owns constraints, privileges and transactional writes.
 const instant = (name: string) => timestamp(name, { withTimezone: true });
 export const v2DecisionIdsTable = pgTable("v2_decision_ids", {
-  id: uuid("id").primaryKey().defaultRandom(), kind: text("kind", { enum: ["review"] }).notNull(),
+  id: uuid("id").primaryKey().defaultRandom(), kind: text("kind", { enum: ["review", "field", "association"] }).notNull(),
   createdAt: instant("created_at").notNull().defaultNow(),
 });
 export const v2ReviewRolesTable = pgTable("v2_review_roles", {
