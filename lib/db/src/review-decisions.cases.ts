@@ -24,7 +24,7 @@ export function registerReviewTests(context: () => Context) {
   }
   async function fixture() {
     const { user, other, corridor } = context();
-    const reviewer = randomUUID(), subject = randomUUID(), contribution = randomUUID();
+    const reviewer: string = randomUUID(), subject = randomUUID(), contribution = randomUUID();
     await query("INSERT INTO users(id) VALUES($1)", [reviewer]);
     await query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','bootstrap')", [other]);
     await query(roleSql, [other, reviewer, "reviewer", "grant", "delegated_review"]);
