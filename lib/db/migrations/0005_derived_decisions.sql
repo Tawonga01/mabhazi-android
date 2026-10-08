@@ -91,7 +91,7 @@ CREATE INDEX v2_association_link_target_idx ON public.v2_association_links(to_su
 
 CREATE TABLE public.v2_field_decisions (
  id uuid PRIMARY KEY, decision_kind text NOT NULL DEFAULT 'field' CHECK(decision_kind='field'),
- subject_id uuid NOT NULL REFERENCES public.v2_subjects(id),
+ subject_id uuid NOT NULL REFERENCES public.v2_leads(subject_id),
  field_key text NOT NULL CHECK(field_key IN ('operator.reported','departure.reported','boarding.pickup','alighting.dropoff','fare.paid','fare.quoted','fare.advertised')),
  scope_key text NOT NULL CHECK(scope_key ~ '^[0-9a-f]{64}$'), scope jsonb,
  revision bigint NOT NULL CHECK(revision>=1),
@@ -299,15 +299,17 @@ CREATE TRIGGER v2_candidate_content_immutable BEFORE UPDATE ON public.v2_associa
 
 CREATE FUNCTION public.v2_validate_current_decision() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE candidate uuid;
 BEGIN
- IF TG_TABLE_NAME='v2_current_fields' THEN
+ IF TG_TABLE_NAME IN ('v2_current_fields','v2_field_decisions') THEN
    IF EXISTS(SELECT 1 FROM public.v2_current_fields f JOIN public.v2_field_decisions d ON d.id=f.field_decision_id
      JOIN public.v2_subjects s ON s.id=f.subject_id WHERE f.subject_id=NEW.subject_id AND f.field_key=NEW.field_key AND f.scope_key=NEW.scope_key
        AND (d.invalidated OR f.generation<>s.input_generation OR d.input_generation<>f.generation)) THEN
      RAISE EXCEPTION 'v2_current_field_stale' USING ERRCODE='23514'; END IF;
  ELSE
+   IF TG_TABLE_NAME='v2_association_candidates' THEN candidate:=NEW.id; ELSE candidate:=NEW.candidate_id; END IF;
    IF EXISTS(SELECT 1 FROM public.v2_association_links l JOIN public.v2_association_decisions d ON d.id=l.decision_id
-     JOIN public.v2_association_candidates c ON c.id=l.candidate_id WHERE l.candidate_id=NEW.candidate_id
+     JOIN public.v2_association_candidates c ON c.id=l.candidate_id WHERE l.candidate_id=candidate
        AND (d.action<>'accept' OR d.invalidated OR c.last_decision_id<>d.id OR c.last_decision_id IS NULL OR c.state<>'decided')) THEN
      RAISE EXCEPTION 'v2_current_association_invalid' USING ERRCODE='23514'; END IF;
  END IF;
@@ -316,6 +318,12 @@ END; $$;
 CREATE CONSTRAINT TRIGGER v2_current_field_valid AFTER INSERT OR UPDATE ON public.v2_current_fields
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_validate_current_decision();
 CREATE CONSTRAINT TRIGGER v2_current_association_valid AFTER INSERT OR UPDATE ON public.v2_association_links
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_validate_current_decision();
+CREATE CONSTRAINT TRIGGER v2_current_association_valid AFTER UPDATE ON public.v2_association_candidates
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_validate_current_decision();
+CREATE CONSTRAINT TRIGGER v2_current_association_valid AFTER UPDATE ON public.v2_association_decisions
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_validate_current_decision();
+CREATE CONSTRAINT TRIGGER v2_current_field_valid AFTER UPDATE ON public.v2_field_decisions
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_validate_current_decision();
 
 CREATE FUNCTION public.v2_apply_field_decision(decision uuid) RETURNS void
@@ -339,6 +347,15 @@ BEGIN
    SELECT id,kind,revision,public.v2_transport_snapshot(id),'decision',d.id,'field' FROM public.v2_subjects WHERE id=d.subject_id;
 END; $$;
 
+CREATE FUNCTION public.v2_resolved_operator(subject uuid) RETURNS uuid
+LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+ SELECT operator_subject_id FROM public.v2_leads WHERE subject_id=subject
+ UNION ALL SELECT operator_subject_id FROM public.v2_routes WHERE subject_id=subject
+ UNION ALL SELECT r.operator_subject_id FROM public.v2_patterns p JOIN public.v2_routes r ON r.subject_id=p.route_subject_id WHERE p.subject_id=subject
+ UNION ALL SELECT r.operator_subject_id FROM public.v2_service_plans sp JOIN public.v2_patterns p ON p.subject_id=sp.pattern_subject_id JOIN public.v2_routes r ON r.subject_id=p.route_subject_id WHERE sp.subject_id=subject
+ UNION ALL SELECT r.operator_subject_id FROM public.v2_runs run JOIN public.v2_service_plans sp ON sp.subject_id=run.service_plan_subject_id
+   JOIN public.v2_patterns p ON p.subject_id=sp.pattern_subject_id JOIN public.v2_routes r ON r.subject_id=p.route_subject_id WHERE run.subject_id=subject;
+$$;
 CREATE FUNCTION public.v2_apply_association_decision(decision uuid) RETURNS void
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE d public.v2_association_decisions; c public.v2_association_candidates; r public.v2_review_decisions; review_subject uuid;
@@ -381,9 +398,16 @@ BEGIN
    IF d.actor_kind='reviewer' AND EXISTS(SELECT 1 FROM public.v2_candidate_evidence e WHERE e.candidate_id=c.id
      AND NOT EXISTS(SELECT 1 FROM public.v2_review_decision_evidence re WHERE re.decision_id=r.id AND re.observation_id=e.observation_id)) THEN
      RAISE EXCEPTION 'v2_candidate_evidence_not_reviewed' USING ERRCODE='23514'; END IF;
-   IF c.relation='contains_segment' AND NOT EXISTS(SELECT 1 FROM public.v2_patterns p JOIN public.v2_pattern_stops s
-     ON s.pattern_subject_id=p.subject_id AND s.pattern_version=p.current_pattern_version
-     WHERE p.subject_id=c.from_subject_id GROUP BY p.subject_id HAVING min(s.sequence)<=c.segment_start AND max(s.sequence)>=c.segment_end) THEN
+   IF c.relation IN ('same_service','same_pattern','duplicate_of')
+     AND public.v2_resolved_operator(c.from_subject_id)<>public.v2_resolved_operator(c.to_subject_id) THEN
+     RAISE EXCEPTION 'v2_known_operators_differ' USING ERRCODE='23514'; END IF;
+   IF c.from_kind='run' AND c.to_kind='run' AND c.relation IN ('same_service','duplicate_of')
+     AND (SELECT departure_seconds FROM public.v2_runs WHERE subject_id=c.from_subject_id)<>
+       (SELECT departure_seconds FROM public.v2_runs WHERE subject_id=c.to_subject_id) THEN
+     RAISE EXCEPTION 'v2_distinct_departures_are_distinct_runs' USING ERRCODE='23514'; END IF;
+   IF c.relation='contains_segment' AND NOT EXISTS(SELECT 1 FROM public.v2_patterns p JOIN public.v2_pattern_stops ps
+     ON ps.pattern_subject_id=p.subject_id AND ps.pattern_version=p.current_pattern_version
+     WHERE p.subject_id=c.from_subject_id GROUP BY p.subject_id HAVING min(ps.sequence)<=c.segment_start AND max(ps.sequence)>=c.segment_end) THEN
      RAISE EXCEPTION 'v2_segment_out_of_bounds' USING ERRCODE='23514'; END IF;
    INSERT INTO public.v2_association_links VALUES(c.id,c.from_subject_id,c.to_subject_id,c.relation,d.id);
  ELSIF d.action='reverse' THEN
@@ -499,7 +523,7 @@ DO $$ DECLARE t text; role_name text; f record; BEGIN
  -- All new processing helpers are owner-only until the actual worker path is
  -- implemented, with lease/actor authorization. Trigger helpers remain usable.
  FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN (
-   'v2_apply_field_decision','v2_apply_association_decision','v2_invalidate_derived','v2_transport_snapshot',
+   'v2_apply_field_decision','v2_apply_association_decision','v2_invalidate_derived','v2_transport_snapshot','v2_resolved_operator',
    'v2_derived_observation_change','v2_derived_review_change','v2_clear_stale_fields','v2_erase_subject_snapshots') LOOP
    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,mabhazi_api',f.signature);
    FOREACH role_name IN ARRAY ARRAY['anon','authenticated'] LOOP

@@ -87,6 +87,12 @@ export function registerDerivedTests(context: () => Context) {
     await association(c, { action: "defer" });
     await invalid(() => q("INSERT INTO v2_candidate_evidence VALUES($1,$2)", [c, b.observation]));
   });
+  test("derived: initial field registry cannot attach lead-only facts to another subtype", async () => {
+    const a = await lead(), operator = randomUUID();
+    await q("INSERT INTO v2_subjects(id,kind) VALUES($1,'operator')", [operator]);
+    await q("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Fixture operator')", [operator]);
+    await invalid(() => field({ ...a, id: operator }, { selected: null }), ["23503"]);
+  });
   test("derived: selected values require exact live evidence and scope, not just a matching hash", async () => {
     const a = await lead(), b = await lead();
     for (const options of [{ evidence: [] }, { evidence: [b.observation] }, { selected: { time: "09:00", basis: "scheduled" } }, { scope: { different: true } }]) {
@@ -198,6 +204,21 @@ export function registerDerivedTests(context: () => Context) {
     assert.equal((await q("SELECT count(*) FROM v2_current_fields WHERE subject_id=$1", [a.id])).rows[0].count, "0");
     await q("DELETE FROM v2_observations WHERE id=$1", [a.observation]);
     assert.equal((await q("SELECT erased FROM v2_field_decisions WHERE id=$1", [d])).rows[0].erased, true);
+  });
+  test("derived: a review cannot equate services of different known operators", async () => {
+    const a = await lead(), b = await lead();
+    for (const f of [a, b]) {
+      const operator = randomUUID();
+      await q("INSERT INTO v2_subjects(id,kind) VALUES($1,'operator')", [operator]);
+      await q("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Distinct operator')", [operator]);
+      await q("UPDATE v2_leads SET operator_name=NULL,operator_subject_id=$1 WHERE subject_id=$2", [operator, f.id]);
+    }
+    const c = await candidate(a, b, "duplicate_of"); const r = await review(a); const d = await association(c, { review: r.id });
+    await invalid(() => applyAssociation(d));
+  });
+  test("derived: active links cannot survive a candidate becoming obsolete", async () => {
+    const a = await lead(), b = await lead(); const c = await candidate(a, b); const d = await association(c); await applyAssociation(d);
+    await invalid(async () => { await q("UPDATE v2_association_candidates SET state='obsolete' WHERE id=$1", [c]); await q("SET CONSTRAINTS ALL IMMEDIATE"); });
   });
   test("derived: association evidence erasure removes links, redacts digest and retains decision tombstones", async () => {
     const a = await lead(), b = await lead(); const c = await candidate(a, b); const d = await association(c); await applyAssociation(d);
