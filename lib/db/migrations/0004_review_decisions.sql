@@ -93,7 +93,9 @@ LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 DECLARE target uuid; registry_kind text;
 BEGIN
   target:=COALESCE(NEW.id,OLD.id);
-  SELECT kind INTO registry_kind FROM public.v2_decision_ids WHERE id=target FOR UPDATE;
+  -- Registry identity is immutable; the shared guard already serializes writes.
+  -- Deferred checks run after SECURITY DEFINER returns, under the caller's role.
+  SELECT kind INTO registry_kind FROM public.v2_decision_ids WHERE id=target;
   IF NOT FOUND THEN RETURN NULL; END IF;
   IF registry_kind='review' AND NOT EXISTS(SELECT 1 FROM public.v2_review_decisions WHERE id=target) THEN
     RAISE EXCEPTION 'v2_decision_requires_subtype' USING ERRCODE='23514'; END IF;
