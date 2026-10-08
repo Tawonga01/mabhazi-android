@@ -16,7 +16,8 @@ Names, times or account counts do not authorize an automatic identity match.
 
 The internal apply primitive permits automatic same-corridor grouping only with
 equal known directed corridor IDs. Identity acceptance needs a current identity
-review with the candidate's declared evidence; field-specific reviews cannot
+review explicitly bound to that candidate and its declared evidence; the binding
+cannot change after a decision. Field-specific reviews cannot
 approve identity. It checks case lineage, both subject revisions and candidate
 revision under the structural guard. A candidate based on an older revision can
 only account for the exact review revision increment; unrelated changes require

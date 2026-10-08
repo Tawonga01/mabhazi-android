@@ -44,6 +44,21 @@ CREATE TABLE public.v2_association_candidates (
 CREATE UNIQUE INDEX v2_candidate_effect_idx ON public.v2_association_candidates(from_subject_id,to_subject_id,relation,rule_version,evidence_digest) WHERE state<>'obsolete';
 CREATE INDEX v2_candidate_target_idx ON public.v2_association_candidates(to_subject_id);
 CREATE INDEX v2_candidate_queue_idx ON public.v2_association_candidates(state,created_at);
+ALTER TABLE public.v2_review_cases ADD COLUMN candidate_id uuid REFERENCES public.v2_association_candidates(id);
+CREATE INDEX v2_review_candidate_idx ON public.v2_review_cases(candidate_id);
+CREATE FUNCTION public.v2_review_candidate_binding() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF TG_OP='UPDATE' AND NEW.candidate_id IS DISTINCT FROM OLD.candidate_id
+   AND (OLD.last_decision_id IS NOT NULL OR NEW.last_decision_id IS NOT NULL) THEN
+   RAISE EXCEPTION 'v2_review_candidate_binding_immutable' USING ERRCODE='23514'; END IF;
+ IF NEW.candidate_id IS NOT NULL AND (NEW.kind<>'identity' OR NOT EXISTS
+   (SELECT 1 FROM public.v2_association_candidates WHERE id=NEW.candidate_id AND NEW.subject_id IN (from_subject_id,to_subject_id))) THEN
+   RAISE EXCEPTION 'v2_review_candidate_target_mismatch' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER v2_review_candidate_binding BEFORE INSERT OR UPDATE ON public.v2_review_cases
+ FOR EACH ROW EXECUTE FUNCTION public.v2_review_candidate_binding();
 CREATE TABLE public.v2_candidate_evidence (
  candidate_id uuid NOT NULL REFERENCES public.v2_association_candidates(id),
  observation_id uuid NOT NULL REFERENCES public.v2_observations(id) ON DELETE CASCADE,
@@ -376,7 +391,7 @@ BEGIN
    RAISE EXCEPTION 'v2_identity_requires_review' USING ERRCODE='42501'; END IF;
  IF d.actor_kind='reviewer' THEN
    SELECT * INTO r FROM public.v2_review_decisions WHERE id=d.reviewer_decision_id;
-   SELECT subject_id INTO review_subject FROM public.v2_review_cases WHERE id=r.case_id AND last_decision_id=r.id AND kind='identity';
+   SELECT subject_id INTO review_subject FROM public.v2_review_cases WHERE id=r.case_id AND last_decision_id=r.id AND kind='identity' AND candidate_id=c.id;
    IF r.evidence_erased OR review_subject IS NULL OR review_subject NOT IN (c.from_subject_id,c.to_subject_id)
      OR (d.action='accept' AND r.action<>'accept') OR (d.action='reverse' AND r.action<>'reverse')
      OR (d.action='reject' AND r.action<>'reject') OR (d.action='defer' AND r.action<>'needs_context') THEN
@@ -384,6 +399,10 @@ BEGIN
  END IF;
  IF d.action='accept' THEN
    IF c.state<>'pending' THEN RAISE EXCEPTION 'v2_candidate_requires_reopening' USING ERRCODE='23514'; END IF;
+   IF d.actor_kind='reviewer' AND (
+     (review_subject=source.id AND (r.expected_subject_revision<>c.source_revision OR source.revision<>r.expected_subject_revision+1))
+     OR (review_subject=target.id AND (r.expected_subject_revision<>c.target_revision OR target.revision<>r.expected_subject_revision+1))) THEN
+     RAISE EXCEPTION 'v2_review_candidate_revision_conflict' USING ERRCODE='40001'; END IF;
    IF (c.source_revision<>source.revision AND NOT COALESCE(review_subject=source.id AND r.expected_subject_revision=c.source_revision AND source.revision=r.expected_subject_revision+1,false))
      OR (c.target_revision<>target.revision AND NOT COALESCE(review_subject=target.id AND r.expected_subject_revision=c.target_revision AND target.revision=r.expected_subject_revision+1,false)) THEN
      RAISE EXCEPTION 'v2_candidate_evidence_stale' USING ERRCODE='40001'; END IF;

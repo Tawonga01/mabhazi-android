@@ -56,9 +56,10 @@ export function registerDerivedTests(context: () => Context) {
       options.expectedTo ?? (await state(row.to_subject_id)).revision, options.expectedCandidate ?? row.revision]);
     return id;
   }
-  async function review(f: Lead, kind = "identity") {
+  async function review(f: Lead, kind = "identity", candidateId: string | null = null) {
     await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture_grant') ON CONFLICT DO NOTHING", [context().other]);
     const caseId = (await q("SELECT v2_open_review_case($1,$2,$3,$4,$5) id", [context().other, f.id, kind, kind === "identity" ? null : "departure.reported", kind === "identity" ? null : key])).rows[0].id as string;
+    if (candidateId) await q("UPDATE v2_review_cases SET candidate_id=$1 WHERE id=$2", [candidateId, caseId]);
     const id = (await q("SELECT v2_record_review($1,$2,1,$3,'accept','evidence_reviewed',NULL,$4,'review/1',NULL) id", [context().other, caseId, (await state(f.id)).revision, [f.observation]])).rows[0].id as string;
     return { id, caseId };
   }
@@ -194,7 +195,7 @@ export function registerDerivedTests(context: () => Context) {
     await invalid(async () => { const d = await association(c, { review: r.id }); await applyAssociation(d); });
     const c2 = await candidate(a, b, "duplicate_of", false);
     await q("INSERT INTO v2_candidate_evidence VALUES($1,$2)", [c2, a.observation]);
-    const identity = await review(a); const d = await association(c2, { review: identity.id }); await applyAssociation(d);
+    const identity = await review(a, "identity", c2); const d = await association(c2, { review: identity.id }); await applyAssociation(d);
     assert.equal((await q("SELECT decision_id FROM v2_association_links WHERE candidate_id=$1", [c2])).rows[0].decision_id, d);
   });
   test("derived: review reversal invalidates dependent fields before background recomputation", async () => {
@@ -213,12 +214,25 @@ export function registerDerivedTests(context: () => Context) {
       await q("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Distinct operator')", [operator]);
       await q("UPDATE v2_leads SET operator_name=NULL,operator_subject_id=$1 WHERE subject_id=$2", [operator, f.id]);
     }
-    const c = await candidate(a, b, "duplicate_of"); const r = await review(a); const d = await association(c, { review: r.id });
+    const c = await candidate(a, b, "duplicate_of"); const r = await review(a, "identity", c); const d = await association(c, { review: r.id });
     await invalid(() => applyAssociation(d));
   });
   test("derived: active links cannot survive a candidate becoming obsolete", async () => {
     const a = await lead(), b = await lead(); const c = await candidate(a, b); const d = await association(c); await applyAssociation(d);
     await invalid(async () => { await q("UPDATE v2_association_candidates SET state='obsolete' WHERE id=$1", [c]); await q("SET CONSTRAINTS ALL IMMEDIATE"); });
+  });
+  test("derived: review approval is bound to one candidate and cannot be reassigned or reused", async () => {
+    const a = await lead(), b = await lead(), other = await lead();
+    const approved = await candidate(a, b, "duplicate_of"), different = await candidate(a, other, "duplicate_of");
+    const r = await review(a, "identity", approved);
+    await invalid(() => q("UPDATE v2_review_cases SET candidate_id=$1 WHERE id=$2", [different, r.caseId]));
+    await invalid(async () => { const d = await association(different, { review: r.id }); await applyAssociation(d); });
+    const d = await association(approved, { review: r.id }); await applyAssociation(d);
+    const reverse = (await q("SELECT v2_record_review($1,$2,2,$3,'reverse','wrong_match',NULL,ARRAY[]::uuid[],'review/1',$4) id", [context().other, r.caseId, (await state(a.id)).revision, r.id])).rows[0].id as string;
+    assert.equal((await q("SELECT count(*) FROM v2_association_links WHERE candidate_id=$1", [approved])).rows[0].count, "0");
+    const reversal = await association(approved, { action: "reverse", previous: d, review: reverse }); await applyAssociation(reversal);
+    await q("SET CONSTRAINTS ALL IMMEDIATE");
+    assert.equal((await q("SELECT state FROM v2_association_candidates WHERE id=$1", [approved])).rows[0].state, "pending");
   });
   test("derived: association evidence erasure removes links, redacts digest and retains decision tombstones", async () => {
     const a = await lead(), b = await lead(); const c = await candidate(a, b); const d = await association(c); await applyAssociation(d);

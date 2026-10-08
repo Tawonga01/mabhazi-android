@@ -24,7 +24,7 @@ export const v2ReviewCasesTable = pgTable("v2_review_cases", {
   kind: text("kind", { enum: ["identity", "correction", "conflict", "moderation", "affiliation"] }).notNull(),
   state: text("state", { enum: ["open", "in_review", "resolved", "reopened", "dismissed"] }).notNull().default("open"),
   revision: bigint("revision", { mode: "bigint" }).notNull().default(1n), openedAt: instant("opened_at").notNull().defaultNow(),
-  lastDecisionId: uuid("last_decision_id"),
+  lastDecisionId: uuid("last_decision_id"), candidateId: uuid("candidate_id"),
 });
 export const v2ReviewDecisionsTable = pgTable("v2_review_decisions", {
   id: uuid("id").primaryKey(), decisionKind: text("decision_kind", { enum: ["review"] }).notNull().default("review"),
