@@ -8,6 +8,8 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import pg from "pg";
 import { intakeTables } from "./schema/contributionIntake";
+import { transportTables } from "./schema/transportStructure";
+import { registerTransportTests } from "./transport-structure.cases";
 
 // Disposable database only. Never run mutation tests in the supplied database.
 // Isolated test-cluster credentials need CREATEDB/CREATEROLE.
@@ -24,6 +26,7 @@ let origin: number;
 let destination: number;
 let corridor: string;
 let legacySnapshot: unknown;
+let preservedIntakeUpgrade = false;
 const createdRoles: string[] = [];
 
 async function migrate() {
@@ -47,7 +50,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -64,8 +67,18 @@ before(async () => {
   await db.query(`INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price)
     VALUES ('Harare','Bulawayo','08:00','14:00','2026-10-07','Synthetic legacy company','A','B',25.50)`);
   legacySnapshot = (await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows;
+  const upgradeUser = randomUUID(), upgradeSubject = randomUUID(), upgradeContribution = randomUUID();
+  await db.query("INSERT INTO users(id) VALUES($1)", [upgradeUser]);
+  const upgradeCities = (await db.query("INSERT INTO cities(name,place_type) VALUES('Upgrade origin','city'),('Upgrade destination','city') RETURNING id")).rows.map(r => r.id);
+  const upgradeCorridor = (await db.query("INSERT INTO v2_corridors(origin_city_id,destination_city_id) VALUES($1,$2) RETURNING id", upgradeCities)).rows[0].id;
+  await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'lead')", [upgradeSubject]);
+  await db.query(`INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id)
+    VALUES($1,$2,gen_random_uuid(),'1.0','contribute_tab',$3,'{"synthetic":"preserve intake"}',$4)`, [upgradeContribution, upgradeUser, hash, upgradeSubject]);
+  await db.query(`INSERT INTO v2_leads(subject_id,corridor_id,reported_departure_seconds,operator_name,initial_contribution_id)
+    VALUES($1,$2,0,'Upgrade operator',$3)`, [upgradeSubject, upgradeCorridor, upgradeContribution]);
+  const intakeSnapshot = (await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows;
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0002 must actively revoke these grants, not merely rely on fresh PG defaults.
+  // 0003 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -75,8 +88,19 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0002_contribution_intake.sql/);
+  assert.match(await migrate(), /Applied 0003_transport_structure.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
+  assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
+  preservedIntakeUpgrade = true;
+  // Remove only this synthetic setup fixture; each behavioural case rolls back.
+  await db.query("BEGIN");
+  await db.query("DELETE FROM v2_contributions WHERE id=$1", [upgradeContribution]);
+  await db.query("DELETE FROM v2_leads WHERE subject_id=$1", [upgradeSubject]);
+  await db.query("DELETE FROM v2_subjects WHERE id=$1", [upgradeSubject]);
+  await db.query("DELETE FROM v2_corridors WHERE id=$1", [upgradeCorridor]);
+  await db.query("DELETE FROM cities WHERE id=ANY($1::int[])", [upgradeCities]);
+  await db.query("DELETE FROM users WHERE id=$1", [upgradeUser]);
+  await db.query("COMMIT");
 });
 after(async () => {
   if (db) await db.end();
@@ -137,9 +161,10 @@ async function job(c: Contribution) {
 }
 
 test("populated upgrade preserves legacy rows and records checksums once", async () => {
+  assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 3);
+  assert.equal(ledger.length, 4);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -148,7 +173,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of intakeTables) {
+  for (const table of [...intakeTables, ...transportTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -157,7 +182,7 @@ test("all Drizzle query columns, primary keys, types and generated fields match 
     const aliases: Record<string, string> = { "timestamp with time zone": "timestamp with time zone", "date": "date", "varchar": "character varying", "integer": "integer", "bigint": "bigint", "boolean": "boolean", "uuid": "uuid", "text": "text", "jsonb": "jsonb" };
     for (const column of columns) {
       const row = actual.find(r => r.column_name === column.name)!;
-      assert.equal(row.data_type, aliases[column.getSQLType()], `${name}.${column.name} type`);
+      assert.equal(row.data_type, column.getSQLType().startsWith("numeric") ? "numeric" : aliases[column.getSQLType()], `${name}.${column.name} type`);
       assert.equal(row.is_nullable === "NO", column.notNull, `${name}.${column.name} nullability`);
       assert.equal(row.is_generated === "ALWAYS", !!column.generated, `${name}.${column.name} generated`);
     }
@@ -323,7 +348,7 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = intakeTables.map(getTableName);
+  const tables = [...intakeTables, ...transportTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
   for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, "ALL"); }
@@ -343,3 +368,5 @@ test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while perm
   await db.query("DELETE FROM users WHERE id=$1", [user]);
   await db.query("RESET ROLE");
 });
+
+registerTransportTests(() => ({ db, connectionString, origin, destination, corridor }));

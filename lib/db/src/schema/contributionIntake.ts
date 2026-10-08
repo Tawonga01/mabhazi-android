@@ -11,7 +11,7 @@ const object = (name: string) => jsonb(name).$type<Record<string, unknown>>();
 
 export const v2SubjectsTable = pgTable("v2_subjects", {
   id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind", { enum: ["lead", "operator"] }).notNull(),
+  kind: text("kind", { enum: ["lead", "operator", "route", "stop", "pattern", "service_plan", "run", "actual_journey"] }).notNull(),
   revision: revision("revision"), inputGeneration: revision("input_generation"),
   lifecycle: text("lifecycle", { enum: ["active", "retired"] }).notNull().default("active"),
   createdAt: instant("created_at").notNull().defaultNow(),

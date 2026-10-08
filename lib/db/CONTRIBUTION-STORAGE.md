@@ -1,5 +1,7 @@
 # Contribution storage: intake foundation
 
+Migration 0003 now extends this foundation with [transport structure](TRANSPORT-STORAGE.md). The full database package and app integration remain incomplete; the boundaries below describe 0002 specifically.
+
 Migration `0002_contribution_intake.sql` is an additive first part of WP02. It has no API/mobile consumer or publication switch. Existing journey data, signing configuration and supported response shapes remain unchanged. Do not deploy it as a completed contribution feature.
 
 The new tables store leads with departure city, clock departure, destination city and operator, plus optional typed observations. There is no fare column/default on a lead and no inferred calendar. A reported clock is not an approved recurring service. Legacy intake is a separately reserved server path, never a way for public submissions to bypass the minimum.
