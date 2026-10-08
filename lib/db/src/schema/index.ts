@@ -10,3 +10,4 @@ export * from "./busCompanies";
 export * from "./abuseReports";
 export * from "./contributionIntake";
 export * from "./transportStructure";
+export * from "./reviewDecisions";
