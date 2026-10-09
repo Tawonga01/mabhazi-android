@@ -4,6 +4,7 @@ import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
 import { derivedTables } from "./schema/derivedDecisions";
+import { observationRegistryTables } from "./schema/observationRegistry";
 
 /**
  * Read-only presence check for legacy and v2 intake columns.
@@ -11,7 +12,7 @@ import { derivedTables } from "./schema/derivedDecisions";
  * at startup. Presence does not replace the constraint/RLS/erasure test suite.
  */
 const requiredColumns: Record<string, readonly string[]> = {
-  ...Object.fromEntries([...intakeTables, ...transportTables, ...reviewTables, ...derivedTables].map(table => [getTableName(table), Object.values(getTableColumns(table)).map(column => column.name)])),
+  ...Object.fromEntries([...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables].map(table => [getTableName(table), Object.values(getTableColumns(table)).map(column => column.name)])),
   abuse_reports: [
     "id",
     "reporter_id",

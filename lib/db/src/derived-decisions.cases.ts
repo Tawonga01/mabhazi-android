@@ -88,11 +88,11 @@ export function registerDerivedTests(context: () => Context) {
     await association(c, { action: "defer" });
     await invalid(() => q("INSERT INTO v2_candidate_evidence VALUES($1,$2)", [c, b.observation]));
   });
-  test("derived: initial field registry cannot attach lead-only facts to another subtype", async () => {
+  test("derived: field registry cannot attach lead-only facts to another subtype", async () => {
     const a = await lead(), operator = randomUUID();
     await q("INSERT INTO v2_subjects(id,kind) VALUES($1,'operator')", [operator]);
     await q("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Fixture operator')", [operator]);
-    await invalid(() => field({ ...a, id: operator }, { selected: null }), ["23503"]);
+    await invalid(() => field({ ...a, id: operator }, { selected: null }), ["23514"]);
   });
   test("derived: selected values require exact live evidence and scope, not just a matching hash", async () => {
     const a = await lead(), b = await lead();

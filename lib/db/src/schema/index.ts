@@ -12,3 +12,5 @@ export * from "./contributionIntake";
 export * from "./transportStructure";
 export * from "./reviewDecisions";
 export * from "./derivedDecisions";
+
+export * from "./observationRegistry";

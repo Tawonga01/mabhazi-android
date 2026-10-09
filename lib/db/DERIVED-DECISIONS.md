@@ -25,7 +25,8 @@ new evaluation. Reversing records history and removes only that candidate's link
 This does not implement candidate generation, complete transport matching rules,
 observation-target reassignment or canonical identity materialisation.
 
-Field decisions currently cover the seven initial typed observation fields.
+Migration 0006 expands field decisions to all 18 registered types and their
+compatible subject kinds; see OBSERVATION-REGISTRY.md.
 Selected values must have matching active supporting observations, original
 subject, field, scope hash AND scope content. Revision lineage is contiguous and
 cannot cross a field/subject/scope boundary. Each field keeps its own support,

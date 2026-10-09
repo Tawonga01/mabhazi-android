@@ -51,7 +51,7 @@ export const v2ReceiptsTable = pgTable("v2_receipts", {
 export const v2ObservationsTable = pgTable("v2_observations", {
   id: uuid("id").primaryKey().defaultRandom(), contributionId: uuid("contribution_id").notNull(),
   originalSubjectId: uuid("original_subject_id").notNull(),
-  fieldKey: text("field_key", { enum: ["operator.reported", "departure.reported", "boarding.pickup", "alighting.dropoff", "fare.paid", "fare.quoted", "fare.advertised"] }).notNull(),
+  fieldKey: text("field_key", { enum: ["operator.reported", "departure.reported", "operator.identity", "service.mode", "service.calendar", "departure.scheduled", "arrival.scheduled", "departure.actual", "arrival.actual", "boarding.pickup", "alighting.dropoff", "pattern.stops", "stop.location", "fare.paid", "fare.quoted", "fare.advertised", "service.operating_status", "timetable.sign_presence"] }).notNull(),
   schemaVersion: text("schema_version", { enum: ["1.0"] }).notNull().default("1.0"),
   value: object("value").notNull(), scope: object("scope").notNull().default({}),
   operatorRef: uuid("operator_ref").generatedAlwaysAs(sql`CASE WHEN field_key='operator.reported' THEN (value->>'id')::uuid END`),
