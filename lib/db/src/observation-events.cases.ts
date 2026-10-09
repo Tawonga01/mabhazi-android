@@ -132,6 +132,20 @@ export function registerObservationEventTests(context: () => Context) {
     assert.equal((await state(f.observation)).status, "hidden");
     assert.deepEqual((await events(f.observation)).map(e => e.action), ["submit", "hide", "reverse", "hide", "restore", "reverse"]);
   });
+  test("events: a mixed-state moderation batch rolls back earlier targets and the review together", async () => {
+    const f = await fixture();
+    const another = (await q(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope_key,value_key)
+      SELECT contribution_id,original_subject_id,field_key,value,scope_key,value_key FROM v2_observations WHERE id=$1 RETURNING id`, [f.observation])).rows[0].id as string;
+    const ids = [f.observation, another].sort(); const first = { ...f, observation: ids[0]! };
+    await review(first, "hide"); const before = await state(first.observation), rev = await revision(f.subject);
+    // Restore accepts hidden and active review evidence, but active -> active is
+    // not a valid state event. The earlier hidden -> active target must roll back.
+    await invalid(() => review(first, "restore", { evidence: ids }));
+    assert.deepEqual(await state(first.observation), before); assert.equal(await revision(f.subject), rev);
+    assert.equal((await state(ids[1]!)).status, "active");
+    assert.equal((await events(first.observation)).length, 2);
+    assert.equal((await q("SELECT count(*) FROM v2_review_decisions d JOIN v2_review_cases c ON c.id=d.case_id WHERE c.subject_id=$1", [f.subject])).rows[0].count, "1");
+  });
   test("events: reversal never resurrects subsequently withdrawn or superseded evidence", async () => {
     const f = await fixture(), hide = await review(f, "hide"); await withdraw(f, 2);
     await review(f, "reverse", { caseId: hide.caseId, reverse: hide.id }); assert.equal((await state(f.observation)).status, "withdrawn");

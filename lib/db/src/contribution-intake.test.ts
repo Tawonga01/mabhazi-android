@@ -329,6 +329,7 @@ test("account deletion erases private rows, preserves others, invalidates pendin
   const source = (await db.query("INSERT INTO v2_sources(owner_user_id,kind,private_reference) VALUES($1,'document','private fixture') RETURNING id", [user])).rows[0].id;
   await db.query("INSERT INTO v2_observation_sources(observation_id,source_id) VALUES($1,$2)", [old.id, source]);
   await db.query("UPDATE v2_jobs SET state='leased',lease_token=gen_random_uuid(),lease_until=now()+interval '1 minute' WHERE id=$1", [pending.id]);
+  const beforeErase = BigInt((await db.query("SELECT input_generation FROM v2_subjects WHERE id=$1", [c.subjectId])).rows[0].input_generation);
   await db.query("DELETE FROM users WHERE id=$1", [user]);
   await db.query("SET CONSTRAINTS ALL IMMEDIATE");
   for (const table of ["v2_receipts", "v2_sources", "v2_observation_sources"]) assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, "0", table);
@@ -338,7 +339,9 @@ test("account deletion erases private rows, preserves others, invalidates pendin
   assert.equal(retained.initial_contribution_id, null); assert.equal(retained.attribution_erased, true);
   const cancelled = (await db.query("SELECT * FROM v2_jobs WHERE id=$1", [pending.id])).rows[0];
   assert.equal(cancelled.state, "superseded"); assert.equal(cancelled.contribution_id, null); assert.equal(cancelled.lease_token, null);
-  assert.deepEqual((await db.query("SELECT requested_generation FROM v2_jobs WHERE kind='erase_recompute'")).rows, [{ requested_generation: "2" }]);
+  const erasedGeneration = (await db.query("SELECT input_generation FROM v2_subjects WHERE id=$1", [c.subjectId])).rows[0].input_generation;
+  assert.equal(BigInt(erasedGeneration), beforeErase + 1n);
+  assert.deepEqual((await db.query("SELECT requested_generation FROM v2_jobs WHERE kind='erase_recompute'")).rows, [{ requested_generation: erasedGeneration }]);
 });
 
 test("deleting an old observation clears correction lineage without rewriting the newer evidence", async () => {
