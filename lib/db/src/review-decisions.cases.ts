@@ -120,10 +120,20 @@ export function registerReviewTests(context: () => Context) {
     const f = await fixture();
     for (const evidence of [null, [], [randomUUID()], [f.observation, f.observation], [null]]) await reject(recordSql, [f.reviewer, f.caseId, 1, 1, "accept", "reason", null, evidence, "review/1", null]);
     for (const status of ["hidden", "withdrawn", "superseded"]) {
-      await query("UPDATE v2_observation_states SET status=$1 WHERE observation_id=$2", [status, f.observation]);
-      await reject(recordSql, args(f));
+      await query("SAVEPOINT evidence_state");
+      if (status === "hidden") {
+        const moderation = (await query(openSql, [f.reviewer, f.subject, "moderation", null, null])).rows[0].id;
+        await record({ ...f, caseId: moderation }, "hide");
+      } else if (status === "withdrawn") {
+        await query("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)", [f.user, f.observation, randomUUID()]);
+      } else {
+        await query(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope_key,value_key,supersedes_id)
+          SELECT contribution_id,original_subject_id,field_key,value,scope_key,value_key,id FROM v2_observations WHERE id=$1`, [f.observation]);
+      }
+      const revision = Number((await query("SELECT revision FROM v2_subjects WHERE id=$1", [f.subject])).rows[0].revision);
+      await reject(recordSql, args(f, "accept", 1, revision));
+      await query("ROLLBACK TO SAVEPOINT evidence_state"); await query("RELEASE SAVEPOINT evidence_state");
     }
-    await query("UPDATE v2_observation_states SET status='active' WHERE observation_id=$1", [f.observation]);
     const another = randomUUID();
     await query("INSERT INTO v2_subjects(id,kind) VALUES($1,'operator')", [another]);
     await query("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Other subject')", [another]);

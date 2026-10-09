@@ -67,7 +67,7 @@ export const v2ObservationsTable = pgTable("v2_observations", {
 export const v2ObservationStatesTable = pgTable("v2_observation_states", {
   observationId: uuid("observation_id").primaryKey(), revision: revision("revision"),
   status: text("status", { enum: ["active", "superseded", "withdrawn", "hidden"] }).notNull().default("active"),
-  reasonCode: text("reason_code"), updatedAt: instant("updated_at").notNull().defaultNow(),
+  reasonCode: text("reason_code"), latestEventId: uuid("latest_event_id").notNull(), updatedAt: instant("updated_at").notNull().defaultNow(),
 });
 export const v2SourcesTable = pgTable("v2_sources", {
   id: uuid("id").primaryKey().defaultRandom(), ownerUserId: varchar("owner_user_id").notNull(),

@@ -99,7 +99,7 @@ export function registerDerivedTests(context: () => Context) {
     for (const options of [{ evidence: [] }, { evidence: [b.observation] }, { selected: { time: "09:00", basis: "scheduled" } }, { scope: { different: true } }]) {
       await invalid(async () => { const d = await field(a, options); await applyField(d); });
     }
-    await q("UPDATE v2_observation_states SET status='hidden' WHERE observation_id=$1", [a.observation]);
+    await q("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)", [context().user, a.observation, randomUUID()]);
     await invalid(async () => { const d = await field(a); await applyField(d); });
   });
   test("derived: provisional field selection is idempotent, snapshots transport and does not invent freshness", async () => {
@@ -138,7 +138,7 @@ export function registerDerivedTests(context: () => Context) {
   });
   test("derived: withdrawing support invalidates immediately without erasing historical facts", async () => {
     const a = await lead(); const d = await field(a); await applyField(d);
-    await q("UPDATE v2_observation_states SET status='withdrawn' WHERE observation_id=$1", [a.observation]);
+    await q("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)", [context().user, a.observation, randomUUID()]);
     assert.deepEqual((await q("SELECT invalidated,erased,selected_value IS NULL AS cleared FROM v2_field_decisions WHERE id=$1", [d])).rows[0], { invalidated: true, erased: false, cleared: false });
     assert.equal((await q("SELECT count(*) FROM v2_current_fields WHERE subject_id=$1", [a.id])).rows[0].count, "0");
     await invalid(() => applyField(d));
