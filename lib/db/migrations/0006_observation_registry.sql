@@ -358,8 +358,7 @@ DO $$ BEGIN
      WHERE NOT public.v2_observation_kind_valid(d.field_key,s.kind) OR (d.selected_value IS NOT NULL AND public.v2_intake_observation_valid(d.field_key,d.selected_value,d.scope) IS NOT TRUE)) THEN
    RAISE EXCEPTION 'v2_observation_registry_upgrade_requires_inventory' USING ERRCODE='23514'; END IF;
 END; $$;
-INSERT INTO public.v2_observation_refs SELECT o.id,r.* FROM public.v2_observations o
- CROSS JOIN LATERAL public.v2_observation_reference_rows(o.field_key,o.value,o.scope) r;
+
 
 ALTER TABLE public.v2_observation_refs ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.v2_observation_refs FROM PUBLIC,mabhazi_api;
@@ -381,3 +380,7 @@ DO $$ DECLARE role_name text; f record; BEGIN
      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO mabhazi_api',f.signature); END IF;
  END LOOP;
 END; $$;
+
+-- Backfill only after all DDL; deferred integrity events must not precede ALTER TABLE.
+INSERT INTO public.v2_observation_refs SELECT o.id,r.* FROM public.v2_observations o
+ CROSS JOIN LATERAL public.v2_observation_reference_rows(o.field_key,o.value,o.scope) r;
