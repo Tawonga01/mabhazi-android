@@ -43,6 +43,14 @@ CREATE TABLE public.v2_observation_targets (
 );
 CREATE INDEX v2_observation_target_assignment_idx ON public.v2_observation_targets(assignment_id);
 
+-- Known direction/operator conflicts are not erased by a review label.
+CREATE FUNCTION public.v2_subject_corridor(subject uuid) RETURNS uuid
+LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+ SELECT corridor_id FROM public.v2_leads WHERE subject_id=subject
+ UNION ALL SELECT corridor_id FROM public.v2_patterns WHERE subject_id=subject
+ UNION ALL SELECT p.corridor_id FROM public.v2_service_plans sp JOIN public.v2_patterns p ON p.subject_id=sp.pattern_subject_id WHERE sp.subject_id=subject
+ UNION ALL SELECT p.corridor_id FROM public.v2_runs r JOIN public.v2_patterns p ON p.subject_id=r.pattern_subject_id WHERE r.subject_id=subject;
+$$;
 CREATE FUNCTION public.v2_target_assignment_valid(assignment uuid) RETURNS boolean
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
  SELECT EXISTS(SELECT 1 FROM public.v2_target_assignments a
@@ -57,6 +65,8 @@ LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
  WHERE a.id=assignment AND c.from_subject_id=o.original_subject_id AND c.to_subject_id=a.target_subject_id
  AND c.relation IN ('same_service','same_pattern','duplicate_of')
  AND public.v2_observation_kind_valid(o.field_key,s.kind)
+ AND COALESCE(public.v2_subject_corridor(o.original_subject_id)=public.v2_subject_corridor(a.target_subject_id),true)
+ AND COALESCE(public.v2_resolved_operator(o.original_subject_id)=public.v2_resolved_operator(a.target_subject_id),true)
  AND EXISTS(SELECT 1 FROM public.v2_candidate_evidence e WHERE e.candidate_id=c.id AND e.observation_id=o.id)
  AND EXISTS(SELECT 1 FROM public.v2_review_decision_evidence e WHERE e.decision_id=r.id AND e.observation_id=o.id));
 $$;
@@ -294,7 +304,8 @@ BEGIN
    RAISE EXCEPTION 'v2_observation_target_invalid' USING ERRCODE='23514'; END IF;
  RETURN NULL;
 END; $$;
-CREATE CONSTRAINT TRIGGER v2_check_observation_target AFTER INSERT OR UPDATE ON public.v2_observations
+-- Immediate mode must run the check after the ordinary initializer trigger.
+CREATE CONSTRAINT TRIGGER v2_zz_check_observation_target AFTER INSERT OR UPDATE ON public.v2_observations
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_check_observation_target();
 CREATE CONSTRAINT TRIGGER v2_check_observation_target AFTER INSERT OR UPDATE OR DELETE ON public.v2_observation_targets
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_check_observation_target();
@@ -311,7 +322,7 @@ DO $$ DECLARE t text; role_name text; f record; BEGIN
    EXECUTE format('CREATE TRIGGER v2_target_lock BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH STATEMENT EXECUTE FUNCTION public.v2_lock_transport()',t);
  END LOOP;
  FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN (
-   'v2_target_assignment_valid','v2_observation_subject','v2_target_history_immutable','v2_validate_target_assignment','v2_validate_target_event',
+   'v2_subject_corridor','v2_target_assignment_valid','v2_observation_subject','v2_target_history_immutable','v2_validate_target_assignment','v2_validate_target_event',
    'v2_guard_observation_target','v2_target_recompute_subjects','v2_project_target_event','v2_project_target_assignment',
    'v2_resolve_observation_target','v2_refresh_observation_target','v2_refresh_targets_for_association','v2_refresh_targets_for_review',
    'v2_target_subject_retired','v2_target_observation_change','v2_check_observation_target') LOOP

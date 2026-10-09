@@ -93,6 +93,11 @@ export function registerObservationTargetTests(context: () => Context) {
     assert.equal((await q("SELECT action FROM v2_target_events WHERE id=$1", [t.latest_event_id])).rows[0].action, "baseline");
     await q("SET CONSTRAINTS ALL IMMEDIATE");
   });
+  test("targets: valid observation insertion also works with constraints already immediate", async () => {
+    const a = await lead(); await q("SET CONSTRAINTS ALL IMMEDIATE");
+    const additional = await report(a.id);
+    assert.equal(await effective(additional.observation), a.id); assert.equal((await target(additional.observation)).revision, "1");
+  });
   test("targets: a current reviewed identity explicitly moves only its named observation", async () => {
     const a = await lead(), b = await lead(context().other), other = await report(a.id); const l = await link(a, b.id);
     assert.equal(await effective(a.observation), a.id); const assignment = await resolve(a, l);
@@ -127,6 +132,12 @@ export function registerObservationTargetTests(context: () => Context) {
     const journey = await subject("actual_journey"); await q("INSERT INTO v2_actual_journeys(subject_id) VALUES($1)", [journey]);
     const actual = await report(journey, "departure.actual", { time: "08:00" }); const actualLink = await link(actual, t.run, "same_service");
     await invalid(() => resolve(actual, actualLink));
+  });
+  test("targets: known opposite directions cannot resolve as one identity even with approval", async () => {
+    const a = await lead(), b = await lead();
+    const reversed = (await q("INSERT INTO v2_corridors(origin_city_id,destination_city_id) VALUES($1,$2) RETURNING id", [context().destination, context().origin])).rows[0].id;
+    await q("UPDATE v2_leads SET corridor_id=$1 WHERE subject_id=$2", [reversed, b.id]);
+    const l = await link(a, b.id); await invalid(() => resolve(a, l)); assert.equal(await effective(a.observation), a.id);
   });
   test("targets: assignment is directed from the original subject, with no transitive graph inference", async () => {
     const a = await lead(), b = await lead(), c = await lead(); const ab = await link(a, b.id); await resolve(a, ab);

@@ -14,7 +14,8 @@ returns the assignment UUID. It requires the exact active accepted relationship,
 current identity review for that candidate, and that specific observation in both
 candidate and reviewed evidence. Only directed same_service, same_pattern and
 duplicate_of relationships qualify, within the existing endpoint-kind registry.
-The candidate must start at the observation's original subject. No transitive
+The candidate must start at the observation's original subject. Known conflicting
+operators or directed corridors block assignment even when a review exists. No transitive
 identity inference, whole-lead bulk move, nonidentity relation or incompatible
 field/subject pair can retarget a report. Matching never converts actual into
 scheduled time, unspecified clocks into run facts or pattern facts into run facts.

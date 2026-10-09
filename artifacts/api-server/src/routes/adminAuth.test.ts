@@ -63,3 +63,4 @@ test("admin signatures reject equivalent noncanonical encodings deterministicall
     assert.equal(verifySignedAdminSession(`${payload}.${alias}`, secret, issuedAt), false);
   }
 });
+
