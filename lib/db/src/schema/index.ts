@@ -16,3 +16,5 @@ export * from "./derivedDecisions";
 export * from "./observationRegistry";
 
 export * from "./observationEvents";
+
+export * from "./observationTargets";

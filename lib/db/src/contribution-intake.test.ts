@@ -13,10 +13,12 @@ import { reviewTables } from "./schema/reviewDecisions";
 import { derivedTables } from "./schema/derivedDecisions";
 import { observationRegistryTables } from "./schema/observationRegistry";
 import { observationEventTables } from "./schema/observationEvents";
+import { observationTargetTables } from "./schema/observationTargets";
 import { registerTransportTests } from "./transport-structure.cases";
 import { registerReviewTests } from "./review-decisions.cases";
 import { registerObservationEventTests } from "./observation-events.cases";
 import { registerObservationRegistryTests } from "./observation-registry.cases";
+import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerDerivedTests } from "./derived-decisions.cases";
 
 // Disposable database only. Never run mutation tests in the supplied database.
@@ -58,7 +60,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -86,12 +88,13 @@ before(async () => {
     VALUES($1,$2,0,'Upgrade operator',$3)`, [upgradeSubject, upgradeCorridor, upgradeContribution]);
   const upgradeObservation = (await db.query(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope_key,value_key)
     VALUES($1,$2,'boarding.pickup',$3,$4,$4) RETURNING *`, [upgradeContribution, upgradeSubject, { cityId: upgradeCities[0], name: "Upgrade named place" }, hash])).rows[0];
-  // Preserve a pre-event hidden state, including its historical revision/time.
-  await db.query("UPDATE v2_observation_states SET status='hidden',revision=4,reason_code='legacy_hidden',updated_at='2026-10-01T08:00:00Z' WHERE observation_id=$1", [upgradeObservation.id]);
+  // Preserve a real pre-target withdrawal and its complete event history.
+  await db.query("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)", [upgradeUser, upgradeObservation.id, randomUUID()]);
   const upgradeState = (await db.query("SELECT * FROM v2_observation_states WHERE observation_id=$1", [upgradeObservation.id])).rows[0];
+  const upgradeEvents = (await db.query("SELECT * FROM v2_observation_events WHERE observation_id=$1 ORDER BY revision", [upgradeObservation.id])).rows;
   const intakeSnapshot = (await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows;
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0007 must actively revoke these grants, not merely rely on fresh PG defaults.
+  // 0008 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -102,15 +105,15 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0007_observation_events.sql/);
+  assert.match(await migrate(), /Applied 0008_observation_targets.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
   assert.deepEqual((await db.query("SELECT path,city_id FROM v2_observation_refs WHERE observation_id=$1", [upgradeObservation.id])).rows, [{ path: "value.cityId", city_id: upgradeCities[0] }]);
-  const auditedState = (await db.query("SELECT * FROM v2_observation_states WHERE observation_id=$1", [upgradeObservation.id])).rows[0];
-  const { latest_event_id, ...preservedState } = auditedState;
-  assert.ok(latest_event_id); assert.deepEqual(preservedState, upgradeState);
-  assert.deepEqual((await db.query("SELECT action,revision,status,actor_user_id FROM v2_observation_events WHERE id=$1", [latest_event_id])).rows[0], { action: "baseline", revision: "4", status: "hidden", actor_user_id: null });
+  assert.deepEqual((await db.query("SELECT * FROM v2_observation_states WHERE observation_id=$1", [upgradeObservation.id])).rows[0], upgradeState);
+  assert.deepEqual((await db.query("SELECT * FROM v2_observation_events WHERE observation_id=$1 ORDER BY revision", [upgradeObservation.id])).rows, upgradeEvents);
+  assert.deepEqual((await db.query("SELECT revision,assignment_id FROM v2_observation_targets WHERE observation_id=$1", [upgradeObservation.id])).rows[0], { revision: "1", assignment_id: null });
+  assert.equal((await db.query("SELECT v2_observation_subject($1) id", [upgradeObservation.id])).rows[0].id, upgradeSubject);
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
   await db.query("BEGIN");
@@ -184,7 +187,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 8);
+  assert.equal(ledger.length, 9);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -193,7 +196,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables]) {
+  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -371,10 +374,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables].map(getTableName);
+  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events"].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -401,3 +404,5 @@ registerDerivedTests(() => ({ db, connectionString, user, other, corridor }));
 registerObservationRegistryTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerObservationEventTests(() => ({ db, connectionString, user, other, corridor }));
+
+registerObservationTargetTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
