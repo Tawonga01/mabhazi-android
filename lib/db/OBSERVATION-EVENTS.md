@@ -46,6 +46,8 @@ Initial submit events do not themselves advance subject generation or create the
 submission job: that transaction remains an API/worker integration responsibility.
 
 Observation/contribution deletion cascades owned event streams and private notes.
+Account deletion removes owned observations/streams before account FK cascades,
+so actor anonymisation cannot race the deletion of that event's own parent.
 Deleting a reviewer nulls actor IDs and removes private text throughout affected
 streams, while the justified moderation status remains. Deleting a replacement
 nulls its history link with an explicit erased flag; superseded evidence does not

@@ -264,6 +264,13 @@ BEGIN
  -- Redact the stream: later explanations could quote the erased actor's note.
  UPDATE public.v2_observation_events SET private_reason=NULL WHERE observation_id IN
    (SELECT observation_id FROM public.v2_observation_events WHERE actor_user_id=OLD.id);
+ -- Erase owned streams while the account still exists. Otherwise the account's
+ -- actor SET NULL and contribution CASCADE actions can interleave: an actor
+ -- update would recheck an event's parent FK after its observation was deleted
+ -- but before the queued event cascade ran. Other users' streams still receive
+ -- normal actor anonymisation. Existing observation erasure hooks run here.
+ DELETE FROM public.v2_observations WHERE contribution_id IN
+   (SELECT id FROM public.v2_contributions WHERE user_id=OLD.id);
  RETURN OLD;
 END; $$;
 CREATE TRIGGER v2_erase_event_actor_notes BEFORE DELETE ON public.users
