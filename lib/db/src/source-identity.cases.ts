@@ -174,6 +174,42 @@ export function registerSourceIdentityTests(context: () => Context) {
     assert.deepEqual((await q("SELECT actor_user_id,actor_erased,private_reason,evidence_erased FROM v2_source_decisions WHERE id=$1", [d])).rows[0], { actor_user_id: null, actor_erased: true, private_reason: null, evidence_erased: false });
     assert.deepEqual(await component(a), [a, b].sort());
   });
+  test("sources: source-only deletion erases quoted transport-review notes while keeping the report", async () => {
+    const a = await source(), b = await source(), r = await report([a]); await open(a, b);
+    const c = (await q("SELECT v2_open_review_case($1,$2,'identity',NULL,NULL) id", [context().other, r.subject])).rows[0].id;
+    const revision = (await q("SELECT revision FROM v2_subjects WHERE id=$1", [r.subject])).rows[0].revision;
+    const d = (await q("SELECT v2_record_review($1,$2,1,$3,'accept','inspected_source','private://synthetic/source',ARRAY[$4::uuid],'review/1',NULL) id", [context().other, c, revision, r.observation])).rows[0].id;
+    await q("DELETE FROM v2_sources WHERE id=$1", [a]);
+    assert.deepEqual((await q("SELECT evidence_erased,private_reason FROM v2_review_decisions WHERE id=$1", [d])).rows[0], { evidence_erased: true, private_reason: null });
+    assert.equal((await q("SELECT state FROM v2_review_cases WHERE id=$1", [c])).rows[0].state, "reopened");
+    assert.equal((await q("SELECT count(*) FROM v2_observations WHERE id=$1", [r.observation])).rows[0].count, "1");
+    assert.equal((await footprint(r.observation)).known, false);
+  });
+  test("sources: changed origin invalidates association evidence and reverts a resolved target", async () => {
+    const a = await source(), b = await source(), r = await report([a]), target = await report(); const sc = await open(a, b);
+    const sr = (await q("SELECT revision FROM v2_subjects WHERE id=$1", [r.subject])).rows[0].revision;
+    const tr = (await q("SELECT revision FROM v2_subjects WHERE id=$1", [target.subject])).rows[0].revision;
+    const candidate = (await q(`INSERT INTO v2_association_candidates(from_subject_id,from_kind,to_subject_id,to_kind,relation,evidence_digest,reason_codes,rule_version,source_revision,target_revision)
+      VALUES($1,'lead',$2,'lead','duplicate_of',$3,ARRAY['source_fixture'],'association/1',$4,$5) RETURNING id`, [r.subject, target.subject, key, sr, tr])).rows[0].id;
+    await q("INSERT INTO v2_candidate_evidence VALUES($1,$2)", [candidate, r.observation]);
+    const c = (await q("SELECT v2_open_review_case($1,$2,'identity',NULL,NULL) id", [context().other, r.subject])).rows[0].id;
+    await q("UPDATE v2_review_cases SET candidate_id=$1 WHERE id=$2", [candidate, c]);
+    const d = (await q("SELECT v2_record_review($1,$2,1,$3,'accept','identity_checked',NULL,ARRAY[$4::uuid],'review/1',NULL) id", [context().other, c, sr, r.observation])).rows[0].id;
+    const association = randomUUID(); await q("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'association')", [association]);
+    await q(`INSERT INTO v2_association_decisions(id,candidate_id,action,actor_kind,reviewer_decision_id,reason_code,policy_version,expected_from_revision,expected_to_revision,expected_candidate_revision)
+      SELECT $1,$2,'accept','reviewer',$3,'identity_checked','association/1',revision,$4,1 FROM v2_subjects WHERE id=$5`, [association, candidate, d, tr, r.subject]);
+    await q("SELECT v2_apply_association_decision($1)", [association]);
+    const currentFrom = (await q("SELECT revision FROM v2_subjects WHERE id=$1", [r.subject])).rows[0].revision;
+    const currentTo = (await q("SELECT revision FROM v2_subjects WHERE id=$1", [target.subject])).rows[0].revision;
+    await q("SELECT v2_resolve_observation_target($1,$2,1,1,$3,$4)", [r.observation, association, currentFrom, currentTo]);
+    assert.equal((await q("SELECT v2_observation_subject($1) id", [r.observation])).rows[0].id, target.subject);
+    await review(sc);
+    assert.equal((await q("SELECT invalidated FROM v2_association_decisions WHERE id=$1", [association])).rows[0].invalidated, true);
+    assert.equal((await q("SELECT state FROM v2_association_candidates WHERE id=$1", [candidate])).rows[0].state, "obsolete");
+    assert.equal((await q("SELECT v2_observation_subject($1) id", [r.observation])).rows[0].id, r.subject);
+    assert.ok(Number((await q("SELECT count(*) FROM v2_jobs WHERE subject_id=$1", [target.subject])).rows[0].count) > 0);
+    await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
   test("sources: source deletion preserves other independently reviewed edges", async () => {
     const a = await source(), b = await source(context().other), c = await source(context().other);
     await review(await open(a, b)); await review(await open(b, c)); await q("DELETE FROM v2_sources WHERE id=$1", [a]);

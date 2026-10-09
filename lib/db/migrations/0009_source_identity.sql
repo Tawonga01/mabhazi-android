@@ -117,6 +117,17 @@ BEGIN
  SELECT array_agg(DISTINCT id) INTO decisions FROM (
    SELECT field_decision_id id FROM public.v2_field_decision_evidence WHERE observation_id=ANY(observations)
    UNION SELECT id FROM public.v2_association_decisions WHERE candidate_id=ANY(candidates)) q;
+ IF erase THEN
+   -- Transport-review rationale can quote private source material even when the
+   -- observation survives source-only deletion. Redact the whole quoting case.
+   UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE case_id IN
+     (SELECT d.case_id FROM public.v2_review_decisions d JOIN public.v2_review_decision_evidence e ON e.decision_id=d.id
+       WHERE e.observation_id=ANY(observations));
+   UPDATE public.v2_review_cases c SET state='reopened',revision=revision+1 WHERE EXISTS
+     (SELECT 1 FROM public.v2_review_decisions d WHERE d.id=c.last_decision_id AND d.evidence_erased)
+     AND c.id IN (SELECT d.case_id FROM public.v2_review_decisions d JOIN public.v2_review_decision_evidence e ON e.decision_id=d.id
+       WHERE e.observation_id=ANY(observations));
+ END IF;
  PERFORM public.v2_invalidate_derived(decisions,erase);
  UPDATE public.v2_association_candidates SET state='obsolete',evidence_erased=evidence_erased OR erase,
    evidence_digest=CASE WHEN erase THEN NULL ELSE evidence_digest END WHERE id=ANY(candidates);

@@ -354,8 +354,10 @@ test("account deletion erases private rows, preserves others, invalidates pendin
   const cancelled = (await db.query("SELECT * FROM v2_jobs WHERE id=$1", [pending.id])).rows[0];
   assert.equal(cancelled.state, "superseded"); assert.equal(cancelled.contribution_id, null); assert.equal(cancelled.lease_token, null);
   const erasedGeneration = (await db.query("SELECT input_generation FROM v2_subjects WHERE id=$1", [c.subjectId])).rows[0].input_generation;
-  assert.equal(BigInt(erasedGeneration), beforeErase + 1n);
-  assert.deepEqual((await db.query("SELECT requested_generation FROM v2_jobs WHERE kind='erase_recompute'")).rows, [{ requested_generation: erasedGeneration }]);
+  // Account, source and observation invalidations can each advance generation.
+  // The required contract is stale old work plus durable work for the final state.
+  assert.ok(BigInt(erasedGeneration) > beforeErase);
+  assert.equal((await db.query("SELECT max(requested_generation) generation FROM v2_jobs WHERE kind='erase_recompute' AND subject_id=$1", [c.subjectId])).rows[0].generation, erasedGeneration);
 });
 
 test("deleting an old observation clears correction lineage without rewriting the newer evidence", async () => {
