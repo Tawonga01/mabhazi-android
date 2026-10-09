@@ -69,6 +69,7 @@ export function verifySignedAdminSession(
   const providedBuffer = Buffer.from(providedSignature, "base64url");
   const expectedBuffer = Buffer.from(expectedSignature, "base64url");
   if (
+    providedBuffer.toString("base64url") !== providedSignature ||
     providedBuffer.length !== expectedBuffer.length ||
     !timingSafeEqual(providedBuffer, expectedBuffer)
   ) {
