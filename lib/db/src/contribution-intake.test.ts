@@ -118,6 +118,7 @@ before(async () => {
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
   await db.query("BEGIN");
   await db.query("DELETE FROM v2_contributions WHERE id=$1", [upgradeContribution]);
+  await db.query("DELETE FROM v2_jobs WHERE subject_id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_leads WHERE subject_id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_subjects WHERE id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_corridors WHERE id=$1", [upgradeCorridor]);
