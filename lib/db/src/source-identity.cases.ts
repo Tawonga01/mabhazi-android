@@ -93,7 +93,7 @@ export function registerSourceIdentityTests(context: () => Context) {
     const a = await source(), b = await source(), c = await open(a, b); const old = await review(c); const separated = await review(c, "separate");
     await invalid(() => review(c, "reverse", old)); await review(c, "reverse", separated);
     assert.deepEqual(await component(a), [a]);
-    await invalid(() => review(c, "reverse", (await q("SELECT last_decision_id FROM v2_source_cases WHERE id=$1", [c])).rows[0].last_decision_id));
+    await invalid(async () => review(c, "reverse", (await q("SELECT last_decision_id FROM v2_source_cases WHERE id=$1", [c])).rows[0].last_decision_id));
   });
   test("sources: exact request retries return receipts without reinstating reversed effects", async () => {
     const a = await source(), b = await source(), c = await open(a, b), values = await args(c);
