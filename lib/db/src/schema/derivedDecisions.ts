@@ -41,6 +41,7 @@ export const v2FieldDecisionsTable = pgTable("v2_field_decisions", {
   reasonCodes: text("reason_codes").array().notNull(), policyVersion: text("policy_version").notNull(), inputDigest: text("input_digest"),
   assessedAt: instant("assessed_at").notNull().defaultNow(), nextRecheckAt: instant("next_recheck_at"),
   reviewerDecisionId: uuid("reviewer_decision_id"), previousDecisionId: uuid("previous_decision_id"),
+  assessmentId: uuid("assessment_id"), resolutionId: uuid("resolution_id"), reviewBlocked: boolean("review_blocked").notNull().default(false),
   invalidated: boolean("invalidated").notNull().default(false), erased: boolean("erased").notNull().default(false),
 });
 export const v2FieldDecisionEvidenceTable = pgTable("v2_field_decision_evidence", {
