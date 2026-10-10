@@ -110,6 +110,8 @@ before(async () => {
   await db.query("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Synthetic assessment upgrade stop')",[upgradeAssessmentSubject]);
   const upgradeAssessment = (await db.query("SELECT v2_assess_field($1,'stop.location',v2_assessment_hash('{}'),'{}',1,1,$2,statement_timestamp(),gen_random_uuid()) id",[upgradeAssessmentSubject,upgradeGraph[0].revision])).rows[0].id;
   const assessmentSnapshot = (await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0];
+  const upgradeField = (await db.query("SELECT v2_process_field_assessment($1) id",[upgradeAssessment])).rows[0].id;
+  const fieldSnapshot = (await db.query("SELECT * FROM v2_field_decisions WHERE id=$1",[upgradeField])).rows[0];
   // Model hosted defaults granting client roles access to newly created tables.
   // 0012 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
@@ -137,6 +139,7 @@ before(async () => {
   assert.equal((await db.query("SELECT v2_source_footprint($1) f", [upgradeObservation.id])).rows[0].f.known, false);
   assert.deepEqual((await db.query("SELECT * FROM v2_source_graph")).rows, upgradeGraph);
   assert.deepEqual((await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0],assessmentSnapshot);
+  assert.deepEqual((await db.query("SELECT * FROM v2_field_decisions WHERE id=$1",[upgradeField])).rows[0],fieldSnapshot);
   assert.equal((await db.query("SELECT count(*) FROM v2_field_resolutions")).rows[0].count,"0");
   assert.equal((await db.query("SELECT count(*) FROM v2_affiliation_claims")).rows[0].count,"0");
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");

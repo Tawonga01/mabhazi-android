@@ -248,13 +248,13 @@ BEGIN
  SELECT * INTO r FROM public.v2_review_cases WHERE id=c.case_id FOR UPDATE;
  IF c.erased OR r.revision IS DISTINCT FROM expected OR expected_subject IS DISTINCT FROM (SELECT revision FROM public.v2_subjects WHERE id=c.operator_subject_id) THEN
   RAISE EXCEPTION 'v2_affiliation_revision_conflict' USING ERRCODE='40001'; END IF;
- SET CONSTRAINTS v2_decision_subtype,v2_review_subtype,v2_review_last_decision,v2_affiliation_complete DEFERRED;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_affiliation_complete DEFERRED;
  result:=gen_random_uuid(); INSERT INTO public.v2_decision_ids(id,kind) VALUES(result,'review');
  INSERT INTO public.v2_review_decisions(id,case_id,action,expected_revision,expected_subject_revision,reason_code,private_reason,actor_user_id,reverses_decision_id,policy_version,created_at)
  VALUES(result,c.case_id,operation,expected,expected_subject,reason,note,actor,reverse_id,'affiliation/1',statement_timestamp());
  INSERT INTO public.v2_affiliation_resolutions(review_id,claim_id,valid_until,request_id,request_digest) VALUES(result,claim,until_time,request,digest);
  INSERT INTO public.v2_affiliation_resolution_proofs(review_id,proof_id) SELECT result,unnest(canonical);
- SET CONSTRAINTS v2_affiliation_complete IMMEDIATE;
+ SET CONSTRAINTS public.v2_affiliation_complete IMMEDIATE;
  UPDATE public.v2_review_cases SET revision=revision+1,last_decision_id=result,state=CASE WHEN operation='reverse' THEN 'reopened' WHEN operation='needs_context' THEN 'open' ELSE 'resolved' END WHERE id=c.case_id;
  UPDATE public.v2_subjects SET revision=revision+1,input_generation=input_generation+1 WHERE id=c.operator_subject_id;
  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
@@ -263,7 +263,7 @@ BEGIN
   INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id,available_at)
   SELECT 'assess',id,input_generation,'affiliation/1',result,until_time FROM public.v2_subjects WHERE id=c.operator_subject_id;
  END IF;
- SET CONSTRAINTS v2_decision_subtype,v2_review_subtype,v2_review_last_decision IMMEDIATE;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE;
  RETURN result;
 END; $$;
 
@@ -361,14 +361,14 @@ END; $$;
 CREATE TRIGGER v2_affiliation_review_erased AFTER UPDATE ON public.v2_review_decisions FOR EACH ROW EXECUTE FUNCTION public.v2_affiliation_review_erased();
 CREATE FUNCTION public.v2_affiliation_proof_erased() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE case_id uuid; ids uuid[];
+DECLARE affected_case uuid; ids uuid[];
 BEGIN
  IF NOT NEW.erased OR OLD.erased THEN RETURN NEW; END IF;
- SELECT c.case_id INTO case_id FROM public.v2_affiliation_claims c WHERE c.id=NEW.claim_id;
+ SELECT c.case_id INTO affected_case FROM public.v2_affiliation_claims c WHERE c.id=NEW.claim_id;
  SELECT array_agg(DISTINCT e.source_id) INTO ids FROM public.v2_source_issuer_events e JOIN public.v2_affiliation_resolutions a ON a.review_id=e.affiliation_review_id WHERE a.claim_id=NEW.claim_id AND NOT e.erased;
  -- Later review notes can quote an earlier proof. Redact the whole claim case.
- UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE v2_review_decisions.case_id=v2_affiliation_proof_erased.case_id;
- UPDATE public.v2_review_cases SET state='reopened',revision=revision+1 WHERE id=case_id;
+ UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE v2_review_decisions.case_id=affected_case;
+ UPDATE public.v2_review_cases SET state='reopened',revision=revision+1 WHERE id=affected_case;
  IF cardinality(ids)>0 THEN PERFORM public.v2_source_changed(ids,ARRAY[]::uuid[],true); END IF;
  UPDATE public.v2_subjects SET revision=revision+1,input_generation=input_generation+1 WHERE id=(SELECT operator_subject_id FROM public.v2_affiliation_claims WHERE id=NEW.claim_id);
  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id) SELECT 'erase_recompute',id,input_generation,'affiliation/1',NEW.id FROM public.v2_subjects WHERE id=(SELECT operator_subject_id FROM public.v2_affiliation_claims WHERE id=NEW.claim_id);

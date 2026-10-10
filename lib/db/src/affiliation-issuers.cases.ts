@@ -146,7 +146,7 @@ export function registerAffiliationTests(context: () => Context) {
   test("issuer: same company never automatically merges independent source records",async()=>{
     const op=await operator(),a=await source(),b=await source();await issuer(a,op,null);await issuer(b,op,null);
     assert.deepEqual((await q("SELECT v2_source_component(ARRAY[$1::uuid]) ids",[a])).rows[0].ids,[a]);
-    assert.equal((await q("SELECT count(*) FROM v2_source_relations")).rows[0].count,"0");
+    assert.equal((await q("SELECT count(*) FROM v2_source_relations WHERE source_a=ANY($1::uuid[]) OR source_b=ANY($1::uuid[])",[[a,b]])).rows[0].count,"0");
   });
   test("issuer: revocation invalidates dependent assessments and late citations schedule expiry",async()=>{
     const f=await fixture(),d=await review(f),s=await source(),event=await issuer(s,f.op,d),r=await report(s);
