@@ -177,7 +177,7 @@ BEGIN
 END; $$;
 
 CREATE FUNCTION public.v2_evaluate_assessment(subject uuid,field text,scope jsonb,as_of timestamptz,policy text) RETURNS jsonb
-LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+LANGUAGE sql STABLE SET search_path=pg_catalog SET timezone='UTC' AS $$
  WITH rows AS MATERIALIZED (SELECT * FROM public.v2_assessment_rows(subject,field,scope,as_of,policy)),
  ranked AS (
    SELECT *,row_number() OVER(PARTITION BY owner_id,source_groups ORDER BY admissible DESC,
@@ -279,14 +279,14 @@ BEGIN
  IF expected IS DISTINCT FROM actual THEN RAISE EXCEPTION 'v2_assessment_input_snapshot_mismatch' USING ERRCODE='23514'; END IF;
  RETURN NULL;
 END; $$;
-CREATE CONSTRAINT TRIGGER v2_assessment_inputs_check AFTER INSERT OR UPDATE ON public.v2_field_assessments
+CREATE CONSTRAINT TRIGGER v2_assessment_snapshot_valid AFTER INSERT OR UPDATE ON public.v2_field_assessments
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_assessment_input_check();
-CREATE CONSTRAINT TRIGGER v2_assessment_inputs_check AFTER INSERT OR UPDATE OR DELETE ON public.v2_assessment_inputs
+CREATE CONSTRAINT TRIGGER v2_assessment_snapshot_valid AFTER INSERT OR UPDATE OR DELETE ON public.v2_assessment_inputs
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_assessment_input_check();
 
 CREATE FUNCTION public.v2_assess_field(subject uuid,field text,scope_hash text,requested_scope jsonb,
  expected_subject bigint,expected_generation bigint,expected_graph bigint,as_of timestamptz,request uuid) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET timezone='UTC' AS $$
 DECLARE a public.v2_field_assessments; s public.v2_subjects; policy text; result_id uuid:=gen_random_uuid();
  evaluated jsonb; fingerprint text; previous public.v2_field_assessments;
 BEGIN
@@ -307,15 +307,15 @@ BEGIN
  SELECT version INTO policy FROM public.v2_evidence_policy_state WHERE id;
  evaluated:=public.v2_evaluate_assessment(subject,field,requested_scope,as_of,policy);
  SELECT * INTO previous FROM public.v2_field_assessments WHERE subject_id=subject AND field_key=field AND scope_key=scope_hash ORDER BY revision DESC LIMIT 1;
- SET CONSTRAINTS public.v2_assessment_inputs_check DEFERRED;
+ SET CONSTRAINTS public.v2_assessment_snapshot_valid DEFERRED;
  INSERT INTO public.v2_field_assessments(id,subject_id,field_key,scope_key,scope,revision,previous_id,subject_revision,input_generation,
    source_graph_revision,policy_version,request_id,request_digest,input_digest,assessed_at,valid_until,result)
  VALUES(result_id,subject,field,scope_hash,requested_scope,COALESCE(previous.revision,0)+1,previous.id,s.revision,s.input_generation,
    expected_graph,policy,request,fingerprint,public.v2_assessment_hash(evaluated),as_of,(evaluated->>'nextChangeAt')::timestamptz,evaluated-'inputs');
  INSERT INTO public.v2_assessment_inputs(assessment_id,observation_id,snapshot)
    SELECT result_id,(x->>'observationId')::uuid,x-'observationId' FROM jsonb_array_elements(evaluated->'inputs') x;
- SET CONSTRAINTS public.v2_assessment_inputs_check IMMEDIATE;
- SET CONSTRAINTS public.v2_assessment_inputs_check DEFERRED;
+ SET CONSTRAINTS public.v2_assessment_snapshot_valid IMMEDIATE;
+ SET CONSTRAINTS public.v2_assessment_snapshot_valid DEFERRED;
  INSERT INTO public.v2_current_assessments VALUES(subject,field,scope_hash,result_id)
    ON CONFLICT(subject_id,field_key,scope_key) DO UPDATE SET assessment_id=excluded.assessment_id;
  IF (evaluated->>'nextChangeAt')::timestamptz IS NOT NULL THEN

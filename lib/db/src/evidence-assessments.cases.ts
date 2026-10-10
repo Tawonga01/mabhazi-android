@@ -168,6 +168,14 @@ export function registerAssessmentTests(context: () => Context) {
     const r = (await q("SELECT v2_assessment_day_end('2026-03-28',0,'Europe/Berlin') a,v2_assessment_day_end('2026-03-29',0,'Europe/Berlin') b,v2_assessment_day_end('2026-10-01',0,NULL) c")).rows[0];
     assert.equal(r.a.toISOString(), "2026-03-28T23:00:00.000Z"); assert.equal(r.b.toISOString(), "2026-03-29T22:00:00.000Z"); assert.equal(r.c.toISOString(), "2026-10-01T10:00:00.000Z");
   });
+  test("assessment: session timezone does not change output, input digest or retry identity", async () => {
+    const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope);
+    const before = await evaluate(id, "fare.quoted", scope), values = await args(id, "fare.quoted", scope);
+    const a = (await q(assessSQL, values)).rows[0].id;
+    await q("SET LOCAL TIME ZONE 'Pacific/Auckland'");
+    assert.deepEqual(await evaluate(id, "fare.quoted", scope), before); assert.equal((await q(assessSQL, values)).rows[0].id, a);
+    await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
   test("assessment: expiry and not-yet-effective reports are excluded without inventing a replacement", async () => {
     const t = await transport(), scope = { schemaVersion: "1.0", effectiveFrom: "2026-10-05", effectiveTo: "2026-10-10", timezone: "Africa/Harare" };
     await report(t.run, "departure.scheduled", { seconds: 28800 }, scope);
@@ -240,6 +248,14 @@ export function registerAssessmentTests(context: () => Context) {
   test("assessment: immediate-mode callers can record complete validated input snapshots", async () => {
     const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope); await q("SET CONSTRAINTS ALL IMMEDIATE");
     await record(id, "fare.quoted", scope); await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
+  test("assessment: a forged result cannot claim extra support even through an owner fixture", async () => {
+    const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope); const a = await record(id, "fare.quoted", scope);
+    await invalid(() => q(`INSERT INTO v2_field_assessments(id,subject_id,field_key,scope_key,scope,revision,previous_id,subject_revision,input_generation,
+      source_graph_revision,policy_version,request_id,request_digest,input_digest,assessed_at,valid_until,result)
+      SELECT gen_random_uuid(),subject_id,field_key,scope_key,scope,revision+1,id,subject_revision,input_generation,
+      source_graph_revision,policy_version,gen_random_uuid(),request_digest,input_digest,assessed_at,valid_until,
+      jsonb_set(result,'{candidates,0,support}','"corroborated"') FROM v2_field_assessments WHERE id=$1`, [a]));
   });
   test("assessment: all 18 registered fields are evaluated without inventing unprovided qualifiers", async () => {
     const t = await transport(), id = await lead();
