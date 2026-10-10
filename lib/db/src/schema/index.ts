@@ -24,3 +24,5 @@ export * from "./sourceIdentity";
 export * from "./evidenceAssessments";
 
 export * from "./fieldResolution";
+
+export * from "./affiliationIssuers";

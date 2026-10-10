@@ -17,6 +17,7 @@ import { observationTargetTables } from "./schema/observationTargets";
 import { sourceIdentityTables } from "./schema/sourceIdentity";
 import { evidenceAssessmentTables } from "./schema/evidenceAssessments";
 import { fieldResolutionTables } from "./schema/fieldResolution";
+import { affiliationIssuerTables } from "./schema/affiliationIssuers";
 import { registerTransportTests } from "./transport-structure.cases";
 import { registerReviewTests } from "./review-decisions.cases";
 import { registerObservationEventTests } from "./observation-events.cases";
@@ -25,6 +26,7 @@ import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerSourceIdentityTests } from "./source-identity.cases";
 import { registerAssessmentTests } from "./evidence-assessments.cases";
 import { registerFieldResolutionTests } from "./field-resolution.cases";
+import { registerAffiliationTests } from "./affiliation-issuers.cases";
 import { registerDerivedTests } from "./derived-decisions.cases";
 
 // Disposable database only. Never run mutation tests in the supplied database.
@@ -66,7 +68,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -109,7 +111,7 @@ before(async () => {
   const upgradeAssessment = (await db.query("SELECT v2_assess_field($1,'stop.location',v2_assessment_hash('{}'),'{}',1,1,$2,statement_timestamp(),gen_random_uuid()) id",[upgradeAssessmentSubject,upgradeGraph[0].revision])).rows[0].id;
   const assessmentSnapshot = (await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0];
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0011 must actively revoke these grants, not merely rely on fresh PG defaults.
+  // 0012 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -120,7 +122,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0011_field_resolution.sql/);
+  assert.match(await migrate(), /Applied 0012_affiliation_issuers.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -136,6 +138,8 @@ before(async () => {
   assert.deepEqual((await db.query("SELECT * FROM v2_source_graph")).rows, upgradeGraph);
   assert.deepEqual((await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0],assessmentSnapshot);
   assert.equal((await db.query("SELECT count(*) FROM v2_field_resolutions")).rows[0].count,"0");
+  assert.equal((await db.query("SELECT count(*) FROM v2_affiliation_claims")).rows[0].count,"0");
+  assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
   await db.query("BEGIN");
@@ -211,7 +215,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 12);
+  assert.equal(ledger.length, 13);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -220,7 +224,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables]) {
+  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -403,10 +407,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables].map(getTableName);
+  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -440,3 +444,5 @@ registerSourceIdentityTests(() => ({ db, connectionString, user, other, origin, 
 
 registerAssessmentTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerFieldResolutionTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerAffiliationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
