@@ -20,3 +20,5 @@ export * from "./observationEvents";
 export * from "./observationTargets";
 
 export * from "./sourceIdentity";
+
+export * from "./evidenceAssessments";
