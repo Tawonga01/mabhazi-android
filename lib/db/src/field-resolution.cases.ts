@@ -203,6 +203,10 @@ export function registerFieldResolutionTests(context: () => Context) {
     const caseId=(await thread(f.id)).id; await invalid(()=>q("DELETE FROM v2_field_case_events WHERE case_id=$1",[caseId]));
     await invalid(async()=>{ await q("UPDATE v2_field_decisions SET support_status='corroborated' WHERE subject_id=$1",[f.id]); });
   });
+  test("field resolution: immediate constraints permit complete review and field snapshots",async()=>{
+    const f=await conflict(); await q("SET CONSTRAINTS ALL IMMEDIATE"); await resolve(f.assessment,f.a.observation,[f.b.observation]);
+    await q("SET CONSTRAINTS ALL IMMEDIATE"); assert.equal((await fieldRead(f.id,f.scope)).dispute,"resolved");
+  });
   test("field resolution: private storage and historical clock functions remain inaccessible to app roles", async () => {
     const f=await conflict(), args=await resolutionArgs(f.assessment,f.a.observation,[f.b.observation]);
     await invalid(()=>q(resolveSQL,args.map((v,i)=>i===0?context().user:v)),["42501"]);

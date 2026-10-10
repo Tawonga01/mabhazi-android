@@ -267,7 +267,7 @@ BEGIN
      RAISE EXCEPTION 'v2_field_choice_requires_uncontested_live_evidence' USING ERRCODE='23514'; END IF;
  ELSIF jsonb_array_length(evaluated->'candidates')>0 THEN
    RAISE EXCEPTION 'v2_reject_requires_explicit_exclusions' USING ERRCODE='23514'; END IF;
- SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype DEFERRED;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_field_resolution_inputs_valid DEFERRED;
  INSERT INTO public.v2_decision_ids(id,kind) VALUES(review,'review');
  INSERT INTO public.v2_review_decisions(id,case_id,action,expected_revision,expected_subject_revision,reason_code,private_reason,actor_user_id,policy_version)
  VALUES(review,c.id,decision_action,c.revision,s.revision,reason,private_note,actor,a.policy_version);
@@ -278,6 +278,8 @@ BEGIN
    SELECT review,observation_id,observation_id=ANY(canonical_excluded),
      public.v2_field_input_fingerprint(snapshot || jsonb_build_object('observationId',observation_id))
    FROM public.v2_assessment_inputs WHERE assessment_id=a.id AND NOT erased;
+ SET CONSTRAINTS public.v2_field_resolution_inputs_valid IMMEDIATE;
+ SET CONSTRAINTS public.v2_field_resolution_inputs_valid DEFERRED;
  UPDATE public.v2_review_cases SET last_decision_id=review,state='resolved',revision=revision+1 WHERE id=c.id;
  -- Review changes interpretation, not the underlying observation generation.
  UPDATE public.v2_subjects SET revision=revision+1 WHERE id=a.subject_id;
@@ -286,6 +288,55 @@ BEGIN
    VALUES('assess',a.subject_id,a.input_generation,a.policy_version,review);
  RETURN review;
 END; $$;
+
+CREATE FUNCTION public.v2_field_binding_validate() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE a public.v2_field_assessments; c public.v2_review_cases; d public.v2_review_decisions;
+BEGIN
+ IF TG_TABLE_NAME='v2_field_review_threads' THEN
+   IF NOT EXISTS(SELECT 1 FROM public.v2_review_cases rc WHERE rc.id=NEW.case_id AND rc.kind IN ('conflict','correction')
+     AND rc.subject_id=NEW.subject_id AND rc.field_key=NEW.field_key AND rc.scope_key=NEW.scope_key) THEN
+     RAISE EXCEPTION 'v2_field_case_binding_mismatch' USING ERRCODE='23514'; END IF;
+ ELSE
+   a:=public.v2_field_assessment_ready(NEW.assessment_id);
+   SELECT * INTO d FROM public.v2_review_decisions WHERE id=NEW.review_id;
+   SELECT * INTO c FROM public.v2_review_cases WHERE id=d.case_id;
+   IF NEW.erased OR NEW.receipt_redacted OR d.evidence_erased OR d.action NOT IN ('accept','reject')
+     OR d.expected_revision IS DISTINCT FROM c.revision OR d.policy_version IS DISTINCT FROM a.policy_version
+     OR d.expected_subject_revision IS DISTINCT FROM (SELECT revision FROM public.v2_subjects WHERE id=a.subject_id)
+     OR NOT EXISTS(SELECT 1 FROM public.v2_field_review_threads WHERE case_id=c.id AND subject_id=a.subject_id AND field_key=a.field_key AND scope_key=a.scope_key)
+     OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=d.actor_user_id AND revoked_at IS NULL)
+     OR (d.action='accept')<>(NEW.chosen_observation_id IS NOT NULL)
+     OR (NEW.chosen_observation_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.v2_assessment_inputs
+       WHERE assessment_id=a.id AND observation_id=NEW.chosen_observation_id AND (snapshot->>'admissible')::boolean)) THEN
+     RAISE EXCEPTION 'v2_field_resolution_binding_mismatch' USING ERRCODE='23514'; END IF;
+ END IF;
+ RETURN NEW;
+END; $$;
+CREATE TRIGGER v2_field_binding_validate BEFORE INSERT ON public.v2_field_review_threads FOR EACH ROW EXECUTE FUNCTION public.v2_field_binding_validate();
+CREATE TRIGGER v2_field_binding_validate BEFORE INSERT ON public.v2_field_resolutions FOR EACH ROW EXECUTE FUNCTION public.v2_field_binding_validate();
+CREATE FUNCTION public.v2_field_resolution_check() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE r public.v2_field_resolutions;
+BEGIN
+ SELECT * INTO r FROM public.v2_field_resolutions WHERE review_id=NEW.review_id;
+ IF r.review_id IS NULL OR r.erased OR EXISTS(SELECT 1 FROM public.v2_field_assessments WHERE id=r.assessment_id AND invalidated) THEN RETURN NULL; END IF;
+ IF EXISTS(SELECT observation_id FROM public.v2_assessment_inputs WHERE assessment_id=r.assessment_id
+   EXCEPT SELECT observation_id FROM public.v2_field_resolution_inputs WHERE review_id=r.review_id)
+   OR EXISTS(SELECT observation_id FROM public.v2_field_resolution_inputs WHERE review_id=r.review_id
+   EXCEPT SELECT observation_id FROM public.v2_assessment_inputs WHERE assessment_id=r.assessment_id)
+   OR EXISTS(SELECT 1 FROM public.v2_field_resolution_inputs i JOIN public.v2_assessment_inputs ai
+     ON ai.assessment_id=r.assessment_id AND ai.observation_id=i.observation_id
+     WHERE i.review_id=r.review_id AND (i.erased OR i.evidence_digest IS DISTINCT FROM
+       public.v2_field_input_fingerprint(ai.snapshot || jsonb_build_object('observationId',ai.observation_id))
+       OR (i.observation_id=r.chosen_observation_id AND i.rejected))) THEN
+   RAISE EXCEPTION 'v2_field_resolution_input_mismatch' USING ERRCODE='23514'; END IF;
+ RETURN NULL;
+END; $$;
+CREATE CONSTRAINT TRIGGER v2_field_resolution_inputs_valid AFTER INSERT OR UPDATE ON public.v2_field_resolutions
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_field_resolution_check();
+CREATE CONSTRAINT TRIGGER v2_field_resolution_inputs_valid AFTER INSERT OR UPDATE OR DELETE ON public.v2_field_resolution_inputs
+ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.v2_field_resolution_check();
 
 CREATE FUNCTION public.v2_field_resolution_immutable() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
@@ -348,7 +399,7 @@ BEGIN
    IS DISTINCT FROM ROW(a.subject_id,a.field_key,a.scope_key,a.scope,a.input_generation,a.policy_version,a.assessed_at,a.valid_until,resolution,blocked)
    OR ROW(NEW.selected_value,NEW.support_status,NEW.freshness,NEW.dispute_status,NEW.publication,NEW.input_digest)
    IS DISTINCT FROM ROW(NULLIF(expected->'value','null'::jsonb),expected->>'support',expected->>'freshness',expected->>'dispute',expected->>'publication',expected->>'inputDigest')
-   OR NEW.reviewer_decision_id IS DISTINCT FROM CASE WHEN expected->>'dispute'='resolved' THEN resolution END
+   OR NEW.reviewer_decision_id IS DISTINCT FROM (CASE WHEN expected->>'dispute'='resolved' THEN resolution END)
    OR NEW.expected_subject_revision IS DISTINCT FROM (SELECT revision FROM public.v2_subjects WHERE id=a.subject_id) THEN
    RAISE EXCEPTION 'v2_field_requires_computed_interpretation' USING ERRCODE='23514'; END IF;
  RETURN NEW;
