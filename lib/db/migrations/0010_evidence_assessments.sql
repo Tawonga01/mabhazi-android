@@ -67,6 +67,11 @@ CREATE TABLE public.v2_current_assessments (
 
 CREATE FUNCTION public.v2_assessment_hash(value jsonb) RETURNS text
 LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$ SELECT encode(sha256(convert_to(value::text,'UTF8')),'hex'); $$;
+CREATE FUNCTION public.v2_assessment_input_digest(subject uuid,field text,scope jsonb,graph bigint,evaluated jsonb) RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog AS $$
+ SELECT public.v2_assessment_hash(jsonb_build_object('subject',subject,'field',field,'scope',jsonb_strip_nulls(scope),
+   'sourceGraphRevision',graph,'evaluation',evaluated-'assessedAt'));
+$$;
 -- Inclusive evidence day plus policy window; unknown zone expires at the
 -- earliest worldwide day boundary (UTC+14), never at the phone/server timezone.
 CREATE FUNCTION public.v2_assessment_day_end(day date,days integer,zone text) RETURNS timestamptz
@@ -107,7 +112,7 @@ RETURNS TABLE(observation_id uuid,owner_id varchar,value jsonb,evidence_date dat
  reason text,next_change timestamptz,state_revision bigint,target_revision bigint)
 LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
 DECLARE o record; p public.v2_evidence_policies; kind text; zone text; dated date; source_day date; source_latest date; start_day date; end_day date;
- horizon integer; due timestamptz; expires timestamptz; starts timestamptz; local_day date; fp jsonb; bad_date boolean;
+ horizon integer; due timestamptz; expires timestamptz; starts timestamptz; local_day date; fp jsonb; bad_date boolean; latest_evidence_day date;
 BEGIN
  SELECT * INTO p FROM public.v2_evidence_policies WHERE version=policy;
  IF p.version IS NULL OR as_of IS NULL OR NOT isfinite(as_of) THEN RAISE EXCEPTION 'v2_assessment_policy_time_invalid' USING ERRCODE='23514'; END IF;
@@ -122,7 +127,7 @@ BEGIN
    observation_id:=o.id; owner_id:=o.user_id; value:=o.value; state_revision:=o.state_rev; target_revision:=o.target_rev;
    IF field LIKE 'fare.%' THEN value:=jsonb_set(value,'{amount}',to_jsonb(trim_scale((value->>'amount')::numeric)::text)); END IF;
    zone:=COALESCE(o.scope->>'timezone',CASE WHEN field='service.calendar' THEN o.value->>'timezone' END);
-   local_day:=(as_of AT TIME ZONE COALESCE(zone,'Pacific/Kiritimati'))::date;
+   local_day:=(as_of AT TIME ZONE COALESCE(zone,'Etc/GMT+12'))::date;
    fp:=public.v2_source_footprint(o.id);
    known_source:=(fp->>'known')::boolean;
    SELECT COALESCE(array_agg(x::uuid ORDER BY x::uuid),ARRAY[]::uuid[]) INTO source_groups FROM jsonb_array_elements_text(fp->'groups') x;
@@ -137,6 +142,8 @@ BEGIN
    bad_date:=EXISTS(SELECT 1 FROM unnest(ARRAY[o.observed_from,o.observed_to,source_day,source_latest,
      (o.scope->>'sourceDate')::date,CASE WHEN field='fare.quoted' THEN (o.scope->>'quotationDate')::date END,dated]) d
      WHERE d IS NOT NULL AND (NOT isfinite(d) OR d>local_day));
+   latest_evidence_day:=greatest(o.observed_from,o.observed_to,source_latest,(o.scope->>'sourceDate')::date,
+     CASE WHEN field='fare.quoted' THEN (o.scope->>'quotationDate')::date END,dated);
    complete_scope:=public.v2_assessment_scope_complete(field,kind,o.value,o.scope);
    basis_eligible:=CASE
      WHEN field IN('departure.scheduled','arrival.scheduled','service.calendar','fare.advertised','fare.quoted') THEN o.knowledge_basis IN('observed_sign','operator_statement')
@@ -171,7 +178,8 @@ BEGIN
      WHEN temporal_class='historical' THEN 'historical_evidence' WHEN freshness='recheck_due' THEN 'recheck_due'
      WHEN NOT known_source THEN 'source_unknown' WHEN NOT basis_eligible THEN 'basis_ineligible' ELSE 'eligible' END;
    SELECT min(v) INTO next_change FROM unnest(ARRAY[due,expires,starts,
-     CASE WHEN dated>local_day THEN dated::timestamp AT TIME ZONE COALESCE(zone,'Etc/GMT+12') END]) v WHERE v>as_of;
+     CASE WHEN latest_evidence_day>local_day AND isfinite(latest_evidence_day)
+       THEN latest_evidence_day::timestamp AT TIME ZONE COALESCE(zone,'Etc/GMT+12') END]) v WHERE v>as_of;
    RETURN NEXT;
  END LOOP;
 END; $$;
@@ -229,13 +237,16 @@ CREATE FUNCTION public.v2_assessment_history_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF TG_OP='UPDATE' AND pg_trigger_depth()>1 THEN
-   IF TG_TABLE_NAME='v2_field_assessments' AND (NOT OLD.invalidated OR NEW.invalidated) AND (NOT OLD.erased OR NEW.erased)
+   IF TG_TABLE_NAME='v2_field_assessments' THEN
+    IF (NOT OLD.invalidated OR NEW.invalidated) AND (NOT OLD.erased OR NEW.erased)
      AND (NEW.erased OR (NEW.result IS NOT DISTINCT FROM OLD.result AND NEW.scope IS NOT DISTINCT FROM OLD.scope
        AND NEW.request_digest IS NOT DISTINCT FROM OLD.request_digest AND NEW.input_digest IS NOT DISTINCT FROM OLD.input_digest))
      AND to_jsonb(NEW)-ARRAY['invalidated','erased','result','scope','request_digest','input_digest']
        =to_jsonb(OLD)-ARRAY['invalidated','erased','result','scope','request_digest','input_digest'] THEN RETURN NEW; END IF;
-   IF TG_TABLE_NAME='v2_assessment_inputs' AND NEW.erased AND NEW.observation_id IS NULL AND NEW.snapshot IS NULL
+   ELSIF TG_TABLE_NAME='v2_assessment_inputs' THEN
+    IF NEW.erased AND NEW.observation_id IS NULL AND NEW.snapshot IS NULL
      AND to_jsonb(NEW)-ARRAY['erased','observation_id','snapshot']=to_jsonb(OLD)-ARRAY['erased','observation_id','snapshot'] THEN RETURN NEW; END IF;
+   END IF;
  END IF;
  RAISE EXCEPTION 'v2_assessment_history_immutable' USING ERRCODE='23514';
 END; $$;
@@ -260,7 +271,8 @@ BEGIN
      OR (o.scope_key<>NEW.scope_key AND jsonb_strip_nulls(o.scope)=jsonb_strip_nulls(NEW.scope)))) THEN
    RAISE EXCEPTION 'v2_assessment_scope_hash_inconsistent' USING ERRCODE='23514'; END IF;
  evaluated:=public.v2_evaluate_assessment(NEW.subject_id,NEW.field_key,NEW.scope,NEW.assessed_at,NEW.policy_version);
- IF NEW.result IS DISTINCT FROM evaluated-'inputs' OR NEW.input_digest IS DISTINCT FROM public.v2_assessment_hash(evaluated)
+ IF NEW.result IS DISTINCT FROM evaluated-'inputs' OR NEW.input_digest IS DISTINCT FROM
+   public.v2_assessment_input_digest(NEW.subject_id,NEW.field_key,NEW.scope,NEW.source_graph_revision,evaluated)
    OR NEW.valid_until IS DISTINCT FROM (evaluated->>'nextChangeAt')::timestamptz THEN
    RAISE EXCEPTION 'v2_assessment_requires_computed_evidence' USING ERRCODE='23514'; END IF;
  RETURN NEW;
@@ -311,7 +323,8 @@ BEGIN
  INSERT INTO public.v2_field_assessments(id,subject_id,field_key,scope_key,scope,revision,previous_id,subject_revision,input_generation,
    source_graph_revision,policy_version,request_id,request_digest,input_digest,assessed_at,valid_until,result)
  VALUES(result_id,subject,field,scope_hash,requested_scope,COALESCE(previous.revision,0)+1,previous.id,s.revision,s.input_generation,
-   expected_graph,policy,request,fingerprint,public.v2_assessment_hash(evaluated),as_of,(evaluated->>'nextChangeAt')::timestamptz,evaluated-'inputs');
+   expected_graph,policy,request,fingerprint,public.v2_assessment_input_digest(subject,field,requested_scope,expected_graph,evaluated),
+   as_of,(evaluated->>'nextChangeAt')::timestamptz,evaluated-'inputs');
  INSERT INTO public.v2_assessment_inputs(assessment_id,observation_id,snapshot)
    SELECT result_id,(x->>'observationId')::uuid,x-'observationId' FROM jsonb_array_elements(evaluated->'inputs') x;
  SET CONSTRAINTS public.v2_assessment_snapshot_valid IMMEDIATE;

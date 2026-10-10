@@ -176,6 +176,17 @@ export function registerAssessmentTests(context: () => Context) {
     assert.deepEqual(await evaluate(id, "fare.quoted", scope), before); assert.equal((await q(assessSQL, values)).rows[0].id, a);
     await q("SET CONSTRAINTS ALL IMMEDIATE");
   });
+  test("assessment: input identity is stable within a validity interval and includes scope and source revision", async () => {
+    const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope);
+    const a = await record(id, "fare.quoted", scope), b = await record(id, "fare.quoted", scope, "2026-10-02T13:00:00Z");
+    const rows = (await q("SELECT input_digest,assessed_at FROM v2_field_assessments WHERE id=ANY($1::uuid[]) ORDER BY revision", [[a, b]])).rows;
+    assert.equal(rows[0].input_digest, rows[1].input_digest); assert.notEqual(rows[0].assessed_at.toISOString(), rows[1].assessed_at.toISOString());
+    const result = await evaluate(id, "fare.quoted", scope);
+    const digests = (await q(`SELECT v2_assessment_input_digest($1,'fare.quoted',$2,1,$3) a,
+      v2_assessment_input_digest($1,'fare.quoted',$4,1,$3) b,v2_assessment_input_digest($1,'fare.quoted',$2,2,$3) c`,
+      [id, scope, result, fareScope({ passengerCategory: "child" })])).rows[0];
+    assert.notEqual(digests.a, digests.b); assert.notEqual(digests.a, digests.c);
+  });
   test("assessment: expiry and not-yet-effective reports are excluded without inventing a replacement", async () => {
     const t = await transport(), scope = { schemaVersion: "1.0", effectiveFrom: "2026-10-05", effectiveTo: "2026-10-10", timezone: "Africa/Harare" };
     await report(t.run, "departure.scheduled", { seconds: 28800 }, scope);
@@ -190,6 +201,9 @@ export function registerAssessmentTests(context: () => Context) {
   test("assessment: a future evidence date cannot borrow an old source date to become admissible", async () => {
     const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope, { date: "2026-10-03", sourceDate: "2026-10-01" });
     const r = await evaluate(id, "fare.quoted", scope); assert.deepEqual(r.candidates, []); assert.equal(r.inputs[0].reason, "future_or_invalid_date");
+    assert.equal(new Date(r.nextChangeAt).toISOString(), "2026-10-03T12:00:00.000Z");
+    assert.deepEqual((await evaluate(id, "fare.quoted", scope, "2026-10-03T11:59:59Z")).candidates, []);
+    assert.equal((await evaluate(id, "fare.quoted", scope, "2026-10-03T12:00:00Z")).candidates[0].support, "reported");
   });
   test("assessment: reported lead clocks and unresolved pattern variants remain incomplete", async () => {
     const id = await lead(); await report(id, "departure.reported", { time: "08:00", basis: "scheduled" });
