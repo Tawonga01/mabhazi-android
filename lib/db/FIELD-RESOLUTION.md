@@ -14,7 +14,7 @@ A managed review thread has one case for its subject/field/scope. Automatic open
 
 ## Integrity, privacy and reads
 
-Computed field rows bind the source assessment and optional resolution, with exact scoped evidence membership/dispositions. Legacy provisional rows keep their old validators. Raw histories remain immutable apart from mandated erasure. Current-time `v2_read_field` refuses an invalidated, retired, expired or policy-stale selection. It exposes transport values/status, not private notes or input/source identifiers; historical-clock helpers stay owner-only. APIs must use this boundary rather than raw cached rows.
+Computed field rows bind the source assessment and optional resolution, with exact scoped evidence membership/dispositions. Legacy provisional rows keep their old validators. Raw histories remain immutable apart from mandated erasure. Current-time `v2_read_field` refuses an invalidated, retired, expired or policy-stale selection. It exposes transport values/status and dated candidates with historical context, without private notes, witness IDs or input/source identifiers; historical-clock helpers stay owner-only. APIs must use this boundary rather than raw cached rows.
 
 Observation/source/account erasure removes copied selected values, scopes/digests and rejected-input identifiers; request fingerprints containing actor/private-note input are removed too. Reviewer-only deletion redacts that retry fingerprint and private rationale while preserving independently owned transport evidence. New tables have RLS, backend SELECT only and no client grants. No live reviewer roles or schema changes are applied here.
 

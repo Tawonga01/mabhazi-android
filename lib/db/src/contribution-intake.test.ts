@@ -391,11 +391,14 @@ test("outbox keys, lease shape and subject ownership reject inconsistent jobs", 
 });
 
 test("failed transaction leaves no contribution, receipt or job", async () => {
+  const tables=["v2_subjects","v2_leads","v2_contributions","v2_receipts","v2_jobs"];
+  const before=new Map<string,string>();
+  for(const table of tables) before.set(table,(await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count);
   await db.query("SAVEPOINT interrupted_submit");
   const c = await lead(); await receipt(c); await job(c);
   await db.query("ROLLBACK TO SAVEPOINT interrupted_submit");
-  for (const table of ["v2_subjects", "v2_leads", "v2_contributions", "v2_receipts", "v2_jobs"]) {
-    assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, "0", table);
+  for (const table of tables) {
+    assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, before.get(table), table);
   }
 });
 

@@ -96,6 +96,8 @@ export function registerFieldResolutionTests(context: () => Context) {
   test("field resolution: conflicts open one durable case and withhold a winner", async () => {
     const f = await conflict(); const c = await thread(f.id); assert.equal(c.state, "open");
     const r = await fieldRead(f.id, f.scope); assert.equal(r.value, null); assert.equal(r.dispute, "open"); assert.equal(r.status, "review_required");
+    assert.equal(r.candidates.length,2); assert.ok(r.candidates.every((x:Record<string,unknown>)=>x.oldestDate==="2026-10-01" && !Object.hasOwn(x,"witnesses")));
+    assert.ok(!JSON.stringify(r).includes(f.a.observation)); assert.ok(!JSON.stringify(r).includes("Synthetic private rationale"));
     await process(f.assessment); assert.equal((await q("SELECT count(*) FROM v2_field_case_events WHERE case_id=$1", [c.id])).rows[0].count, "1");
   });
   test("field resolution: reviewer must explicitly exclude conflicting evidence", async () => {
@@ -171,7 +173,7 @@ export function registerFieldResolutionTests(context: () => Context) {
     const b=await report(t.actual,"fare.paid",fare("30"),scope,{owner:context().other,basis:"travelled",date:"2020-01-01"});
     const assessment=await record(t.actual,"fare.paid",scope); await process(assessment); await reviewer(); assert.equal((await thread(t.actual)).state,"open");
     await resolve(assessment,a.observation,[b.observation]); const r=await fieldRead(t.actual,scope,at,"fare.paid");
-    assert.equal(r.freshness,"unknown"); assert.equal(r.support,"reported"); assert.equal(r.dispute,"resolved"); assert.equal(r.publication,"provisional");
+    assert.equal(r.freshness,"unknown"); assert.equal(r.support,"reported"); assert.equal(r.dispute,"resolved"); assert.equal(r.publication,"provisional"); assert.equal(r.candidates[0].temporalClass,"historical"); assert.equal(r.candidates[0].oldestDate,"2020-01-01");
   });
   test("field resolution: account erasure removes reviewed choices, request digests and rejected input identifiers", async () => {
     const f=await conflict(); const review=await resolve(f.assessment,f.a.observation,[f.b.observation]);
@@ -202,6 +204,25 @@ export function registerFieldResolutionTests(context: () => Context) {
     await invalid(()=>q("UPDATE v2_field_resolutions SET chosen_observation_id=$1 WHERE review_id=$2",[f.b.observation,review]));
     const caseId=(await thread(f.id)).id; await invalid(()=>q("DELETE FROM v2_field_case_events WHERE case_id=$1",[caseId]));
     await invalid(async()=>{ await q("UPDATE v2_field_decisions SET support_status='corroborated' WHERE subject_id=$1",[f.id]); });
+  });
+  test("field resolution: excluding a repeated claim lets a reviewer select its still-active predecessor",async()=>{
+    const id=await lead(),scope=fareScope(),src=await source();
+    const a=await report(id,"fare.quoted",fare(),scope,{sources:[src]}),b=await report(id,"fare.quoted",fare("30"),scope,{sources:[src]});
+    const assessment=await record(id,"fare.quoted",scope); await process(assessment);await reviewer();
+    const inputs=(await q("SELECT observation_id,snapshot FROM v2_assessment_inputs WHERE assessment_id=$1",[assessment])).rows;
+    const repeated=inputs.find(x=>x.snapshot.reason==="repeated_account_source")!,current=inputs.find(x=>x.snapshot.admissible)!;
+    await resolve(assessment,repeated.observation_id,[current.observation_id]);
+    assert.equal((await fieldRead(id,scope)).value.amount,repeated.observation_id===a.observation?"25":"30");
+    assert.ok([a.observation,b.observation].includes(current.observation_id));
+  });
+  test("field resolution: a fabricated corroborated field row is rejected at insertion",async()=>{
+    const id=await lead(),scope=fareScope(); await report(id,"fare.quoted",fare(),scope); const a=await record(id,"fare.quoted",scope),d=await process(a);
+    await invalid(async()=>{
+      const fake=randomUUID();await q("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'field')",[fake]);
+      await q(`INSERT INTO v2_field_decisions SELECT (jsonb_populate_record(NULL::v2_field_decisions,to_jsonb(d)||jsonb_build_object(
+        'id',$1::uuid,'revision',d.revision+1,'previous_decision_id',d.id,'expected_subject_revision',s.revision,'support_status','corroborated'))).*
+        FROM v2_field_decisions d JOIN v2_subjects s ON s.id=d.subject_id WHERE d.id=$2`,[fake,d]);
+    });
   });
   test("field resolution: immediate constraints permit complete review and field snapshots",async()=>{
     const f=await conflict(); await q("SET CONSTRAINTS ALL IMMEDIATE"); await resolve(f.assessment,f.a.observation,[f.b.observation]);

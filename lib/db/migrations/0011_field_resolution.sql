@@ -307,8 +307,9 @@ BEGIN
      OR NOT EXISTS(SELECT 1 FROM public.v2_field_review_threads WHERE case_id=c.id AND subject_id=a.subject_id AND field_key=a.field_key AND scope_key=a.scope_key)
      OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=d.actor_user_id AND revoked_at IS NULL)
      OR (d.action='accept')<>(NEW.chosen_observation_id IS NOT NULL)
-     OR (NEW.chosen_observation_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.v2_assessment_inputs
-       WHERE assessment_id=a.id AND observation_id=NEW.chosen_observation_id AND (snapshot->>'admissible')::boolean)) THEN
+     OR (NEW.chosen_observation_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM
+       public.v2_assessment_rows(a.subject_id,a.field_key,a.scope,a.assessed_at,a.policy_version)
+       WHERE observation_id=NEW.chosen_observation_id AND admissible)) THEN
      RAISE EXCEPTION 'v2_field_resolution_binding_mismatch' USING ERRCODE='23514'; END IF;
  END IF;
  RETURN NEW;
@@ -460,7 +461,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
    AND d.assessed_at<=as_of AND (d.next_recheck_at IS NULL OR as_of<d.next_recheck_at)
    THEN jsonb_build_object('status',CASE WHEN d.review_blocked THEN 'review_required' ELSE 'assessed' END,
      'value',d.selected_value,'support',d.support_status,'freshness',d.freshness,'dispute',d.dispute_status,
-     'publication',d.publication,'reviewed',d.resolution_id IS NOT NULL,'nextRecheckAt',d.next_recheck_at)
+     'publication',d.publication,'reviewed',d.resolution_id IS NOT NULL,'nextRecheckAt',d.next_recheck_at,
+     'candidates',(SELECT COALESCE(jsonb_agg(x-'witnesses'),'[]'::jsonb) FROM jsonb_array_elements(
+       public.v2_field_expected(a.id,d.resolution_id,d.review_blocked)->'result'->'candidates') x))
    ELSE jsonb_build_object('status','recheck_required') END
  FROM public.v2_current_fields c JOIN public.v2_field_decisions d ON d.id=c.field_decision_id
  JOIN public.v2_subjects s ON s.id=d.subject_id JOIN public.v2_field_assessments a ON a.id=d.assessment_id
