@@ -45,5 +45,7 @@ jobs:
       - name: Verify migration can safely run again
         run: pnpm --dir lib/db run migrate
       - run: pnpm --dir artifacts/api-server exec tsx --test src/lib/origins.test.ts src/lib/supabaseAuth.test.ts src/lib/identityDeletion.test.ts src/routes/adminAuth.test.ts src/routes/auth.test.ts
+      - name: Verify contribution storage and populated upgrade
+        run: pnpm --dir lib/db run test:intake
       - run: pnpm --dir artifacts/api-server run test
       - run: pnpm --dir artifacts/api-server run build

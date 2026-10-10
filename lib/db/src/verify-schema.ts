@@ -1,14 +1,23 @@
 import pg from "pg";
+import { getTableColumns, getTableName } from "drizzle-orm";
+import { intakeTables } from "./schema/contributionIntake";
+import { transportTables } from "./schema/transportStructure";
+import { reviewTables } from "./schema/reviewDecisions";
+import { derivedTables } from "./schema/derivedDecisions";
+import { observationRegistryTables } from "./schema/observationRegistry";
+import { observationEventTables } from "./schema/observationEvents";
+import { observationTargetTables } from "./schema/observationTargets";
+import { sourceIdentityTables } from "./schema/sourceIdentity";
+import { evidenceAssessmentTables } from "./schema/evidenceAssessments";
+import { fieldResolutionTables } from "./schema/fieldResolution";
 
 /**
- * Read-only verification for the additive UGC moderation and terms schema.
- *
- * Schema changes are applied by Drizzle's development push flow. This check
- * intentionally never executes DDL, so it is safe to run after a development
- * push and as a deployment preflight. Production schema changes still belong
- * to Replit Publish; do not point a schema push command at production.
+ * Read-only presence check for legacy and v2 intake columns.
+ * Apply versioned SQL with the owner-only migration runner, never schema push
+ * at startup. Presence does not replace the constraint/RLS/erasure test suite.
  */
 const requiredColumns: Record<string, readonly string[]> = {
+  ...Object.fromEntries([...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables].map(table => [getTableName(table), Object.values(getTableColumns(table)).map(column => column.name)])),
   abuse_reports: [
     "id",
     "reporter_id",
@@ -30,7 +39,7 @@ const requiredColumns: Record<string, readonly string[]> = {
 
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be set to the development database");
+    throw new Error("DATABASE_URL is required");
   }
 
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -58,7 +67,7 @@ async function main(): Promise<void> {
       throw new Error(`Missing additive schema columns: ${missing.join(", ")}`);
     }
 
-    process.stdout.write("Additive UGC moderation and terms schema is present.\n");
+    process.stdout.write("Legacy moderation/terms and v2 intake columns are present.\n");
   } finally {
     await pool.end();
   }
