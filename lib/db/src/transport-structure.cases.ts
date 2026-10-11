@@ -56,13 +56,14 @@ export function registerTransportTests(context: () => Context) {
   }
 
   test("transport: equal company names, direct/stopping variants and different departures stay separate", async () => {
+    const existingOperators = Number((await query("SELECT count(*) FROM v2_operators")).rows[0].count);
     const a = await pattern(); const b = await pattern();
     const intermediate = await stop();
     const variant = await pattern({ routeId: a.routeId, stops: [a.stops[0]!, intermediate, a.stops[1]!] });
     const p = await plan(a.id); const morning = await run(a.id, p, 7 * 3600); const afternoon = await run(a.id, p, 14 * 3600);
     await query("SET CONSTRAINTS ALL IMMEDIATE");
     assert.notEqual(a.routeId, b.routeId); assert.notEqual(a.id, variant.id); assert.notEqual(morning, afternoon);
-    assert.equal((await query("SELECT count(*) FROM v2_operators")).rows[0].count, "2");
+    assert.equal(Number((await query("SELECT count(*) FROM v2_operators")).rows[0].count)-existingOperators, 2);
     assert.equal((await query("SELECT count(*) FROM v2_patterns")).rows[0].count, "3");
   });
 

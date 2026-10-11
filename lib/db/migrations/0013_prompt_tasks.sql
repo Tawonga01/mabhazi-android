@@ -196,14 +196,14 @@ BEGIN
  invite_reserved=CASE WHEN v2_prompt_sessions.last_active_at<=now_time-make_interval(mins=>minutes) THEN false ELSE v2_prompt_sessions.invite_reserved END,last_active_at=now_time RETURNING session_id INTO result;
  RETURN result;
 END; $$;
-CREATE FUNCTION public.v2_prompt_reserve(actor varchar,request uuid,contexts text[],surface text,manual_task uuid DEFAULT NULL,requested_subject uuid DEFAULT NULL) RETURNS uuid
+CREATE FUNCTION public.v2_prompt_reserve(actor varchar,request uuid,declared text[],surface text,manual_task uuid DEFAULT NULL,requested_subject uuid DEFAULT NULL) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE policy public.v2_prompt_policies; pref public.v2_prompt_preferences; session public.v2_prompt_sessions; prior public.v2_prompt_requests;
  chosen public.v2_question_tasks; now_time timestamptz; digest text; blocked boolean;
 BEGIN
  PERFORM public.v2_prompt_account(actor); now_time:=clock_timestamp();
- IF request IS NULL OR requested_subject IS NULL OR surface IS NULL OR surface NOT IN('search_result','route_detail','own_contribution','contribute_tab') OR NOT public.v2_prompt_context_valid(contexts) THEN RAISE EXCEPTION 'v2_prompt_request_invalid' USING ERRCODE='23514'; END IF;
- digest:=public.v2_assessment_hash(jsonb_build_array(actor,ARRAY(SELECT x FROM unnest(contexts) x ORDER BY x),surface,manual_task,requested_subject));
+ IF request IS NULL OR requested_subject IS NULL OR surface IS NULL OR surface NOT IN('search_result','route_detail','own_contribution','contribute_tab') OR NOT public.v2_prompt_context_valid(declared) THEN RAISE EXCEPTION 'v2_prompt_request_invalid' USING ERRCODE='23514'; END IF;
+ digest:=public.v2_assessment_hash(jsonb_build_array(actor,ARRAY(SELECT x FROM unnest(declared) x ORDER BY x),surface,manual_task,requested_subject));
  SELECT * INTO prior FROM public.v2_prompt_requests WHERE id=request;
  IF FOUND THEN
   IF prior.user_id<>actor OR prior.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_prompt_request_conflict' USING ERRCODE='23514'; END IF;
@@ -216,16 +216,16 @@ BEGIN
     OR (SELECT count(*) FROM public.v2_prompt_requests WHERE user_id=actor AND consumed AND created_at>now_time-interval '24 hours')>=policy.daily_cap);
  IF NOT COALESCE(blocked,false) THEN
   SELECT t.* INTO chosen FROM public.v2_question_tasks t JOIN public.v2_question_registry r ON r.key=t.registry_key AND r.version=t.registry_version
-  WHERE t.registry_version='prompts/1' AND t.subject_id=requested_subject AND (manual_task IS NULL OR t.id=manual_task) AND public.v2_prompt_eligible(t.id,actor,contexts)
+  WHERE t.registry_version='prompts/1' AND t.subject_id=requested_subject AND (manual_task IS NULL OR t.id=manual_task) AND public.v2_prompt_eligible(t.id,actor,declared)
    AND (manual_task IS NOT NULL OR (surface=ANY(r.surfaces) AND NOT t.registry_key=ANY(pref.disabled_types)
-     AND ( 'new_experience'=ANY(contexts) OR NOT EXISTS(SELECT 1 FROM public.v2_prompt_suppressions s WHERE s.user_id=actor AND s.subject_id=t.subject_id AND s.field_key=t.field_key AND s.scope_key=t.scope_key AND s.until_time>now_time))))
+     AND ( 'new_experience'=ANY(declared) OR NOT EXISTS(SELECT 1 FROM public.v2_prompt_suppressions s WHERE s.user_id=actor AND s.subject_id=t.subject_id AND s.field_key=t.field_key AND s.scope_key=t.scope_key AND s.until_time>now_time))))
   ORDER BY t.priority,t.created_at,t.id LIMIT 1;
  END IF;
  INSERT INTO public.v2_prompt_requests(id,user_id,request_digest,session_id,consumed,created_at) VALUES(request,actor,digest,session.session_id,chosen.id IS NOT NULL AND manual_task IS NULL,now_time);
  IF chosen.id IS NULL THEN RETURN NULL; END IF;
  INSERT INTO public.v2_prompt_invitations(id,user_id,task_id,policy_version,mode,reserved_at,expires_at,target_revision,identity_hash,declared_context,surface)
  VALUES(request,actor,chosen.id,'prompts/1',CASE WHEN manual_task IS NULL THEN 'unsolicited' ELSE 'manual' END,now_time,now_time+make_interval(mins=>policy.unopened_minutes),
-  (SELECT revision FROM public.v2_subjects WHERE id=chosen.subject_id),public.v2_prompt_identity(chosen.subject_id),contexts,surface);
+  (SELECT revision FROM public.v2_subjects WHERE id=chosen.subject_id),public.v2_prompt_identity(chosen.subject_id),declared,surface);
  IF manual_task IS NULL THEN UPDATE public.v2_prompt_sessions SET invite_reserved=true WHERE user_id=actor; END IF;
  RETURN request;
 END; $$;
