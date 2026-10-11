@@ -10,6 +10,7 @@ import { observationTargetTables } from "./schema/observationTargets";
 import { sourceIdentityTables } from "./schema/sourceIdentity";
 import { evidenceAssessmentTables } from "./schema/evidenceAssessments";
 import { fieldResolutionTables } from "./schema/fieldResolution";
+import { transportPropagationTables } from "./schema/transportPropagation";
 import { promptTables } from "./schema/promptTasks";
 import { affiliationIssuerTables } from "./schema/affiliationIssuers";
 
@@ -19,7 +20,7 @@ import { affiliationIssuerTables } from "./schema/affiliationIssuers";
  * at startup. Presence does not replace the constraint/RLS/erasure test suite.
  */
 const requiredColumns: Record<string, readonly string[]> = {
-  ...Object.fromEntries([...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables].map(table => [getTableName(table), Object.values(getTableColumns(table)).map(column => column.name)])),
+  ...Object.fromEntries([...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables].map(table => [getTableName(table), Object.values(getTableColumns(table)).map(column => column.name)])),
   abuse_reports: [
     "id",
     "reporter_id",
