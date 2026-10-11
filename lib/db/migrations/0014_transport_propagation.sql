@@ -49,6 +49,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE affected uuid[]; event_id uuid:=gen_random_uuid(); before_state jsonb; candidates uuid[]; decisions uuid[]; item record;
 BEGIN
  UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
+ roots:=ARRAY(SELECT DISTINCT x FROM unnest(roots) x WHERE x IS NOT NULL ORDER BY x);
  affected:=ARRAY(SELECT x FROM unnest(public.v2_transport_dependents(roots)) x WHERE x IS DISTINCT FROM removed_subject);
  IF cardinality(affected)=0 THEN RETURN; END IF;
  PERFORM 1 FROM public.v2_subjects WHERE id=ANY(affected) ORDER BY id FOR UPDATE;

@@ -149,6 +149,22 @@ export function registerPropagationTests(context: () => Context) {
     for(const sql of statements) {const before=await generations([f.run]);await q(sql,[f.run,f.pattern]);await advanced(before);}
     assert.deepEqual(await generations([f.pattern,f.plan]),parent);
   });
+  test("propagation: inserted and deleted child rows invalidate non-root actual journeys",async()=>{
+    const f=await transport(),journey=await actual(f.run);
+    for(const sql of ["INSERT INTO v2_run_stop_times(run_subject_id,pattern_subject_id,pattern_version,pattern_sequence,departure_seconds) VALUES($1,$2,1,0,28800)","DELETE FROM v2_run_stop_times WHERE run_subject_id=$1 AND pattern_subject_id=$2"]) {
+      const before=await generations([f.run,journey]);await q(sql,[f.run,f.pattern]);await advanced(before);
+      const effects=(await q("SELECT is_root FROM v2_transport_change_subjects WHERE subject_id=$1 ORDER BY resulting_generation DESC LIMIT 1",[journey])).rows;
+      assert.deepEqual(effects,[{is_root:false}]);
+    }
+  });
+  test("propagation: deleting an unused subject removes only its audit links",async()=>{
+    const id=await subject("stop");await q("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Disposable stop')",[id]);
+    await q("UPDATE v2_stops SET name='Renamed disposable stop' WHERE subject_id=$1",[id]);
+    const event=(await q("SELECT change_id FROM v2_transport_change_subjects WHERE subject_id=$1",[id])).rows[0].change_id;
+    await q("DELETE FROM v2_stops WHERE subject_id=$1",[id]);await q("DELETE FROM v2_jobs WHERE subject_id=$1",[id]);await q("DELETE FROM v2_subjects WHERE id=$1",[id]);
+    assert.equal((await q("SELECT count(*) FROM v2_transport_change_subjects WHERE change_id=$1",[event])).rows[0].count,"0");
+    assert.equal((await q("SELECT count(*) FROM v2_transport_changes WHERE id=$1",[event])).rows[0].count,"1");await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
   for(const mode of ["frequency","on_demand"]) test(`propagation: ${mode} window moves invalidate old and new owners`,async()=>{
     const f=await transport(), a=await subject("service_plan"), b=await subject("service_plan");
     await q("INSERT INTO v2_service_plans(subject_id,pattern_subject_id,pattern_version,mode) VALUES($1,$3,1,$4),($2,$3,1,$4)",[a,b,f.pattern,mode]);
