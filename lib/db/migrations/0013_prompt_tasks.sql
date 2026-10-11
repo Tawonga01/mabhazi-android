@@ -96,7 +96,7 @@ BEGIN
  END IF;
  IF definition.key IS NULL OR NOT subject.kind=ANY(definition.target_kinds) OR NOT public.v2_observation_kind_valid(NEW.field_key,subject.kind)
    OR NOT ('*'=ANY(definition.field_keys) OR NEW.field_key=ANY(definition.field_keys)) OR NEW.priority<>definition.priority
-   OR NEW.reason<>CASE NEW.registry_key WHEN 'confirm_current_fact' THEN 'stale' WHEN 'resolve_conflict_context' THEN 'disputed' ELSE 'missing' END THEN
+   OR NEW.reason<>(CASE NEW.registry_key WHEN 'confirm_current_fact' THEN 'stale' WHEN 'resolve_conflict_context' THEN 'disputed' ELSE 'missing' END) THEN
   RAISE EXCEPTION 'v2_task_registry_mismatch' USING ERRCODE='23514'; END IF;
  NEW.updated_at:=statement_timestamp(); RETURN NEW;
 END; $$;
@@ -165,7 +165,7 @@ BEGIN
  SELECT version INTO p FROM public.v2_evidence_policy_state WHERE id;
  a:=public.v2_evaluate_assessment(t.subject_id,t.field_key,t.scope,statement_timestamp(),p);
  IF t.reason='disputed' THEN RETURN a->>'dispute'='open'; END IF;
- IF t.reason='stale' THEN RETURN EXISTS(SELECT 1 FROM jsonb_array_elements(a->'inputs') x WHERE x->>'freshness' IN('recheck_due','expired') AND x->>'evidenceDate' IS NOT NULL); END IF;
+ IF t.reason='stale' THEN RETURN EXISTS(SELECT 1 FROM jsonb_array_elements(a->'inputs') x WHERE x->>'freshness' IN('recheck_due','expired') AND x->>'evidenceDate' IS NOT NULL AND x->>'reason' NOT IN('hidden','withdrawn','superseded','future_or_invalid_date','not_yet_effective')); END IF;
  -- A usable current report satisfies a missing-fact invitation, without claiming
  -- that it is corroborated or canonically accepted.
  RETURN NOT EXISTS(SELECT 1 FROM jsonb_array_elements(a->'candidates') x WHERE x->>'freshness'='current');

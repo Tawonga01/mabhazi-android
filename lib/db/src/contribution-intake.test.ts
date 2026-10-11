@@ -114,6 +114,11 @@ before(async () => {
   const assessmentSnapshot = (await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0];
   const upgradeField = (await db.query("SELECT v2_process_field_assessment($1) id",[upgradeAssessment])).rows[0].id;
   const fieldSnapshot = (await db.query("SELECT * FROM v2_field_decisions WHERE id=$1",[upgradeField])).rows[0];
+  const upgradeOperator = (await db.query("INSERT INTO v2_subjects(kind) VALUES('operator') RETURNING id")).rows[0].id;
+  await db.query("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Synthetic upgrade affiliation company')",[upgradeOperator]);
+  const upgradeClaim = (await db.query("SELECT v2_claim_affiliation($1,$2,'operations representative',gen_random_uuid()) id",[upgradeUser,upgradeOperator])).rows[0].id;
+  const upgradeProof = (await db.query("SELECT v2_add_affiliation_proof($1,$2,'authorization_document',statement_timestamp()-interval '1 day',statement_timestamp()+interval '30 days','private://synthetic-upgrade',gen_random_uuid()) id",[upgradeUser,upgradeClaim])).rows[0].id;
+  const affiliationSnapshot = (await db.query("SELECT to_jsonb(c) claim,to_jsonb(p) proof FROM v2_affiliation_claims c JOIN v2_affiliation_proofs p ON p.claim_id=c.id WHERE c.id=$1",[upgradeClaim])).rows;
   // Model hosted defaults granting client roles access to newly created tables.
   // 0013 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
@@ -143,7 +148,8 @@ before(async () => {
   assert.deepEqual((await db.query("SELECT * FROM v2_field_assessments WHERE id=$1",[upgradeAssessment])).rows[0],assessmentSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_field_decisions WHERE id=$1",[upgradeField])).rows[0],fieldSnapshot);
   assert.equal((await db.query("SELECT count(*) FROM v2_field_resolutions")).rows[0].count,"0");
-  assert.equal((await db.query("SELECT count(*) FROM v2_affiliation_claims")).rows[0].count,"0");
+  assert.deepEqual((await db.query("SELECT to_jsonb(c) claim,to_jsonb(p) proof FROM v2_affiliation_claims c JOIN v2_affiliation_proofs p ON p.claim_id=c.id WHERE c.id=$1",[upgradeClaim])).rows,affiliationSnapshot);
+  assert.equal((await db.query("SELECT count(*) FROM v2_question_tasks")).rows[0].count,"0");
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.

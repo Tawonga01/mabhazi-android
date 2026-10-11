@@ -43,6 +43,10 @@ export function registerPromptTests(context: () => Context) {
   if(withReceipt) await q("INSERT INTO v2_receipts(user_id,client_submission_id,contribution_id,semantic_hash,initial_response) VALUES($1,$2,$3,$4,'{\"status\":\"saved\"}')",[owner,client,c,hash]);
   return {c,o,client};
  }
+ async function datedFact(subject:string,field:string,value:unknown,daysAgo=1,owner=context().user) {
+  const c=(await q("INSERT INTO v2_contributions(user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,gen_random_uuid(),'1.0','route_detail',$2,'{}',$3) RETURNING id",[owner,hash,subject])).rows[0].id;
+  return (await q("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key,knowledge_basis,observed_from) VALUES($1,$2,$3,$4,'{}',v2_assessment_hash('{}'),v2_assessment_hash($4),'observed_sign',current_date-$5::integer) RETURNING id",[c,subject,field,value,daysAgo])).rows[0].id as string;
+ }
  const answer=(i:string,o:string,id:string=randomUUID(),owner=context().user)=>q("SELECT v2_prompt_answer($1,$2,$3,$4) id",[owner,i,id,o]);
  test("prompts: nine reviewed definitions preserve the selected pilot policy",async()=>{
   const r=(await q("SELECT key,priority FROM v2_question_registry ORDER BY priority")).rows;
@@ -77,6 +81,22 @@ export function registerPromptTests(context: () => Context) {
   assert.equal(await eligible(t,["knows_schedule"]),false);await answerReport(subject,context().user,true,"departure.reported");assert.equal(await eligible(t,["knows_schedule"]),true);
   const stale=await task(subject,"confirm_current_fact","boarding.pickup"),disputed=await task(subject,"resolve_conflict_context","boarding.pickup");
   assert.equal(await eligible(stale,["knows_route"]),false);assert.equal(await eligible(disputed,["knows_route","relevant_conflict"]),false);
+ });
+ test("prompts: a current reported fact suppresses a missing-field invitation without a worker",async()=>{
+  const f=await fixture();assert.equal(await eligible(f.task,["knows_route"]),true);
+  await datedFact(f.subject,"boarding.pickup",{cityId:context().origin,name:"Known pickup"});
+  assert.equal(await eligible(f.task,["knows_route"]),false);assert.equal(await reserve(),null);
+ });
+ test("prompts: dated stale evidence can invite a recheck but withdrawn evidence cannot",async()=>{
+  const subject=await lead(),o=await datedFact(subject,"boarding.pickup",{cityId:context().origin,name:"Old pickup"},400),t=await task(subject,"confirm_current_fact","boarding.pickup");
+  assert.equal(await eligible(t,["knows_route"]),true);await q("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)",[context().user,o,randomUUID()]);
+  const refreshed=await task(subject,"confirm_current_fact","boarding.pickup");assert.equal(await eligible(refreshed,["knows_route"]),false);
+ });
+ test("prompts: actual current disagreement requires an explicit scope-relevant declaration",async()=>{
+  const subject=randomUUID();await q("INSERT INTO v2_subjects(id,kind) VALUES($1,'stop')",[subject]);await q("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Synthetic terminal')",[subject]);
+  await datedFact(subject,"stop.location",{cityId:context().origin,name:"North terminal",precision:"named_place"});
+  await datedFact(subject,"stop.location",{cityId:context().origin,name:"South terminal",precision:"named_place"},1,context().other);
+  const t=await task(subject,"resolve_conflict_context","stop.location");assert.equal(await eligible(t,["at_stop"]),false);assert.equal(await eligible(t,["at_stop","relevant_conflict"]),true);
  });
  test("prompts: deterministic priority chooses unresolved identity before a pickup gap",async()=>{
   const f=await fixture(),identity=await task(f.subject,"identify_service","operator.identity"),i=await reserve();assert.ok(i);assert.equal((await read(i)).taskId,identity);
