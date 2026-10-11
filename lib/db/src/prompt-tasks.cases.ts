@@ -27,10 +27,10 @@ export function registerPromptTests(context: () => Context) {
   return (await q("SELECT v2_prompt_put_task($1,$2,$3,$4,$5) id",[subject,field,scope,question,generation])).rows[0].id as string;
  }
  async function fixture() {const subject=await lead();return {subject,task:await task(subject)};}
- async function reserve(contexts=["knows_route"],manual:string|null=null,owner=context().user,request=randomUUID(),surface="route_detail") {
+ async function reserve(contexts=["knows_route"],manual:string|null=null,owner=context().user,request:string=randomUUID(),surface="route_detail") {
   return (await q(reserveSQL,[owner,request,contexts,surface,manual,manual?(await q("SELECT subject_id FROM v2_question_tasks WHERE id=$1",[manual])).rows[0]?.subject_id:activeSubject])).rows[0].id as string|null;
  }
- async function event(invite:string,outcome="shown",owner=context().user,id=randomUUID(),zone="UTC",when:Date|null=null) {
+ async function event(invite:string,outcome="shown",owner=context().user,id:string=randomUUID(),zone="UTC",when:Date|null=null) {
   return (await q("SELECT v2_prompt_event($1,$2,$3,$4,$5,$6) id",[owner,invite,id,outcome,zone,when])).rows[0].id as string;
  }
  const read=async(i:string,owner=context().user)=>(await q("SELECT v2_prompt_read($1,$2) r",[owner,i])).rows[0].r;
@@ -43,7 +43,7 @@ export function registerPromptTests(context: () => Context) {
   if(withReceipt) await q("INSERT INTO v2_receipts(user_id,client_submission_id,contribution_id,semantic_hash,initial_response) VALUES($1,$2,$3,$4,'{\"status\":\"saved\"}')",[owner,client,c,hash]);
   return {c,o,client};
  }
- const answer=(i:string,o:string,id=randomUUID(),owner=context().user)=>q("SELECT v2_prompt_answer($1,$2,$3,$4) id",[owner,i,id,o]);
+ const answer=(i:string,o:string,id:string=randomUUID(),owner=context().user)=>q("SELECT v2_prompt_answer($1,$2,$3,$4) id",[owner,i,id,o]);
  test("prompts: nine reviewed definitions preserve the selected pilot policy",async()=>{
   const r=(await q("SELECT key,priority FROM v2_question_registry ORDER BY priority")).rows;
   assert.deepEqual(r.map(x=>x.key),["identify_service","clarify_time_basis","resolve_conflict_context","operating_days","pickup_place","fare_paid","fare_advertised","complete_pattern","confirm_current_fact"]);
