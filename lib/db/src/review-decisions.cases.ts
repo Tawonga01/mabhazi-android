@@ -169,7 +169,7 @@ export function registerReviewTests(context: () => Context) {
     await reject(recordSql, args(f, "reverse", 3, 3, [], reversed));
     assert.equal((await query("SELECT state FROM v2_review_cases WHERE id=$1", [f.caseId])).rows[0].state, "reopened");
     assert.equal((await query("SELECT count(*) FROM v2_review_decisions")).rows[0].count, "2");
-    assert.equal((await query("SELECT count(*) FROM v2_jobs WHERE kind='assess'")).rows[0].count, "2");
+    assert.equal((await query("SELECT count(*) FROM v2_jobs WHERE kind='assess' AND subject_id=$1", [f.subject])).rows[0].count, "2");
     await record(f, "accept", 3, 3);
   });
   test("review: action restrictions keep moderation explicit and affiliation unavailable pending its proof model", async () => {

@@ -184,7 +184,9 @@ export function registerDerivedTests(context: () => Context) {
     const a = await lead(), b = await lead(); const c = await candidate(a, b);
     const reversed = (await q("INSERT INTO v2_corridors(origin_city_id,destination_city_id) SELECT destination_city_id,origin_city_id FROM v2_corridors WHERE id=$1 RETURNING id", [context().corridor])).rows[0].id;
     await q("UPDATE v2_leads SET corridor_id=$1 WHERE subject_id=$2", [reversed, b.id]);
-    const d = await association(c); await invalid(() => applyAssociation(d));
+    const stale = await association(c); await invalid(() => applyAssociation(stale), ["40001"]);
+    assert.equal((await q("SELECT state FROM v2_association_candidates WHERE id=$1",[c])).rows[0].state,"obsolete");
+    const fresh=await candidate(a,b),d=await association(fresh);await invalid(()=>applyAssociation(d));
     await q("UPDATE v2_subjects SET revision=revision+1 WHERE id=$1", [a.id]);
     await invalid(() => applyAssociation(d), ["40001"]);
   });

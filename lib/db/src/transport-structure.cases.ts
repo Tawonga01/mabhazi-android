@@ -252,6 +252,7 @@ export function registerTransportTests(context: () => Context) {
       await left.query("ROLLBACK"); await right.query("ROLLBACK"); await left.end(); await right.end();
       await query("BEGIN"); await query("UPDATE v2_stops SET parent_stop_id=NULL WHERE subject_id=ANY($1::uuid[])", [[a, b]]);
       await query("DELETE FROM v2_stops WHERE subject_id=ANY($1::uuid[])", [[a, b]]);
+      await query("DELETE FROM v2_jobs WHERE subject_id=ANY($1::uuid[])", [[a, b]]);
       await query("DELETE FROM v2_subjects WHERE id=ANY($1::uuid[])", [[a, b]]); await query("COMMIT");
       await query("BEGIN"); // Match the shared afterEach rollback hook.
     }

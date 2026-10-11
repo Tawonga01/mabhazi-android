@@ -73,7 +73,7 @@ BEGIN
  END LOOP;
 END; $$;
 CREATE FUNCTION public.v2_transport_input_change() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE old_row jsonb; new_row jsonb; changed text[]; roots uuid[]:='{}'; old_id uuid; new_id uuid; ids uuid[]; cities integer[]; removed uuid;
+DECLARE old_row jsonb; new_row jsonb; changed text[]; roots uuid[]:='{}'; ids uuid[]; cities integer[]; removed uuid;
 BEGIN
  IF TG_OP<>'INSERT' THEN old_row:=to_jsonb(OLD); END IF;
  IF TG_OP<>'DELETE' THEN new_row:=to_jsonb(NEW); END IF;
@@ -81,8 +81,8 @@ BEGIN
   IF NEW.lifecycle IS NOT DISTINCT FROM OLD.lifecycle THEN RETURN NEW; END IF;
   old_row:=jsonb_build_object('lifecycle',OLD.lifecycle);new_row:=jsonb_build_object('lifecycle',NEW.lifecycle);roots:=ARRAY[NEW.id];
  ELSIF TG_TABLE_NAME IN('v2_leads','v2_operators','v2_routes','v2_stops','v2_patterns','v2_service_plans','v2_runs','v2_actual_journeys') THEN
-  IF TG_TABLE_NAME='v2_leads' THEN old_row:=old_row-ARRAY['initial_contribution_id','attribution_erased','original_origin_text','original_destination_text'];new_row:=new_row-ARRAY['initial_contribution_id','attribution_erased','original_origin_text','original_destination_text']; END IF;
-  roots:=ARRAY[COALESCE((old_row->>'subject_id')::uuid,(new_row->>'subject_id')::uuid)];
+  IF TG_TABLE_NAME='v2_leads' THEN old_row:=old_row-ARRAY['initial_contribution_id','attribution_erased'];new_row:=new_row-ARRAY['initial_contribution_id','attribution_erased']; END IF;
+  roots:=ARRAY[(old_row->>'subject_id')::uuid,(new_row->>'subject_id')::uuid];
   IF TG_OP='DELETE' THEN removed:=roots[1]; END IF;
  ELSIF TG_TABLE_NAME='v2_corridors' THEN
   ids:=ARRAY[(old_row->>'id')::uuid,(new_row->>'id')::uuid];

@@ -21,12 +21,12 @@ export function registerPropagationTests(context: () => Context) {
   async function subject(kind: string) {
     const id = randomUUID(); await q("INSERT INTO v2_subjects(id,kind) VALUES($1,$2)", [id, kind]); return id;
   }
-  async function report(id: string, field = "departure.reported", value: unknown = { time: "08:00", basis: "scheduled" }, owner = context().user) {
+  async function report(id: string, field = "departure.reported", value: unknown = { time: "08:00", basis: "scheduled" }, owner = context().user, scope?: unknown) {
     const contribution = randomUUID();
     await q(`INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id)
       VALUES($1,$2,gen_random_uuid(),'1.0','contribute_tab',$3,'{}',$4)`, [contribution, owner, key, id]);
     const observation = (await q(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key)
-      VALUES($1,$2,$3,$4,$5,$6,$6) RETURNING id`, [contribution, id, field, value, field.endsWith(".scheduled") || field.endsWith(".actual") ? { schemaVersion: "1.0" } : {}, key])).rows[0].id as string;
+      VALUES($1,$2,$3,$4,$5,$6,$6) RETURNING id`, [contribution, id, field, value, scope ?? (field.endsWith(".scheduled") || field.endsWith(".actual") ? { schemaVersion: "1.0" } : {}), key])).rows[0].id as string;
     return { id, contribution, observation };
   }
   async function lead(owner = context().user, field = "departure.reported", value: unknown = { time: "08:00", basis: "scheduled" }) {
@@ -75,16 +75,6 @@ export function registerPropagationTests(context: () => Context) {
     return [a.observation, l.id, (await target(a.observation)).revision, os.revision, (await state(a.id)).revision, (await state(l.destination)).revision];
   }
   const resolve = async (a: Report, l: Link) => (await q(resolveSQL, await args(a, l))).rows[0].id as string;
-  const reverse = (a: Report, l: Link) => review(a, "identity", "reverse", { caseId: l.review.caseId, reverse: l.review.id });
-  async function selected(a: Report, destination = a.id) {
-    const id = randomUUID(), s = await state(destination);
-    const o = (await q("SELECT * FROM v2_observations WHERE id=$1", [a.observation])).rows[0];
-    await q("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'field')", [id]);
-    await q(`INSERT INTO v2_field_decisions(id,subject_id,field_key,scope_key,scope,revision,expected_subject_revision,input_generation,selected_value,support_status,dispute_status,freshness,publication,reason_codes,policy_version,input_digest)
-      VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,'reported','none','unknown','provisional',ARRAY['reported_evidence'],'evidence/1',$9)`, [id, destination, o.field_key, o.scope_key, o.scope, s.revision, s.input_generation, o.value, digest()]);
-    await q("INSERT INTO v2_field_decision_evidence(field_decision_id,observation_id,disposition,reason_code) VALUES($1,$2,'supporting','reported_evidence')", [id, a.observation]);
-    await q("SELECT v2_apply_field_decision($1)", [id]); return id;
-  }
   const eventCount = async () => Number((await q("SELECT count(*) FROM v2_transport_changes")).rows[0].count);
   const generations = async (ids: string[]) => (await q("SELECT id,revision,input_generation FROM v2_subjects WHERE id=ANY($1) ORDER BY id", [ids])).rows;
   async function advanced(before: Awaited<ReturnType<typeof generations>>) {
@@ -139,7 +129,7 @@ export function registerPropagationTests(context: () => Context) {
   });
   test("propagation: a plan edit invalidates dependent assessment and selected field",async()=>{
     const f=await transport(), a=await assessment(f.run), d=(await q("SELECT v2_process_field_assessment($1) id",[a])).rows[0].id;
-    await q("UPDATE v2_service_plans SET boarding_note='Board at revised bay' WHERE subject_id=$1",[f.plan]);
+    await q("UPDATE v2_service_plans SET boarding_instructions='Board at revised bay' WHERE subject_id=$1",[f.plan]);
     assert.equal((await q("SELECT invalidated FROM v2_field_assessments WHERE id=$1",[a])).rows[0].invalidated,true);
     assert.equal((await q("SELECT invalidated FROM v2_field_decisions WHERE id=$1",[d])).rows[0].invalidated,true);
     assert.equal((await q("SELECT count(*) FROM v2_current_fields WHERE subject_id=$1",[f.run])).rows[0].count,"0");
@@ -171,9 +161,24 @@ export function registerPropagationTests(context: () => Context) {
   test("propagation: a city change reaches observation-only references",async()=>{
     const a=await lead(context().user,"boarding.pickup",{cityId:context().origin,name:"Synthetic stop"});
     const extra=(await q("INSERT INTO cities(name,place_type) VALUES('Reference-only city','city') RETURNING id")).rows[0].id;
-    const b=await report(a.id,"boarding.dropoff",{cityId:extra,name:"Dropoff"}); const before=await generations([a.id]);
+    const b=await report(a.id,"alighting.dropoff",{cityId:extra,name:"Dropoff"}); const before=await generations([a.id]);
     await q("UPDATE cities SET name='Renamed reference city' WHERE id=$1",[extra]);await advanced(before);
     assert.equal((await q("SELECT value FROM v2_observations WHERE id=$1",[b.observation])).rows[0].value.name,"Dropoff");
+  });
+  test("propagation: observation-only stop and operator references invalidate their subjects",async()=>{
+    const f=await transport(),g=await transport();
+    const a=await lead(context().user,"boarding.pickup",{stopId:g.stop});
+    await report(f.route,"operator.identity",{id:g.operator});
+    const before=await generations([a.id,f.route,f.pattern,f.plan,f.run]);
+    await q("UPDATE v2_stops SET name='Referenced stop changed' WHERE subject_id=$1",[g.stop]);
+    await q("UPDATE v2_operators SET display_name='Referenced operator changed' WHERE subject_id=$1",[g.operator]);await advanced(before);
+  });
+  test("propagation: observation-only calendar references reach original and resolved subjects",async()=>{
+    const a=await lead(),f=await transport(),cal=await calendar();
+    const o=await report(a.id,"departure.scheduled",{seconds:28800},context().user,{schemaVersion:"1.0",calendarId:cal,timezone:"Africa/Harare"});
+    const l=await link(o,f.run,"same_service");await resolve(o,l);const before=await generations([a.id,f.run]);
+    await q("UPDATE v2_calendars SET weekdays=31 WHERE id=$1",[cal]);await advanced(before);
+    assert.equal(await effective(o.observation),a.id);await q("SET CONSTRAINTS ALL IMMEDIATE");
   });
   test("propagation: corridor endpoint changes reach leads and patterns",async()=>{
     const a=await lead(), f=await transport(), city=(await q("INSERT INTO cities(name,place_type) VALUES('New endpoint','city') RETURNING id")).rows[0].id;
@@ -198,14 +203,14 @@ export function registerPropagationTests(context: () => Context) {
   });
   test("propagation: attribution erasure is not a service identity edit",async()=>{
     const a=await lead(),before=await generations([a.id]),n=await eventCount();
-    await q("UPDATE v2_leads SET original_origin_text='Raw label',original_destination_text='Other raw label' WHERE subject_id=$1",[a.id]);
+    await q("UPDATE v2_leads SET initial_contribution_id=NULL,attribution_erased=true WHERE subject_id=$1",[a.id]);
     assert.deepEqual(await generations([a.id]),before);assert.equal(await eventCount(),n);
     await q("DELETE FROM users WHERE id=$1",[context().user]);
     assert.equal((await q("SELECT attribution_erased FROM v2_leads WHERE subject_id=$1",[a.id])).rows[0].attribution_erased,true);
     assert.equal(await eventCount(),n);
   });
   test("propagation: parent edits invalidate reviewed identity, fall back the target and preserve reports",async()=>{
-    const a=await lead(),f=await transport(),l=await link(a,f.run,"same_service");await resolve(a,l);
+    const a=await lead(context().user,"departure.scheduled",{seconds:28800}),f=await transport(),l=await link(a,f.run,"same_service");await resolve(a,l);
     const original=(await q("SELECT * FROM v2_observations WHERE id=$1",[a.observation])).rows[0];const before=await generations([a.id,f.run]);
     await q("UPDATE v2_operators SET display_name='Updated parent identity' WHERE subject_id=$1",[f.operator]);
     await advanced(before);assert.equal(await effective(a.observation),a.id);
@@ -217,7 +222,7 @@ export function registerPropagationTests(context: () => Context) {
   });
   test("propagation: a pending candidate cannot apply after structural identity changes",async()=>{
     const a=await lead(),f=await transport(),l=await link(a,f.run,"same_service",[a.observation],false);
-    await q("UPDATE v2_service_plans SET boarding_note='Changed' WHERE subject_id=$1",[f.plan]);
+    await q("UPDATE v2_service_plans SET boarding_instructions='Changed' WHERE subject_id=$1",[f.plan]);
     assert.equal((await q("SELECT state FROM v2_association_candidates WHERE id=$1",[l.candidate])).rows[0].state,"obsolete");
     await invalid(()=>q("SELECT v2_apply_association_decision($1)",[l.id]),["23514","40001"]);
   });
