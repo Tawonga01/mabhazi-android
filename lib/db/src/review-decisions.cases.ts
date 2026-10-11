@@ -110,10 +110,13 @@ export function registerReviewTests(context: () => Context) {
   });
   test("review: stale case or subject rejects without orphan decisions or jobs", async () => {
     const f = await fixture();
+    const tables = ["v2_decision_ids", "v2_review_decisions", "v2_review_decision_evidence", "v2_jobs"];
+    const before = new Map<string,string>();
+    for (const t of tables) before.set(t,(await query(`SELECT count(*) FROM ${t}`)).rows[0].count);
     await reject(recordSql, args(f, "accept", 2), ["40001"]);
     await query("UPDATE v2_subjects SET revision=revision+1 WHERE id=$1", [f.subject]);
     await reject(recordSql, args(f), ["40001"]);
-    for (const t of ["v2_decision_ids", "v2_review_decisions", "v2_review_decision_evidence", "v2_jobs"]) assert.equal((await query(`SELECT count(*) FROM ${t}`)).rows[0].count, "0");
+    for (const t of tables) assert.equal((await query(`SELECT count(*) FROM ${t}`)).rows[0].count, before.get(t));
     await record(f, "accept", 1, 2);
   });
   test("review: affirmative evidence cannot be missing, duplicate, hidden, withdrawn or unrelated", async () => {
@@ -149,8 +152,9 @@ export function registerReviewTests(context: () => Context) {
   });
   test("review: decisions and registry are append only; invalid rationale rolls back all writes", async () => {
     const f = await fixture();
+    const beforeCount = (await query("SELECT count(*) FROM v2_decision_ids")).rows[0].count;
     const bad = args(f); bad[6] = "x".repeat(4001); await reject(recordSql, bad);
-    assert.equal((await query("SELECT count(*) FROM v2_decision_ids")).rows[0].count, "0");
+    assert.equal((await query("SELECT count(*) FROM v2_decision_ids")).rows[0].count, beforeCount);
     const id = await record(f);
     await reject("UPDATE v2_review_decisions SET private_reason=NULL WHERE id=$1", [id]);
     await reject("DELETE FROM v2_review_decisions WHERE id=$1", [id]);

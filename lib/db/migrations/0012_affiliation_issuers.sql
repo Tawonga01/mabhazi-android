@@ -156,8 +156,8 @@ BEGIN
    OR (NEW.valid_until IS NOT NULL AND NEW.valid_until<=statement_timestamp()) THEN
     RAISE EXCEPTION 'v2_affiliation_action_invalid' USING ERRCODE='23514'; END IF;
   IF d.action='reverse' AND (d.reverses_decision_id IS DISTINCT FROM r.last_decision_id OR NOT EXISTS(
-    SELECT 1 FROM public.v2_affiliation_resolutions a JOIN public.v2_review_decisions old ON old.id=a.review_id
-    WHERE a.review_id=r.last_decision_id AND NOT a.evidence_erased AND old.action NOT IN('reverse','needs_context'))) THEN
+    SELECT 1 FROM public.v2_affiliation_resolutions a JOIN public.v2_review_decisions preceding_review ON preceding_review.id=a.review_id
+    WHERE a.review_id=r.last_decision_id AND NOT a.evidence_erased AND preceding_review.action NOT IN('reverse','needs_context'))) THEN
     RAISE EXCEPTION 'v2_reverse_current_affiliation_required' USING ERRCODE='23514'; END IF;
  END IF;
  RETURN NEW;
