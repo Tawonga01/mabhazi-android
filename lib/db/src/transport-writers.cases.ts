@@ -141,6 +141,13 @@ export function registerWriterTests(context: () => Context) {
     await decide(f.e,"reverse",review);const reversed=await state(f.run);
     assert.equal(await apply(f.e,review,request),event);assert.deepEqual(await state(f.run),reversed);assert.equal((await snapshot(f.run)).data.departure_seconds,28800);
   });
+  test("writers: compound review invalidation binds final revisions instead of assuming one increment",async()=>{
+    await roles();const f=await transport(),r=await report(f.run,"departure.scheduled",{seconds:32400}),s=await state(f.run),scope={schemaVersion:"1.0"};
+    const a=(await q("SELECT v2_assess_field($1,'departure.scheduled',v2_assessment_hash($2),$2,$3,$4,(SELECT revision FROM v2_source_graph),statement_timestamp(),gen_random_uuid()) id",[f.run,scope,s.revision,s.input_generation])).rows[0].id;
+    await q("SELECT v2_process_field_assessment($1)",[a]);const e=await propose(r),before=await state(f.run),review=await decide(e),after=await state(f.run);
+    assert.ok(BigInt(after.input_generation)>BigInt(before.input_generation)+1n);
+    await apply(e,review);assert.equal((await read(f.run)).fieldKey,"departure.scheduled");assert.equal((await snapshot(f.run)).data.departure_seconds,32400);await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
   test("writers: scoped review works with immediate constraints and retries without restoring authority",async()=>{
     const f=await fixture(),p=await edit(f.e),c=(await q("SELECT revision FROM v2_review_cases WHERE id=$1",[p.case_id])).rows[0],s=await state(f.run),request=randomUUID();
     await q("SET CONSTRAINTS ALL IMMEDIATE");

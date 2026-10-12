@@ -195,7 +195,7 @@ BEGIN
  IF public.v2_edit_snapshot(subject) IS DISTINCT FROM snapshot THEN RAISE EXCEPTION 'v2_edit_projection_does_not_match_approval' USING ERRCODE='23514'; END IF;
 END; $$;
 CREATE FUNCTION public.v2_edit_event_validate() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
-DECLARE e public.v2_transport_edits; previous public.v2_transport_edit_events; r public.v2_review_decisions; s public.v2_subjects; current_edit uuid;
+DECLARE e public.v2_transport_edits; previous public.v2_transport_edit_events; approved public.v2_transport_edit_events; r public.v2_review_decisions; s public.v2_subjects; current_edit uuid;
 BEGIN
  SELECT * INTO e FROM public.v2_transport_edits WHERE id=NEW.edit_id;
  SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=e.id ORDER BY revision DESC LIMIT 1;
@@ -210,16 +210,17 @@ BEGIN
    RAISE EXCEPTION 'v2_edit_review_receipt_binding_invalid' USING ERRCODE='23514'; END IF;
  ELSIF NEW.action='apply' THEN
   SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.review_id;
+  SELECT * INTO approved FROM public.v2_transport_edit_events WHERE edit_id=e.id AND action='review' AND review_id=r.id;
   SELECT * INTO s FROM public.v2_subjects WHERE id=e.subject_id FOR UPDATE;
   IF e.erased OR (previous.id IS NOT NULL AND previous.action<>'review')
    OR EXISTS(SELECT 1 FROM public.v2_transport_edit_events WHERE edit_id=e.id AND action='apply')
    OR NOT public.v2_edit_evidence_live(e.id) OR s.lifecycle<>'active'
-   OR r.case_id IS DISTINCT FROM e.case_id OR r.action IS DISTINCT FROM 'accept' OR r.evidence_erased
+   OR approved.id IS NULL OR r.case_id IS DISTINCT FROM e.case_id OR r.action IS DISTINCT FROM 'accept' OR r.evidence_erased
    OR r.actor_user_id IS DISTINCT FROM NEW.actor_user_id OR NEW.actor_user_id IS NULL
    OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=NEW.actor_user_id AND revoked_at IS NULL)
    OR NOT EXISTS(SELECT 1 FROM public.v2_review_cases WHERE id=e.case_id AND last_decision_id=r.id AND state='resolved') THEN
    RAISE EXCEPTION 'v2_edit_current_approval_required' USING ERRCODE='23514'; END IF;
-  IF s.revision<>e.expected_subject_revision+1 OR s.input_generation<>e.expected_generation+1 OR r.expected_subject_revision<>e.expected_subject_revision
+  IF s.revision<>approved.resulting_revision OR s.input_generation<>approved.resulting_generation OR r.expected_subject_revision<>e.expected_subject_revision
    OR public.v2_edit_snapshot(e.subject_id) IS DISTINCT FROM e.before_snapshot THEN RAISE EXCEPTION 'v2_edit_apply_revision_conflict' USING ERRCODE='40001'; END IF;
   PERFORM public.v2_write_edit_snapshot(e.subject_id,e.after_snapshot,e.id,r.id); NEW.projection_changed:=true;
  ELSIF NEW.action='reverse' THEN
