@@ -166,7 +166,7 @@ export function registerWriterTests(context: () => Context) {
   test("writers: compound review invalidation binds final revisions instead of assuming one increment",async()=>{
     await roles();const f=await transport(),r=await report(f.run,"departure.scheduled",{seconds:32400}),s=await state(f.run),scope={schemaVersion:"1.0"};
     const a=(await q("SELECT v2_assess_field($1,'departure.scheduled',v2_assessment_hash($2),$2,$3,$4,(SELECT revision FROM v2_source_graph),statement_timestamp(),gen_random_uuid()) id",[f.run,scope,s.revision,s.input_generation])).rows[0].id;
-    await q("SELECT v2_process_field_assessment($1)",[a]);const e=await propose(r),before=await state(f.run),review=await decide(e),after=await state(f.run);
+    await q("SELECT v2_process_field_assessment($1)",[a]);const e=await propose(r),before=await state(f.run);await q("SET CONSTRAINTS ALL IMMEDIATE");const review=await decide(e),after=await state(f.run);
     assert.ok(BigInt(after.input_generation)>BigInt(before.input_generation)+1n);
     await apply(e,review);assert.equal((await read(f.run)).fieldKey,"departure.scheduled");assert.equal((await snapshot(f.run)).data.departure_seconds,32400);await q("SET CONSTRAINTS ALL IMMEDIATE");
   });

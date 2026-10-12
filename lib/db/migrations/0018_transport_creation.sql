@@ -40,6 +40,10 @@ CREATE TABLE public.v2_transport_creation_heads (
  event_id uuid NOT NULL REFERENCES public.v2_transport_creation_events(id)
 );
 CREATE INDEX v2_creation_head_event_idx ON public.v2_transport_creation_heads(event_id);
+-- Value-free source identity; expected epoch carries structural concurrency.
+CREATE FUNCTION public.v2_creation_source_snapshot(subject uuid) RETURNS jsonb LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+ SELECT jsonb_build_object('subjectId',id,'kind',kind) FROM public.v2_subjects WHERE id=subject;
+$$;
 CREATE FUNCTION public.v2_creation_desired(observation uuid,kind text,target uuid) RETURNS jsonb LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
 DECLARE o public.v2_observations;data jsonb;
 BEGIN
@@ -68,7 +72,7 @@ BEGIN
  OR c.subject_id IS DISTINCT FROM s.id OR c.kind<>'identity' OR c.candidate_id IS NOT NULL OR c.last_decision_id IS NOT NULL OR c.field_key IS NOT NULL OR c.scope_key IS NOT NULL
  OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=NEW.actor_user_id AND revoked_at IS NULL)
  OR NEW.field_key IS DISTINCT FROM (SELECT field_key FROM public.v2_observations WHERE id=NEW.observation_id)
- OR NEW.source_snapshot IS DISTINCT FROM public.v2_transport_snapshot(s.id)
+ OR NEW.source_snapshot IS DISTINCT FROM public.v2_creation_source_snapshot(s.id)
  OR NEW.desired_snapshot IS DISTINCT FROM public.v2_creation_desired(NEW.observation_id,NEW.target_kind,NEW.target_subject_id)
  OR NOT EXISTS(SELECT 1 FROM public.v2_observations o JOIN public.v2_observation_states os ON os.observation_id=o.id JOIN public.v2_observation_targets ot ON ot.observation_id=o.id
  WHERE o.id=NEW.observation_id AND o.original_subject_id=s.id AND public.v2_observation_subject(o.id)=s.id AND os.status='active' AND os.revision=NEW.observation_revision AND ot.revision=NEW.target_revision) THEN
@@ -91,7 +95,7 @@ BEGIN
  c:=public.v2_open_review_case(actor,source,'identity',NULL,NULL);
  INSERT INTO public.v2_transport_creations(source_subject_id,target_subject_id,target_kind,case_id,actor_user_id,observation_id,field_key,expected_source_revision,expected_generation,
  observation_revision,target_revision,source_snapshot,desired_snapshot,request_id,request_digest)
- SELECT source,target,kind,c,actor,o.id,o.field_key,s.revision,s.input_generation,os.revision,ot.revision,public.v2_transport_snapshot(source),public.v2_creation_desired(observation,kind,target),request,digest
+ SELECT source,target,kind,c,actor,o.id,o.field_key,s.revision,s.input_generation,os.revision,ot.revision,public.v2_creation_source_snapshot(source),public.v2_creation_desired(observation,kind,target),request,digest
  FROM public.v2_observations o JOIN public.v2_observation_states os ON os.observation_id=o.id JOIN public.v2_observation_targets ot ON ot.observation_id=o.id WHERE o.id=observation RETURNING id INTO result;
  IF result IS NULL THEN RAISE EXCEPTION 'v2_creation_observation_missing' USING ERRCODE='23503';END IF;RETURN result;
 END;$$;
@@ -103,7 +107,7 @@ BEGIN
  IF NEW.last_decision_id IS DISTINCT FROM OLD.last_decision_id THEN
  SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.last_decision_id;
  IF r.action='accept' AND (r.expected_subject_revision<>p.expected_source_revision OR p.expected_generation IS DISTINCT FROM (SELECT input_generation FROM public.v2_subjects WHERE id=p.source_subject_id)
- OR p.source_snapshot IS DISTINCT FROM public.v2_transport_snapshot(p.source_subject_id) OR NOT public.v2_creation_evidence_live(p.id)
+ OR p.source_snapshot IS DISTINCT FROM public.v2_creation_source_snapshot(p.source_subject_id) OR NOT public.v2_creation_evidence_live(p.id)
  OR (SELECT array_agg(observation_id ORDER BY observation_id) FROM public.v2_review_decision_evidence WHERE decision_id=r.id) IS DISTINCT FROM ARRAY[p.observation_id]) THEN
  RAISE EXCEPTION 'v2_creation_approval_stale_or_different_evidence' USING ERRCODE='40001';END IF;END IF;RETURN NEW;
 END;$$;
@@ -119,9 +123,9 @@ BEGIN
  IF FOUND THEN IF receipt.action<>'review' OR receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_creation_review_request_conflict' USING ERRCODE='23514';END IF;RETURN receipt.review_id;END IF;
  SELECT * INTO p FROM public.v2_transport_creations WHERE id=creation;
  IF p.id IS NULL OR p.erased THEN RAISE EXCEPTION 'v2_creation_proposal_missing' USING ERRCODE='23514';END IF;
- SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision DEFERRED;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid DEFERRED;
  result:=public.v2_record_review(actor,p.case_id,expected_case,expected_source,operation,reason,note,CASE WHEN operation='reverse' THEN ARRAY[]::uuid[] ELSE ARRAY[p.observation_id] END,'review/1',reverse_id);
- SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid IMMEDIATE;
  SELECT * INTO previous FROM public.v2_transport_creation_events WHERE creation_id=creation ORDER BY revision DESC LIMIT 1;
  INSERT INTO public.v2_transport_creation_events(creation_id,revision,previous_event_id,action,actor_user_id,review_id,request_id,request_digest,source_revision,source_generation,projection_changed)
  VALUES(creation,COALESCE(previous.revision,0)+1,previous.id,'review',actor,result,request,digest,1,1,false);RETURN result;
@@ -149,7 +153,7 @@ BEGIN
  OR r.actor_user_id IS DISTINCT FROM NEW.actor_user_id OR NEW.actor_user_id IS NULL OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=NEW.actor_user_id AND revoked_at IS NULL)
  OR NOT EXISTS(SELECT 1 FROM public.v2_review_cases WHERE id=p.case_id AND last_decision_id=r.id AND state='resolved') THEN RAISE EXCEPTION 'v2_creation_current_approval_required' USING ERRCODE='23514';END IF;
  IF s.revision<>approval.source_revision OR s.input_generation<>approval.source_generation OR r.expected_subject_revision<>p.expected_source_revision
- OR public.v2_transport_snapshot(s.id) IS DISTINCT FROM p.source_snapshot THEN RAISE EXCEPTION 'v2_creation_apply_revision_conflict' USING ERRCODE='40001';END IF;
+ OR public.v2_creation_source_snapshot(s.id) IS DISTINCT FROM p.source_snapshot THEN RAISE EXCEPTION 'v2_creation_apply_revision_conflict' USING ERRCODE='40001';END IF;
  SET CONSTRAINTS public.v2_subject_subtype DEFERRED;
  INSERT INTO public.v2_subjects(id,kind) VALUES(p.target_subject_id,p.target_kind);
  IF p.target_kind='operator' THEN INSERT INTO public.v2_operators(subject_id,display_name) VALUES(p.target_subject_id,p.desired_snapshot->'data'->>'display_name');
@@ -334,3 +338,43 @@ CREATE OR REPLACE FUNCTION public.v2_transport_dependents(roots uuid[]) RETURNS 
  ), reached(id) AS (SELECT unnest(roots) UNION SELECT e.child FROM edges e JOIN reached r ON r.id=e.parent)
  SELECT COALESCE(array_agg(s.id ORDER BY s.id),'{}'::uuid[]) FROM reached r JOIN public.v2_subjects s ON s.id=r.id;
 $$;
+
+-- Scoped final-state checks also cover existing reviewed edit operations.
+CREATE OR REPLACE FUNCTION public.v2_review_transport_edit(actor varchar,edit uuid,expected_case bigint,expected_subject bigint,operation text,reason text,note text,request uuid,reverse_id uuid DEFAULT NULL) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE e public.v2_transport_edits; receipt public.v2_transport_edit_events; previous public.v2_transport_edit_events; digest text; result uuid;
+BEGIN
+ IF actor IS NULL OR request IS NULL OR operation IS NULL OR operation NOT IN('accept','reject','needs_context','reverse') THEN RAISE EXCEPTION 'v2_edit_review_request_invalid' USING ERRCODE='23514'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtext(actor));UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
+ digest:=public.v2_assessment_hash(jsonb_build_array(actor,edit,expected_case,expected_subject,operation,reason,note,reverse_id));
+ SELECT * INTO receipt FROM public.v2_transport_edit_events WHERE request_id=request;
+ IF FOUND THEN IF receipt.action<>'review' OR receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_edit_review_request_conflict' USING ERRCODE='23514'; END IF;RETURN receipt.review_id;END IF;
+ SELECT * INTO e FROM public.v2_transport_edits WHERE id=edit;
+ IF e.id IS NULL OR e.erased THEN RAISE EXCEPTION 'v2_edit_review_proposal_missing' USING ERRCODE='23514'; END IF;
+ -- The registry is completed by the matching subtype inside this operation.
+ -- Recheck just these constraints immediately, including for callers that had
+ -- all constraints immediate; leave unrelated deferral choices unchanged.
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid DEFERRED;
+ result:=public.v2_record_review(actor,e.case_id,expected_case,expected_subject,operation,reason,note,CASE WHEN operation='reverse' THEN ARRAY[]::uuid[] ELSE ARRAY[e.observation_id] END,'review/1',reverse_id);
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid IMMEDIATE;
+ SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=edit ORDER BY revision DESC LIMIT 1;
+ INSERT INTO public.v2_transport_edit_events(edit_id,revision,previous_event_id,action,actor_user_id,review_id,request_id,request_digest,resulting_revision,resulting_generation,projection_changed)
+ VALUES(edit,COALESCE(previous.revision,0)+1,previous.id,'review',actor,result,request,digest,1,1,false);
+ RETURN result;
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.v2_apply_transport_edit(actor varchar,edit uuid,review uuid,request uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE receipt public.v2_transport_edit_events; digest text; result uuid; previous public.v2_transport_edit_events;
+BEGIN
+ IF actor IS NULL OR request IS NULL THEN RAISE EXCEPTION 'v2_edit_apply_request_invalid' USING ERRCODE='23514'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtext(actor)); UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
+ digest:=public.v2_assessment_hash(jsonb_build_array(actor,edit,review));
+ SELECT * INTO receipt FROM public.v2_transport_edit_events WHERE request_id=request;
+ IF FOUND THEN IF receipt.action<>'apply' OR receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_edit_apply_request_conflict' USING ERRCODE='23514'; END IF; RETURN receipt.id; END IF;
+ SET CONSTRAINTS public.v2_current_field_valid,public.v2_current_association_valid DEFERRED;
+ SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=edit ORDER BY revision DESC LIMIT 1;
+ INSERT INTO public.v2_transport_edit_events(edit_id,revision,previous_event_id,action,actor_user_id,review_id,request_id,request_digest,resulting_revision,resulting_generation,projection_changed)
+ VALUES(edit,COALESCE(previous.revision,0)+1,previous.id,'apply',actor,review,request,digest,1,1,false) RETURNING id INTO result;
+ SET CONSTRAINTS public.v2_current_field_valid,public.v2_current_association_valid IMMEDIATE;
+ RETURN result;
+END; $$;
