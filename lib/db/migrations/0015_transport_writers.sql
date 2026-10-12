@@ -79,7 +79,9 @@ BEGIN
    OR (o.scope ? 'calendarId' AND (o.scope->>'calendarId')::uuid IS DISTINCT FROM plan.calendar_id)
    OR (o.scope ? 'serviceDate' AND ((data->>'validity_from')::date IS DISTINCT FROM (o.scope->>'serviceDate')::date OR (data->>'validity_to')::date IS DISTINCT FROM (o.scope->>'serviceDate')::date))
    OR (o.scope ? 'effectiveFrom' AND ((data->>'validity_from')::date IS NULL OR (data->>'validity_from')::date<(o.scope->>'effectiveFrom')::date))
-   OR (o.scope ? 'effectiveTo' AND ((data->>'validity_to')::date IS NULL OR (data->>'validity_to')::date>(o.scope->>'effectiveTo')::date)) THEN
+  OR (o.scope ? 'effectiveTo' AND ((data->>'validity_to')::date IS NULL OR (data->>'validity_to')::date>(o.scope->>'effectiveTo')::date))
+  OR (o.effective_from IS NOT NULL AND ((data->>'validity_from')::date IS NULL OR (data->>'validity_from')::date<o.effective_from))
+  OR (o.effective_to IS NOT NULL AND ((data->>'validity_to')::date IS NULL OR (data->>'validity_to')::date>o.effective_to)) THEN
    RAISE EXCEPTION 'v2_edit_scheduled_scope_mismatch' USING ERRCODE='23514'; END IF;
   data:=data || jsonb_build_object(CASE o.field_key WHEN 'departure.scheduled' THEN 'departure_seconds' ELSE 'arrival_seconds' END,o.value->'seconds');
  ELSIF kind='pattern' AND o.field_key='pattern.stops' THEN
@@ -156,7 +158,8 @@ BEGIN
  IF NEW.last_decision_id IS DISTINCT FROM OLD.last_decision_id THEN
   SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.last_decision_id;
   IF r.action='accept' THEN
-   IF r.expected_subject_revision<>e.expected_subject_revision OR e.before_snapshot IS DISTINCT FROM public.v2_edit_snapshot(e.subject_id)
+   IF r.expected_subject_revision<>e.expected_subject_revision OR e.expected_generation IS DISTINCT FROM (SELECT input_generation FROM public.v2_subjects WHERE id=e.subject_id)
+    OR e.before_snapshot IS DISTINCT FROM public.v2_edit_snapshot(e.subject_id)
     OR NOT public.v2_edit_evidence_live(e.id) OR (SELECT array_agg(observation_id ORDER BY observation_id) FROM public.v2_review_decision_evidence WHERE decision_id=r.id) IS DISTINCT FROM ARRAY[e.observation_id] THEN
     RAISE EXCEPTION 'v2_edit_approval_stale_or_different_evidence' USING ERRCODE='40001'; END IF;
   END IF;
@@ -286,7 +289,7 @@ BEGIN
  SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.last_decision_id;
  SELECT * INTO applied FROM public.v2_transport_edit_events WHERE edit_id=e.id AND action='apply';
  IF applied.id IS NULL THEN RETURN NEW; END IF;
- IF r.action='reverse' AND r.reverses_decision_id=applied.review_id THEN
+ IF NEW.last_decision_id IS DISTINCT FROM OLD.last_decision_id AND r.action='reverse' AND r.reverses_decision_id=applied.review_id THEN
   PERFORM public.v2_append_edit_invalidation(e.id,'reverse',r.id,r.id);
  ELSIF NEW.state<>'resolved' OR NEW.last_decision_id IS DISTINCT FROM applied.review_id THEN
   PERFORM public.v2_transport_propagate(ARRAY[e.subject_id],'v2_transport_edits','UPDATE',ARRAY['review_authority'],NULL);

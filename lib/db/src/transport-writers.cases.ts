@@ -120,7 +120,7 @@ export function registerWriterTests(context: () => Context) {
     const f=await transport(),r=await report(f.run,"departure.scheduled",{seconds:32400});await invalid(()=>propose(r),["42501"]);
     await roles();const l=await lead();await invalid(()=>propose(l));
     const actual=await subject("actual_journey");await q("INSERT INTO v2_actual_journeys(subject_id) VALUES($1)",[actual]);
-    await invalid(()=>propose({...(await report(actual,"departure.actual",{time:"09:00"})),id:actual}));
+    const actualReport=await report(actual,"departure.actual",{time:"09:00"});await invalid(()=>propose(actualReport));
   });
   test("writers: no-op, wrong target, inactive subject and inactive evidence cannot create proposals",async()=>{
     await roles();const f=await transport(),same=await report(f.run,"departure.scheduled",{seconds:28800});await invalid(()=>propose(same));
