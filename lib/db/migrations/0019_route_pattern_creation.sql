@@ -59,7 +59,7 @@ BEGIN
  data:=jsonb_build_object('subject_id',target,'subject_kind','stop','city_id',o.value->'cityId','name',o.value->'name','parent_stop_id',NULL,'latitude',NULL,'longitude',NULL,'precision','named_place');
  ELSIF kind='route' AND o.field_key IN('operator.reported','operator.identity') AND o.value ? 'id' THEN
   IF public.v2_read_created_subject((o.value->>'id')::uuid)->>'status' IS DISTINCT FROM 'reviewed_origin' THEN RAISE EXCEPTION 'v2_creation_reviewed_operator_required' USING ERRCODE='23514';END IF;
-  source_operator:=public.v2_resolved_operator(o.original_subject_id);
+  source_operator:=COALESCE(public.v2_resolved_operator(o.original_subject_id),(SELECT public.v2_resolved_operator(a.matched_run_subject_id) FROM public.v2_actual_journeys a WHERE a.subject_id=o.original_subject_id AND a.association_status='matched'));
   IF source_operator IS NOT NULL AND source_operator<>(o.value->>'id')::uuid THEN RAISE EXCEPTION 'v2_creation_source_operator_conflict' USING ERRCODE='23514';END IF;
   data:=jsonb_build_object('subject_id',target,'subject_kind','route','operator_subject_id',(o.value->>'id')::uuid,'public_name',NULL,'public_code',NULL);
  ELSIF kind='pattern' AND o.field_key='pattern.stops' AND parent IS NOT NULL THEN
