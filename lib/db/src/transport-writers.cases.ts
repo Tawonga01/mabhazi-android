@@ -134,6 +134,28 @@ export function registerWriterTests(context: () => Context) {
     assert.equal((await q("SELECT count(*) FROM v2_pattern_stops WHERE pattern_subject_id=$1 AND pattern_version=2",[f.pattern])).rows[0].count,"3");
     assert.equal((await read(f.pattern)).status,"stale");
   });
+  test("writers: uppercase operator UUID applies canonically without changing original evidence",async()=>{
+    await roles();const f=await transport(),other=await transport();
+    const r=await report(f.route,"operator.identity",{id:other.operator.toUpperCase()}),original=(await q("SELECT value FROM v2_observations WHERE id=$1",[r.observation])).rows[0].value;
+    const e=await propose(r),review=await decide(e);await apply(e,review);
+    assert.equal((await snapshot(f.route)).data.operator_subject_id,other.operator);assert.equal((await read(f.route)).status,"reviewed");
+    assert.deepEqual((await q("SELECT value FROM v2_observations WHERE id=$1",[r.observation])).rows[0].value,original);
+    await q("SET CONSTRAINTS ALL IMMEDIATE");await decide(e,"reverse",review);assert.equal((await snapshot(f.route)).data.operator_subject_id,f.operator);
+  });
+  test("writers: uppercase stop UUIDs create canonical sealed list and preserve declared text",async()=>{
+    await roles();const f=await transport(),old=await snapshot(f.pattern);
+    const r=await report(f.pattern,"pattern.stops",{stops:[{place:{stopId:f.stop.toUpperCase()},pickup:"request",dropoff:"forbidden"},{place:{stopId:f.stop.toUpperCase()},pickup:"unknown",dropoff:"allowed"}],stopsComplete:false});
+    const original=(await q("SELECT value FROM v2_observations WHERE id=$1",[r.observation])).rows[0].value,e=await propose(r),review=await decide(e);await apply(e,review);
+    assert.equal((await snapshot(f.pattern)).patternStops[0].stop_subject_id,f.stop);assert.equal((await read(f.pattern)).status,"reviewed");
+    assert.equal((await q("SELECT pattern_version FROM v2_service_plans WHERE subject_id=$1",[f.plan])).rows[0].pattern_version,1);
+    assert.deepEqual((await q("SELECT value FROM v2_observations WHERE id=$1",[r.observation])).rows[0].value,original);
+    await q("SET CONSTRAINTS ALL IMMEDIATE");await decide(e,"reverse",review);assert.deepEqual(await snapshot(f.pattern),old);
+  });
+  for(const kind of ["route","pattern"]) test(`writers: UUID text case alone is not a ${kind} edit`,async()=>{
+    await roles();const f=await transport(),before=await snapshot(f[kind as "route"|"pattern"]);
+    const r=kind==="route"?await report(f.route,"operator.identity",{id:f.operator.toUpperCase()}):await report(f.pattern,"pattern.stops",{stops:before.patternStops.map((stop:{stop_subject_id:string;pickup:string;dropoff:string})=>({place:{stopId:stop.stop_subject_id.toUpperCase()},pickup:stop.pickup,dropoff:stop.dropoff})),stopsComplete:before.patternVersion.stops_complete});
+    await invalid(()=>propose(r));assert.deepEqual(await snapshot(r.id),before);
+  });
   test("writers: proposal and application retries return receipts without repeated edits",async()=>{
     const f=await fixture(),p=await edit(f.e);assert.equal(await propose(f.r,p.request_id),f.e);
     const review=await decide(f.e),request=randomUUID(),event=await apply(f.e,review,request),s=await state(f.run);

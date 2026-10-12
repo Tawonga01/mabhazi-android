@@ -75,7 +75,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -143,13 +143,24 @@ before(async () => {
   const writerSnapshot=async()=>Promise.all(["v2_transport_edits","v2_transport_edit_events","v2_transport_edit_heads","v2_pattern_version_origins"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradeWriters=await writerSnapshot();
   assert.ok(upgradeWriters[0]!.length>0);
+  //0017 must preserve actual0016 intake origin, core events, receipt and work.
+  await db.query("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[upgradeUser]);
+  const originIntake=(await db.query("SELECT v2_submit_lead($1,'2026-09-12',$2) result",[upgradeUser,{schemaVersion:"1.0",clientSubmissionId:randomUUID(),entrySurface:"contribute_tab",target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"10:00",operator:{name:"Atomic upgrade operator"}}},observations:[]}])).rows[0].result;
+  const originSnapshot=async()=>Promise.all([
+    db.query("SELECT to_jsonb(t) row FROM v2_subject_revisions t WHERE subject_id=$1 ORDER BY revision",[originIntake.subjectId]),
+    db.query("SELECT to_jsonb(t) row FROM v2_receipts t WHERE contribution_id=$1",[originIntake.contributionId]),
+    db.query("SELECT to_jsonb(t) row FROM v2_jobs t WHERE contribution_id=$1 ORDER BY id",[originIntake.contributionId]),
+    db.query("SELECT to_jsonb(t) row FROM v2_observations t WHERE contribution_id=$1 ORDER BY id",[originIntake.contributionId]),
+    db.query("SELECT to_jsonb(t) row FROM v2_observation_events t WHERE observation_id IN (SELECT id FROM v2_observations WHERE contribution_id=$1) ORDER BY id",[originIntake.contributionId])
+  ]).then(results=>results.map(result=>result.rows));
+  const upgradeOrigins=await originSnapshot();
   const upgradePrompts=await promptSnapshot();
   await db.query("UPDATE v2_operators SET country_code='ZW' WHERE subject_id=$1",[upgradeOperator]);
   const propagationSnapshot=async()=>Promise.all(["v2_transport_changes","v2_transport_change_subjects"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradePropagation=await propagationSnapshot();
   assert.ok(upgradePropagation[0]!.length>0);
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0016 must actively revoke these grants, not merely rely on fresh PG defaults.
+  // 0017 must not accidentally widen these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -160,7 +171,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0016_lead_creation.sql/);
+  assert.match(await migrate(), /Applied 0017_transport_uuid_normalization.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -181,6 +192,7 @@ before(async () => {
   assert.deepEqual(await promptSnapshot(),upgradePrompts);
   assert.deepEqual(await propagationSnapshot(),upgradePropagation);
   assert.deepEqual(await writerSnapshot(),upgradeWriters);
+  assert.deepEqual(await originSnapshot(),upgradeOrigins);
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
@@ -190,7 +202,7 @@ before(async () => {
   await db.query("DELETE FROM v2_jobs WHERE subject_id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_leads WHERE subject_id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_subjects WHERE id=$1", [upgradeSubject]);
-  await db.query("DELETE FROM v2_corridors WHERE id=$1", [upgradeCorridor]);
+  // Keep the corridor shared with retained0016 atomic-origin upgrade evidence.
   // Preserve upgrade cities referenced by independently retained writer evidence.
   // Keep the independently checked writer fixture and its actor until DB teardown.
   await db.query("COMMIT");
@@ -257,12 +269,12 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 17);
+  assert.equal(ledger.length, 18);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
   }
-  assert.equal((await db.query("SELECT count(*) FROM v2_leads")).rows[0].count, "0");
+  assert.equal((await db.query("SELECT count(*) FROM v2_leads WHERE corridor_id=$1", [corridor])).rows[0].count, "0");
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
@@ -329,7 +341,7 @@ test("retry keys are per account and receipts cannot change owner, hash or contr
   await rejectQuery(`INSERT INTO v2_receipts(user_id,client_submission_id,contribution_id,semantic_hash,initial_response)
     VALUES($1,$2,$3,$4,'{}')`, [other, randomUUID(), c.id, hash], ["23503"]);
   await rejectQuery("UPDATE v2_receipts SET initial_response='{}' WHERE contribution_id=$1", [c.id]);
-  assert.equal((await db.query("SELECT count(*) FROM v2_receipts")).rows[0].count, "2");
+  assert.equal((await db.query("SELECT count(*) FROM v2_receipts WHERE user_id=ANY($1::varchar[])", [[user,other]])).rows[0].count, "2");
 });
 
 test("typed observations reject unsupported fields, missing qualifiers and invalid money or time", async () => {
@@ -405,7 +417,8 @@ test("account deletion erases private rows, preserves others, invalidates pendin
   const beforeErase = BigInt((await db.query("SELECT input_generation FROM v2_subjects WHERE id=$1", [c.subjectId])).rows[0].input_generation);
   await db.query("DELETE FROM users WHERE id=$1", [user]);
   await db.query("SET CONSTRAINTS ALL IMMEDIATE");
-  for (const table of ["v2_receipts", "v2_sources", "v2_observation_sources"]) assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, "0", table);
+  assert.equal((await db.query("SELECT count(*) FROM v2_receipts WHERE user_id=$1", [user])).rows[0].count,"0");
+  for (const table of ["v2_sources", "v2_observation_sources"]) assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, "0", table);
   assert.deepEqual((await db.query("SELECT id FROM v2_contributions WHERE original_subject_id=$1", [c.subjectId])).rows, [{ id: survivor.id }]);
   assert.deepEqual((await db.query("SELECT id FROM v2_observations WHERE original_subject_id=$1", [c.subjectId])).rows, [{ id: survivorObservation.id }]);
   const retained = (await db.query("SELECT * FROM v2_leads WHERE subject_id=$1", [c.subjectId])).rows[0];
