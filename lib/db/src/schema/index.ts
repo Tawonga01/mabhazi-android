@@ -33,3 +33,5 @@ export * from "./transportPropagation";
 export * from "./transportWriters";
 
 export * from "./transportCreation";
+
+export * from "./routePatternCreation";

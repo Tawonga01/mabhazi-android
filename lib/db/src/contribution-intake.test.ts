@@ -17,6 +17,7 @@ import { observationTargetTables } from "./schema/observationTargets";
 import { sourceIdentityTables } from "./schema/sourceIdentity";
 import { evidenceAssessmentTables } from "./schema/evidenceAssessments";
 import { fieldResolutionTables } from "./schema/fieldResolution";
+import { routePatternCreationTables } from "./schema/routePatternCreation";
 import { transportCreationTables } from "./schema/transportCreation";
 import { transportWriterTables } from "./schema/transportWriters";
 import { transportPropagationTables } from "./schema/transportPropagation";
@@ -30,6 +31,7 @@ import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerSourceIdentityTests } from "./source-identity.cases";
 import { registerAssessmentTests } from "./evidence-assessments.cases";
 import { registerFieldResolutionTests } from "./field-resolution.cases";
+import { registerRoutePatternTests } from "./route-pattern-creation.cases";
 import { registerTransportCreationTests } from "./transport-creation.cases";
 import { registerLeadCreationTests } from "./lead-creation.cases";
 import { registerWriterTests } from "./transport-writers.cases";
@@ -77,7 +79,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql", "0017_transport_uuid_normalization.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql", "0017_transport_uuid_normalization.sql", "0018_transport_creation.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -145,7 +147,7 @@ before(async () => {
   const writerSnapshot=async()=>Promise.all(["v2_transport_edits","v2_transport_edit_events","v2_transport_edit_heads","v2_pattern_version_origins"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradeWriters=await writerSnapshot();
   assert.ok(upgradeWriters[0]!.length>0);
-  //0018 preserves real intake origin, core events, receipt and work.
+  //0019 preserves real intake origin, core events, receipt and work.
   await db.query("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[upgradeUser]);
   const originIntake=(await db.query("SELECT v2_submit_lead($1,'2026-09-12',$2) result",[upgradeUser,{schemaVersion:"1.0",clientSubmissionId:randomUUID(),entrySurface:"contribute_tab",target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"10:00",operator:{name:"Atomic upgrade operator"}}},observations:[]}])).rows[0].result;
   const originSnapshot=async()=>Promise.all([
@@ -155,6 +157,17 @@ before(async () => {
     db.query("SELECT to_jsonb(t) row FROM v2_observations t WHERE contribution_id=$1 ORDER BY id",[originIntake.contributionId]),
     db.query("SELECT to_jsonb(t) row FROM v2_observation_events t WHERE observation_id IN (SELECT id FROM v2_observations WHERE contribution_id=$1) ORDER BY id",[originIntake.contributionId])
   ]).then(results=>results.map(result=>result.rows));
+  // Preserve real0018 created operator/place origins, receipts and current heads.
+  const creationObservation=(await db.query("SELECT id FROM v2_observations WHERE contribution_id=$1 AND field_key='operator.reported'",[originIntake.contributionId])).rows[0].id;
+  const upgradeCreation=(await db.query("SELECT v2_propose_transport_creation($1,$2,$3,$4,'operator',gen_random_uuid()) id",[upgradeUser,originIntake.subjectId,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision,creationObservation])).rows[0].id;
+  const upgradeCreationReview=(await db.query("SELECT v2_review_transport_creation($1,$2,1,$3,'accept','upgrade_identity',NULL,gen_random_uuid(),NULL) id",[upgradeUser,upgradeCreation,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision])).rows[0].id;
+  await db.query("SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())",[upgradeUser,upgradeCreation,upgradeCreationReview]);
+  const placeObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'boarding.pickup',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[originIntake.contributionId,originIntake.subjectId,{cityId:upgradeCities[0],name:"Created upgrade place"}])).rows[0].id;
+  const upgradePlace=(await db.query("SELECT v2_propose_transport_creation($1,$2,$3,$4,'stop',gen_random_uuid()) id",[upgradeUser,originIntake.subjectId,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision,placeObservation])).rows[0].id;
+  const upgradePlaceReview=(await db.query("SELECT v2_review_transport_creation($1,$2,1,$3,'accept','upgrade_place',NULL,gen_random_uuid(),NULL) id",[upgradeUser,upgradePlace,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision])).rows[0].id;
+  await db.query("SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())",[upgradeUser,upgradePlace,upgradePlaceReview]);
+  const creationSnapshot=async()=>Promise.all(["v2_transport_creations","v2_transport_creation_events","v2_transport_creation_origins","v2_transport_creation_heads"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
+  const upgradeCreations=await creationSnapshot();assert.equal(upgradeCreations[0]!.length,2);
   const upgradeOrigins=await originSnapshot();
   const upgradePrompts=await promptSnapshot();
   await db.query("UPDATE v2_operators SET country_code='ZW' WHERE subject_id=$1",[upgradeOperator]);
@@ -162,7 +175,7 @@ before(async () => {
   const upgradePropagation=await propagationSnapshot();
   assert.ok(upgradePropagation[0]!.length>0);
   // Model hosted defaults granting client roles access to newly created tables.
-  //0018 actively revokes hosted defaults for new internal histories.
+  //0019 actively revokes hosted defaults for dependency/version histories.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -173,7 +186,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0018_transport_creation.sql/);
+  assert.match(await migrate(), /Applied 0019_route_pattern_creation.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -195,6 +208,7 @@ before(async () => {
   assert.deepEqual(await propagationSnapshot(),upgradePropagation);
   assert.deepEqual(await writerSnapshot(),upgradeWriters);
   assert.deepEqual(await originSnapshot(),upgradeOrigins);
+  assert.deepEqual(await creationSnapshot(),upgradeCreations);
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
@@ -271,7 +285,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 19);
+  assert.equal(ledger.length, 20);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -280,7 +294,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables]) {
+  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -464,10 +478,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables].map(getTableName);
+  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -513,3 +527,5 @@ registerWriterTests(() => ({ db, connectionString, user, other, origin, destinat
 registerLeadCreationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerTransportCreationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerRoutePatternTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
