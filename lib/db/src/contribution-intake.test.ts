@@ -17,6 +17,7 @@ import { observationTargetTables } from "./schema/observationTargets";
 import { sourceIdentityTables } from "./schema/sourceIdentity";
 import { evidenceAssessmentTables } from "./schema/evidenceAssessments";
 import { fieldResolutionTables } from "./schema/fieldResolution";
+import { transportCreationTables } from "./schema/transportCreation";
 import { transportWriterTables } from "./schema/transportWriters";
 import { transportPropagationTables } from "./schema/transportPropagation";
 import { promptTables } from "./schema/promptTasks";
@@ -29,6 +30,7 @@ import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerSourceIdentityTests } from "./source-identity.cases";
 import { registerAssessmentTests } from "./evidence-assessments.cases";
 import { registerFieldResolutionTests } from "./field-resolution.cases";
+import { registerTransportCreationTests } from "./transport-creation.cases";
 import { registerLeadCreationTests } from "./lead-creation.cases";
 import { registerWriterTests } from "./transport-writers.cases";
 import { registerPropagationTests } from "./transport-propagation.cases";
@@ -75,7 +77,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql", "0017_transport_uuid_normalization.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -143,7 +145,7 @@ before(async () => {
   const writerSnapshot=async()=>Promise.all(["v2_transport_edits","v2_transport_edit_events","v2_transport_edit_heads","v2_pattern_version_origins"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradeWriters=await writerSnapshot();
   assert.ok(upgradeWriters[0]!.length>0);
-  //0017 must preserve actual0016 intake origin, core events, receipt and work.
+  //0018 preserves real intake origin, core events, receipt and work.
   await db.query("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[upgradeUser]);
   const originIntake=(await db.query("SELECT v2_submit_lead($1,'2026-09-12',$2) result",[upgradeUser,{schemaVersion:"1.0",clientSubmissionId:randomUUID(),entrySurface:"contribute_tab",target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"10:00",operator:{name:"Atomic upgrade operator"}}},observations:[]}])).rows[0].result;
   const originSnapshot=async()=>Promise.all([
@@ -160,7 +162,7 @@ before(async () => {
   const upgradePropagation=await propagationSnapshot();
   assert.ok(upgradePropagation[0]!.length>0);
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0017 must not accidentally widen these grants, not merely rely on fresh PG defaults.
+  //0018 actively revokes hosted defaults for new internal histories.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -171,7 +173,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0017_transport_uuid_normalization.sql/);
+  assert.match(await migrate(), /Applied 0018_transport_creation.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -269,7 +271,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 18);
+  assert.equal(ledger.length, 19);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -278,7 +280,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables]) {
+  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -462,10 +464,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables].map(getTableName);
+  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -509,3 +511,5 @@ registerPropagationTests(() => ({ db, connectionString, user, other, origin, des
 registerWriterTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerLeadCreationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerTransportCreationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
