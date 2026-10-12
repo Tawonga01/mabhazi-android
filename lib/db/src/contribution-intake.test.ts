@@ -29,6 +29,7 @@ import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerSourceIdentityTests } from "./source-identity.cases";
 import { registerAssessmentTests } from "./evidence-assessments.cases";
 import { registerFieldResolutionTests } from "./field-resolution.cases";
+import { registerLeadCreationTests } from "./lead-creation.cases";
 import { registerWriterTests } from "./transport-writers.cases";
 import { registerPropagationTests } from "./transport-propagation.cases";
 import { registerPromptTests } from "./prompt-tasks.cases";
@@ -74,7 +75,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -129,13 +130,26 @@ before(async () => {
   assert.ok(upgradeInvitation);
   await db.query("SELECT v2_prompt_event($1,$2,gen_random_uuid(),'unknown','Africa/Harare',NULL)",[upgradeUser,upgradeInvitation]);
   const promptSnapshot=async()=>Promise.all(["v2_question_tasks","v2_prompt_requests","v2_prompt_invitations","v2_prompt_sessions","v2_prompt_events","v2_prompt_suppressions"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
+  // Preserve real reviewed writer/history from populated0015 on upgrade0016.
+  const writerSubject=randomUUID(),writerContribution=randomUUID();
+  await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'stop')",[writerSubject]);
+  await db.query("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Pre-writer place')",[writerSubject]);
+  await db.query("INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,$2,gen_random_uuid(),'1.0','contribute_tab',$3,'{}',$4)",[writerContribution,upgradeUser,hash,writerSubject]);
+  const writerObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'stop.location',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[writerContribution,writerSubject,{name:"Reviewed upgrade place"}])).rows[0].id;
+  await db.query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture')",[upgradeUser]);
+  const writerEdit=(await db.query("SELECT v2_propose_transport_edit($1,$2,1,$3,gen_random_uuid()) id",[upgradeUser,writerSubject,writerObservation])).rows[0].id;
+  const writerReview=(await db.query("SELECT v2_review_transport_edit($1,$2,1,1,'accept','upgrade_writer',NULL,gen_random_uuid(),NULL) id",[upgradeUser,writerEdit])).rows[0].id;
+  await db.query("SELECT v2_apply_transport_edit($1,$2,$3,gen_random_uuid())",[upgradeUser,writerEdit,writerReview]);
+  const writerSnapshot=async()=>Promise.all(["v2_transport_edits","v2_transport_edit_events","v2_transport_edit_heads","v2_pattern_version_origins"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
+  const upgradeWriters=await writerSnapshot();
+  assert.ok(upgradeWriters[0]!.length>0);
   const upgradePrompts=await promptSnapshot();
   await db.query("UPDATE v2_operators SET country_code='ZW' WHERE subject_id=$1",[upgradeOperator]);
   const propagationSnapshot=async()=>Promise.all(["v2_transport_changes","v2_transport_change_subjects"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradePropagation=await propagationSnapshot();
   assert.ok(upgradePropagation[0]!.length>0);
   // Model hosted defaults granting client roles access to newly created tables.
-  // 0015 must actively revoke these grants, not merely rely on fresh PG defaults.
+  // 0016 must actively revoke these grants, not merely rely on fresh PG defaults.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -146,7 +160,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0015_transport_writers.sql/);
+  assert.match(await migrate(), /Applied 0016_lead_creation.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -166,7 +180,7 @@ before(async () => {
   assert.deepEqual((await db.query("SELECT to_jsonb(c) claim,to_jsonb(p) proof FROM v2_affiliation_claims c JOIN v2_affiliation_proofs p ON p.claim_id=c.id WHERE c.id=$1",[upgradeClaim])).rows,affiliationSnapshot);
   assert.deepEqual(await promptSnapshot(),upgradePrompts);
   assert.deepEqual(await propagationSnapshot(),upgradePropagation);
-  assert.equal((await db.query("SELECT count(*) FROM v2_transport_edits")).rows[0].count,"0");
+  assert.deepEqual(await writerSnapshot(),upgradeWriters);
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
@@ -178,7 +192,7 @@ before(async () => {
   await db.query("DELETE FROM v2_subjects WHERE id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_corridors WHERE id=$1", [upgradeCorridor]);
   await db.query("DELETE FROM cities WHERE id=ANY($1::int[])", [upgradeCities]);
-  await db.query("DELETE FROM users WHERE id=$1", [upgradeUser]);
+  // Keep the independently checked writer fixture and its actor until DB teardown.
   await db.query("COMMIT");
 });
 after(async () => {
@@ -243,7 +257,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 16);
+  assert.equal(ledger.length, 17);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -480,3 +494,5 @@ registerPromptTests(() => ({ db, connectionString, user, other, origin, destinat
 registerPropagationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerWriterTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerLeadCreationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
