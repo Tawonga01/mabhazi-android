@@ -168,7 +168,7 @@ export function registerReviewTests(context: () => Context) {
     await reject(recordSql, args(f, "reverse", 3, 3, [], id));
     await reject(recordSql, args(f, "reverse", 3, 3, [], reversed));
     assert.equal((await query("SELECT state FROM v2_review_cases WHERE id=$1", [f.caseId])).rows[0].state, "reopened");
-    assert.equal((await query("SELECT count(*) FROM v2_review_decisions")).rows[0].count, "2");
+    assert.equal((await query("SELECT count(*) FROM v2_review_decisions WHERE case_id=$1", [f.caseId])).rows[0].count, "2");
     assert.equal((await query("SELECT count(*) FROM v2_jobs WHERE kind='assess' AND subject_id=$1", [f.subject])).rows[0].count, "2");
     await record(f, "accept", 3, 3);
   });
@@ -184,7 +184,7 @@ export function registerReviewTests(context: () => Context) {
     await query("DELETE FROM v2_observations WHERE id=$1", [f.observation]);
     await query("SET CONSTRAINTS ALL IMMEDIATE");
     assert.deepEqual((await query("SELECT evidence_erased,private_reason FROM v2_review_decisions WHERE case_id=$1", [f.caseId])).rows, [{ evidence_erased: true, private_reason: null }, { evidence_erased: true, private_reason: null }]);
-    assert.equal((await query("SELECT count(*) FROM v2_review_decision_evidence")).rows[0].count, "0");
+    assert.equal((await query("SELECT count(*) FROM v2_review_decision_evidence WHERE decision_id IN (SELECT id FROM v2_review_decisions WHERE case_id=$1)", [f.caseId])).rows[0].count, "0");
     assert.deepEqual((await query("SELECT state,revision FROM v2_review_cases WHERE id=$1", [f.caseId])).rows[0], { state: "reopened", revision: "4" });
     assert.equal((await query("SELECT count(*) FROM v2_jobs WHERE kind='erase_recompute' AND trigger_id=$1", [f.observation])).rows[0].count, "1");
   });

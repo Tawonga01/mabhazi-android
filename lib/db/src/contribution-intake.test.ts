@@ -135,7 +135,7 @@ before(async () => {
   await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'stop')",[writerSubject]);
   await db.query("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Pre-writer place')",[writerSubject]);
   await db.query("INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,$2,gen_random_uuid(),'1.0','contribute_tab',$3,'{}',$4)",[writerContribution,upgradeUser,hash,writerSubject]);
-  const writerObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'stop.location',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[writerContribution,writerSubject,{name:"Reviewed upgrade place"}])).rows[0].id;
+  const writerObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'stop.location',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[writerContribution,writerSubject,{cityId:upgradeCities[0],name:"Reviewed upgrade place",precision:"named_place"}])).rows[0].id;
   await db.query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture')",[upgradeUser]);
   const writerEdit=(await db.query("SELECT v2_propose_transport_edit($1,$2,1,$3,gen_random_uuid()) id",[upgradeUser,writerSubject,writerObservation])).rows[0].id;
   const writerReview=(await db.query("SELECT v2_review_transport_edit($1,$2,1,1,'accept','upgrade_writer',NULL,gen_random_uuid(),NULL) id",[upgradeUser,writerEdit])).rows[0].id;
@@ -191,7 +191,7 @@ before(async () => {
   await db.query("DELETE FROM v2_leads WHERE subject_id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_subjects WHERE id=$1", [upgradeSubject]);
   await db.query("DELETE FROM v2_corridors WHERE id=$1", [upgradeCorridor]);
-  await db.query("DELETE FROM cities WHERE id=ANY($1::int[])", [upgradeCities]);
+  // Preserve upgrade cities referenced by independently retained writer evidence.
   // Keep the independently checked writer fixture and its actor until DB teardown.
   await db.query("COMMIT");
 });
@@ -383,8 +383,8 @@ test("corrections append history and cannot supersede another account or field",
     VALUES($1,$2,'departure.reported',$3,$4,$4,$5)`, [theirs.id, c.subjectId, { time: "09:00", basis: "actual" }, hash, original.id]);
   await rejectQuery(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope_key,value_key,observed_from)
     VALUES($1,$2,'departure.reported',$3,$4,$4,current_date+2)`, [c.id, c.subjectId, { time: "09:00", basis: "actual" }, hash]);
-  assert.equal((await db.query("SELECT count(*) FROM v2_observations")).rows[0].count, "2");
-  assert.equal((await db.query("SELECT count(*) FROM v2_observation_states")).rows[0].count, "2");
+  assert.equal((await db.query("SELECT count(*) FROM v2_observations WHERE original_subject_id=$1", [c.subjectId])).rows[0].count, "2");
+  assert.equal((await db.query("SELECT count(*) FROM v2_observation_states WHERE observation_id=ANY($1::uuid[])", [[original.id,corrected.id]])).rows[0].count, "2");
 });
 
 test("private evidence links enforce ownership", async () => {
