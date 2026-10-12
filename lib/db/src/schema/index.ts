@@ -30,3 +30,4 @@ export * from "./affiliationIssuers";
 export * from "./promptTasks";
 
 export * from "./transportPropagation";
+export * from "./transportWriters";
