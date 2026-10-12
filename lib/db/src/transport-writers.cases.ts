@@ -25,7 +25,7 @@ export function registerWriterTests(context: () => Context) {
     await q(`INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id)
       VALUES($1,$2,gen_random_uuid(),'1.0','contribute_tab',$3,'{}',$4)`, [contribution, owner, key, id]);
     const observation = (await q(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key)
-      VALUES($1,$2,$3,$4,$5,$6,$6) RETURNING id`, [contribution, id, field, value, scope ?? (field.endsWith(".scheduled") || field.endsWith(".actual") ? { schemaVersion: "1.0" } : {}), key])).rows[0].id as string;
+      VALUES($1,$2,$3,$4,$5,v2_assessment_hash($5),v2_assessment_hash($4)) RETURNING id`, [contribution, id, field, value, scope ?? (field.endsWith(".scheduled") || field.endsWith(".actual") ? { schemaVersion: "1.0" } : {})])).rows[0].id as string;
     return { id, contribution, observation };
   }
   async function lead(owner = context().user, field = "departure.reported", value: unknown = { time: "08:00", basis: "scheduled" }) {
