@@ -19,7 +19,7 @@ CREATE INDEX v2_transport_edit_actor_idx ON public.v2_transport_edits(actor_user
 CREATE TABLE public.v2_transport_edit_events (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), edit_id uuid NOT NULL REFERENCES public.v2_transport_edits(id),
  revision bigint NOT NULL CHECK(revision>=1), previous_event_id uuid REFERENCES public.v2_transport_edit_events(id),
- action text NOT NULL CHECK(action IN('apply','reverse','invalidate','erase')),
+ action text NOT NULL CHECK(action IN('review','apply','reverse','invalidate','erase')),
  actor_user_id varchar REFERENCES public.users(id) ON DELETE SET NULL, review_id uuid REFERENCES public.v2_review_decisions(id),
  request_id uuid UNIQUE, request_digest text, cause_id uuid,
  resulting_revision bigint NOT NULL CHECK(resulting_revision>=1), resulting_generation bigint NOT NULL CHECK(resulting_generation>=1),
@@ -201,10 +201,19 @@ BEGIN
  SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=e.id ORDER BY revision DESC LIMIT 1;
  IF NEW.revision<>COALESCE(previous.revision,0)+1 OR NEW.previous_event_id IS DISTINCT FROM previous.id THEN RAISE EXCEPTION 'v2_edit_event_revision_conflict' USING ERRCODE='40001'; END IF;
  NEW.projection_changed:=false;
- IF NEW.action='apply' THEN
+ IF NEW.action='review' THEN
+  SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.review_id;
+  IF e.erased OR r.case_id IS DISTINCT FROM e.case_id OR r.actor_user_id IS DISTINCT FROM NEW.actor_user_id OR NEW.actor_user_id IS NULL
+   OR r.action NOT IN('accept','reject','needs_context','reverse') OR r.evidence_erased
+   OR NOT EXISTS(SELECT 1 FROM public.v2_review_cases WHERE id=e.case_id AND last_decision_id=r.id)
+   OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=NEW.actor_user_id AND revoked_at IS NULL) THEN
+   RAISE EXCEPTION 'v2_edit_review_receipt_binding_invalid' USING ERRCODE='23514'; END IF;
+ ELSIF NEW.action='apply' THEN
   SELECT * INTO r FROM public.v2_review_decisions WHERE id=NEW.review_id;
   SELECT * INTO s FROM public.v2_subjects WHERE id=e.subject_id FOR UPDATE;
-  IF e.erased OR previous.id IS NOT NULL OR NOT public.v2_edit_evidence_live(e.id) OR s.lifecycle<>'active'
+  IF e.erased OR (previous.id IS NOT NULL AND previous.action<>'review')
+   OR EXISTS(SELECT 1 FROM public.v2_transport_edit_events WHERE edit_id=e.id AND action='apply')
+   OR NOT public.v2_edit_evidence_live(e.id) OR s.lifecycle<>'active'
    OR r.case_id IS DISTINCT FROM e.case_id OR r.action IS DISTINCT FROM 'accept' OR r.evidence_erased
    OR r.actor_user_id IS DISTINCT FROM NEW.actor_user_id OR NEW.actor_user_id IS NULL
    OR NOT EXISTS(SELECT 1 FROM public.v2_review_roles WHERE user_id=NEW.actor_user_id AND revoked_at IS NULL)
@@ -235,6 +244,7 @@ END; $$;
 CREATE TRIGGER v2_edit_event_validate BEFORE INSERT ON public.v2_transport_edit_events FOR EACH ROW EXECUTE FUNCTION public.v2_edit_event_validate();
 CREATE FUNCTION public.v2_edit_project_event() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
+ IF NEW.action='review' THEN RETURN NEW; END IF;
  IF NEW.action='apply' THEN
   INSERT INTO public.v2_transport_edit_heads(subject_id,edit_id,event_id) SELECT subject_id,NEW.edit_id,NEW.id FROM public.v2_transport_edits WHERE id=NEW.edit_id
    ON CONFLICT(subject_id) DO UPDATE SET edit_id=EXCLUDED.edit_id,event_id=EXCLUDED.event_id;
@@ -252,15 +262,38 @@ BEGIN
 END; $$;
 CREATE TRIGGER v2_edit_head_guard BEFORE INSERT OR UPDATE OR DELETE ON public.v2_transport_edit_heads FOR EACH ROW EXECUTE FUNCTION public.v2_edit_head_guard();
 CREATE FUNCTION public.v2_apply_transport_edit(actor varchar,edit uuid,review uuid,request uuid) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE receipt public.v2_transport_edit_events; digest text; result uuid;
+DECLARE receipt public.v2_transport_edit_events; digest text; result uuid; previous public.v2_transport_edit_events;
 BEGIN
  IF actor IS NULL OR request IS NULL THEN RAISE EXCEPTION 'v2_edit_apply_request_invalid' USING ERRCODE='23514'; END IF;
  PERFORM pg_advisory_xact_lock(hashtext(actor)); UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
  digest:=public.v2_assessment_hash(jsonb_build_array(actor,edit,review));
  SELECT * INTO receipt FROM public.v2_transport_edit_events WHERE request_id=request;
- IF FOUND THEN IF receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_edit_apply_request_conflict' USING ERRCODE='23514'; END IF; RETURN receipt.id; END IF;
- INSERT INTO public.v2_transport_edit_events(edit_id,revision,action,actor_user_id,review_id,request_id,request_digest,resulting_revision,resulting_generation,projection_changed)
- VALUES(edit,1,'apply',actor,review,request,digest,1,1,false) RETURNING id INTO result;
+ IF FOUND THEN IF receipt.action<>'apply' OR receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_edit_apply_request_conflict' USING ERRCODE='23514'; END IF; RETURN receipt.id; END IF;
+ SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=edit ORDER BY revision DESC LIMIT 1;
+ INSERT INTO public.v2_transport_edit_events(edit_id,revision,previous_event_id,action,actor_user_id,review_id,request_id,request_digest,resulting_revision,resulting_generation,projection_changed)
+ VALUES(edit,COALESCE(previous.revision,0)+1,previous.id,'apply',actor,review,request,digest,1,1,false) RETURNING id INTO result;
+ RETURN result;
+END; $$;
+CREATE FUNCTION public.v2_review_transport_edit(actor varchar,edit uuid,expected_case bigint,expected_subject bigint,operation text,reason text,note text,request uuid,reverse_id uuid DEFAULT NULL) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE e public.v2_transport_edits; receipt public.v2_transport_edit_events; previous public.v2_transport_edit_events; digest text; result uuid;
+BEGIN
+ IF actor IS NULL OR request IS NULL OR operation IS NULL OR operation NOT IN('accept','reject','needs_context','reverse') THEN RAISE EXCEPTION 'v2_edit_review_request_invalid' USING ERRCODE='23514'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtext(actor));UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
+ digest:=public.v2_assessment_hash(jsonb_build_array(actor,edit,expected_case,expected_subject,operation,reason,note,reverse_id));
+ SELECT * INTO receipt FROM public.v2_transport_edit_events WHERE request_id=request;
+ IF FOUND THEN IF receipt.action<>'review' OR receipt.request_digest IS DISTINCT FROM digest THEN RAISE EXCEPTION 'v2_edit_review_request_conflict' USING ERRCODE='23514'; END IF;RETURN receipt.review_id;END IF;
+ SELECT * INTO e FROM public.v2_transport_edits WHERE id=edit;
+ IF e.id IS NULL OR e.erased THEN RAISE EXCEPTION 'v2_edit_review_proposal_missing' USING ERRCODE='23514'; END IF;
+ -- The registry is completed by the matching subtype inside this operation.
+ -- Recheck just these constraints immediately, including for callers that had
+ -- all constraints immediate; leave unrelated deferral choices unchanged.
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision DEFERRED;
+ result:=public.v2_record_review(actor,e.case_id,expected_case,expected_subject,operation,reason,note,CASE WHEN operation='reverse' THEN ARRAY[]::uuid[] ELSE ARRAY[e.observation_id] END,'review/1',reverse_id);
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE;
+ SELECT * INTO previous FROM public.v2_transport_edit_events WHERE edit_id=edit ORDER BY revision DESC LIMIT 1;
+ INSERT INTO public.v2_transport_edit_events(edit_id,revision,previous_event_id,action,actor_user_id,review_id,request_id,request_digest,resulting_revision,resulting_generation,projection_changed)
+ VALUES(edit,COALESCE(previous.revision,0)+1,previous.id,'review',actor,result,request,digest,1,1,false);
  RETURN result;
 END; $$;
 
@@ -297,6 +330,23 @@ BEGIN
  RETURN NEW;
 END; $$;
 CREATE TRIGGER v2_edit_review_changed AFTER UPDATE ON public.v2_review_cases FOR EACH ROW EXECUTE FUNCTION public.v2_edit_review_changed();
+CREATE FUNCTION public.v2_edit_support_changed(edit uuid) RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+DECLARE subject uuid; affected uuid[]; item record; event uuid:=gen_random_uuid();
+BEGIN
+ SELECT subject_id INTO subject FROM public.v2_transport_edits WHERE id=edit;
+ affected:=public.v2_transport_dependents(ARRAY[subject]);
+ PERFORM 1 FROM public.v2_subjects WHERE id=ANY(affected) ORDER BY id FOR UPDATE;
+ -- Losing a materialisation's evidence is not a new structural identity edit.
+ -- Keep a freshly reviewed target association intact while invalidating the
+ -- dependent values, canonical heads and questions that relied on the proof.
+ PERFORM public.v2_invalidate_derived(ARRAY(SELECT id FROM public.v2_field_decisions WHERE subject_id=ANY(affected)),false);
+ PERFORM public.v2_target_recompute_subjects(affected,event,false);
+ FOR item IN SELECT edit_id FROM public.v2_transport_edit_heads WHERE subject_id=ANY(affected) ORDER BY subject_id LOOP
+  PERFORM public.v2_append_edit_invalidation(item.edit_id,'invalidate',event);
+ END LOOP;
+ INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+ SELECT 'refresh_tasks',id,input_generation,'prompts/1',event FROM public.v2_subjects WHERE id=ANY(affected);
+END; $$;
 CREATE FUNCTION public.v2_edit_observation_changed() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE e record; observation uuid; erase boolean;
 BEGIN
@@ -309,7 +359,7 @@ BEGIN
   -- while retaining its independently owned observations for fresh review.
   FOR e IN SELECT id,subject_id FROM public.v2_transport_edits WHERE subject_id IN(SELECT subject_id FROM public.v2_transport_edits WHERE observation_id=observation) ORDER BY subject_id,id LOOP
    IF EXISTS(SELECT 1 FROM public.v2_transport_edit_heads WHERE subject_id=e.subject_id) THEN
-    PERFORM public.v2_transport_propagate(ARRAY[e.subject_id],'v2_transport_edits','UPDATE',ARRAY['supporting_observation'],NULL);
+    PERFORM public.v2_edit_support_changed(e.id);
    END IF;
    UPDATE public.v2_transport_edits SET erased=true,observation_id=NULL,observation_revision=NULL,target_revision=NULL,before_snapshot=NULL,after_snapshot=NULL,observation_scope=NULL,request_digest=NULL WHERE id=e.id;
    UPDATE public.v2_transport_edit_events SET request_digest=NULL WHERE edit_id=e.id;
@@ -317,7 +367,7 @@ BEGIN
   END LOOP;
  ELSE
   FOR e IN SELECT p.id,p.subject_id FROM public.v2_transport_edits p JOIN public.v2_transport_edit_heads h ON h.edit_id=p.id WHERE p.observation_id=observation ORDER BY p.subject_id,p.id LOOP
-   PERFORM public.v2_transport_propagate(ARRAY[e.subject_id],'v2_transport_edits','UPDATE',ARRAY['supporting_observation'],NULL);
+   PERFORM public.v2_edit_support_changed(e.id);
   END LOOP;
  END IF;
  RETURN COALESCE(NEW,OLD);
@@ -364,7 +414,7 @@ BEGIN
  IF e.id IS NOT NULL AND public.v2_edit_evidence_live(e.id) AND public.v2_edit_snapshot(subject)=e.after_snapshot
   AND EXISTS(SELECT 1 FROM public.v2_transport_edit_events v JOIN public.v2_review_decisions r ON r.id=v.review_id JOIN public.v2_review_cases c ON c.id=r.case_id
    WHERE v.id=h.event_id AND v.action='apply' AND r.action='accept' AND NOT r.evidence_erased AND c.last_decision_id=r.id AND c.state='resolved') THEN
-  RETURN jsonb_build_object('status','reviewed','snapshot',e.after_snapshot);
+  RETURN jsonb_build_object('status','reviewed','fieldKey',e.field_key,'scope',e.observation_scope,'snapshot',e.after_snapshot);
  END IF;
  RETURN jsonb_build_object('status',CASE WHEN EXISTS(SELECT 1 FROM public.v2_transport_edit_events v JOIN public.v2_transport_edits p ON p.id=v.edit_id WHERE p.subject_id=subject AND v.action='apply') THEN 'stale' ELSE 'unreviewed' END,'snapshot',NULL);
 END; $$;
@@ -377,7 +427,7 @@ DO $$ DECLARE t text; r text; f record; BEGIN
   EXECUTE format('CREATE POLICY backend_access ON public.%I FOR SELECT TO mabhazi_api USING(true)',t);
   EXECUTE format('CREATE TRIGGER v2_edit_lock BEFORE INSERT OR UPDATE OR DELETE ON public.%I FOR EACH STATEMENT EXECUTE FUNCTION public.v2_lock_transport()',t);
  END LOOP;
- FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'v2_edit_%' OR proname IN('v2_propose_transport_edit','v2_apply_transport_edit','v2_write_edit_snapshot','v2_append_edit_invalidation','v2_read_transport')) LOOP
+ FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND (proname LIKE 'v2_edit_%' OR proname IN('v2_propose_transport_edit','v2_review_transport_edit','v2_apply_transport_edit','v2_write_edit_snapshot','v2_append_edit_invalidation','v2_read_transport')) LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,mabhazi_api',f.signature);
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r); END IF; END LOOP;
  END LOOP;

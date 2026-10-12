@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import pg from "pg";
 
 type Context = { db: pg.Client; connectionString: string; user: string; other: string; origin: number; destination: number; corridor: string };
 const key = "a".repeat(64);
+const digest = () => createHash("sha256").update(randomUUID()).digest("hex");
 export function registerWriterTests(context: () => Context) {
   const q = (sql: string, values: unknown[] = []) => context().db.query(sql, values);
   async function invalid(action: () => Promise<unknown>, codes = ["23514"]) {
@@ -46,6 +47,34 @@ export function registerWriterTests(context: () => Context) {
     await q("INSERT INTO v2_runs(subject_id,service_plan_subject_id,pattern_subject_id,pattern_version,departure_seconds) VALUES($1,$2,$3,1,28800)", [run, plan, pattern]);
     return { operator, route, pattern, stop, plan, run };
   }
+  async function review(f: Report, kind: string, action: string, options: { candidate?: string; caseId?: string; reverse?: string; evidence?: string[] } = {}) {
+    await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture') ON CONFLICT DO NOTHING", [context().other]);
+    const caseId = options.caseId ?? (await q("SELECT v2_open_review_case($1,$2,$3,NULL,NULL) id", [context().other, f.id, kind])).rows[0].id as string;
+    if (options.candidate) await q("UPDATE v2_review_cases SET candidate_id=$1 WHERE id=$2", [options.candidate, caseId]);
+    const c = (await q("SELECT revision FROM v2_review_cases WHERE id=$1", [caseId])).rows[0];
+    const id = (await q("SELECT v2_record_review($1,$2,$3,$4,$5,'reviewed_identity',NULL,$6,'review/1',$7) id", [context().other, caseId, c.revision, (await state(f.id)).revision, action, options.evidence ?? (action === "reverse" ? [] : [f.observation]), options.reverse ?? null])).rows[0].id as string;
+    return { id, caseId };
+  }
+  async function link(a: Report, destination: string, relation = "duplicate_of", evidence = [a.observation], apply = true) {
+    const sa = await state(a.id), sb = await state(destination);
+    const candidate = (await q(`INSERT INTO v2_association_candidates(from_subject_id,from_kind,to_subject_id,to_kind,relation,evidence_digest,reason_codes,rule_version,source_revision,target_revision,segment_start,segment_end)
+      VALUES($1,$2,$3,$4,$5,$6,ARRAY['identity_fixture'],'association/1',$7,$8,$9,$10) RETURNING id`, [a.id, sa.kind, destination, sb.kind, relation, digest(), sa.revision, sb.revision, relation === "contains_segment" ? 0 : null, relation === "contains_segment" ? 1 : null])).rows[0].id as string;
+    for (const observation of evidence) await q("INSERT INTO v2_candidate_evidence VALUES($1,$2)", [candidate, observation]);
+    const r = await review(a, "identity", "accept", { candidate, evidence });
+    const id = randomUUID();
+    await q("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'association')", [id]);
+    await q(`INSERT INTO v2_association_decisions(id,candidate_id,action,actor_kind,reviewer_decision_id,reason_code,policy_version,expected_from_revision,expected_to_revision,expected_candidate_revision)
+      VALUES($1,$2,'accept','reviewer',$3,'reviewed_identity','association/1',$4,$5,1)`, [id, candidate, r.id, (await state(a.id)).revision, (await state(destination)).revision]);
+    if (apply) await q("SELECT v2_apply_association_decision($1)", [id]);
+    return { id, candidate, destination, review: r };
+  }
+  type Link = Awaited<ReturnType<typeof link>>;
+  async function args(a: Report, l: Link) {
+    const os = (await q("SELECT revision FROM v2_observation_states WHERE observation_id=$1", [a.observation])).rows[0];
+    return [a.observation, l.id, (await target(a.observation)).revision, os.revision, (await state(a.id)).revision, (await state(l.destination)).revision];
+  }
+  const resolve = async (a: Report, l: Link) => (await q("SELECT v2_resolve_observation_target($1,$2,$3,$4,$5,$6) id", await args(a, l))).rows[0].id as string;
+
   const edit = async (id: string) => (await q("SELECT * FROM v2_transport_edits WHERE id=$1", [id])).rows[0];
   const snapshot = async (id: string) => (await q("SELECT v2_edit_snapshot($1) value", [id])).rows[0].value;
   const read = async (id: string) => (await q("SELECT v2_read_transport($1) value", [id])).rows[0].value;
@@ -57,7 +86,8 @@ export function registerWriterTests(context: () => Context) {
   }
   async function decide(e: string, action = "accept", reverse: string | null = null, evidence?: string[]) {
     const p=await edit(e), c=(await q("SELECT revision FROM v2_review_cases WHERE id=$1",[p.case_id])).rows[0];
-    return (await q("SELECT v2_record_review($1,$2,$3,$4,$5,'transport_observation_reviewed','Private reviewer note',$6,'review/1',$7) id",[context().other,p.case_id,c.revision,(await state(p.subject_id)).revision,action,evidence??(action==="reverse"?[]:[p.observation_id]),reverse])).rows[0].id as string;
+    if(evidence) return (await q("SELECT v2_record_review($1,$2,$3,$4,$5,'transport_observation_reviewed','Private reviewer note',$6,'review/1',$7) id",[context().other,p.case_id,c.revision,(await state(p.subject_id)).revision,action,evidence,reverse])).rows[0].id as string;
+    return (await q("SELECT v2_review_transport_edit($1,$2,$3,$4,$5,'transport_observation_reviewed','Private reviewer note',$6,$7) id",[context().other,e,c.revision,(await state(p.subject_id)).revision,action,randomUUID(),reverse])).rows[0].id as string;
   }
   async function apply(e: string, review: string, request: string = randomUUID(), actor=context().other) {
     return (await q("SELECT v2_apply_transport_edit($1,$2,$3,$4) id",[actor,e,review,request])).rows[0].id as string;
@@ -71,7 +101,7 @@ export function registerWriterTests(context: () => Context) {
     const original=(await q("SELECT * FROM v2_observations WHERE id=$1",[r.observation])).rows[0],before=await snapshot(f.run),e=await propose(r);
     assert.deepEqual(await snapshot(f.run),before);assert.equal((await read(f.run)).status,"unreviewed");
     const review=await decide(e),event=await apply(e,review),result=await read(f.run);
-    assert.equal(result.status,"reviewed");assert.equal(result.snapshot.data[field==="departure.scheduled"?"departure_seconds":"arrival_seconds"],36000);
+    assert.equal(result.status,"reviewed");assert.equal(result.fieldKey,field);assert.deepEqual(result.scope,{schemaVersion:"1.0"});assert.equal(result.snapshot.data[field==="departure.scheduled"?"departure_seconds":"arrival_seconds"],36000);
     assert.deepEqual((await q("SELECT * FROM v2_observations WHERE id=$1",[r.observation])).rows[0],original);
     const h=(await q("SELECT * FROM v2_transport_edit_events WHERE id=$1",[event])).rows[0];assert.equal(h.projection_changed,true);
     assert.equal(h.resulting_revision,(await state(f.run)).revision);assert.equal(h.resulting_generation,(await state(f.run)).input_generation);
@@ -110,6 +140,16 @@ export function registerWriterTests(context: () => Context) {
     assert.equal(await apply(f.e,review,request),event);assert.deepEqual(await state(f.run),s);
     await decide(f.e,"reverse",review);const reversed=await state(f.run);
     assert.equal(await apply(f.e,review,request),event);assert.deepEqual(await state(f.run),reversed);assert.equal((await snapshot(f.run)).data.departure_seconds,28800);
+  });
+  test("writers: scoped review works with immediate constraints and retries without restoring authority",async()=>{
+    const f=await fixture(),p=await edit(f.e),c=(await q("SELECT revision FROM v2_review_cases WHERE id=$1",[p.case_id])).rows[0],s=await state(f.run),request=randomUUID();
+    await q("SET CONSTRAINTS ALL IMMEDIATE");
+    const values=[context().other,f.e,c.revision,s.revision,"accept","transport_review","Private note",request,null];
+    const sql="SELECT v2_review_transport_edit($1,$2,$3,$4,$5,$6,$7,$8,$9) id";
+    const r=(await q(sql,values)).rows[0].id as string;assert.equal((await q(sql,values)).rows[0].id,r);
+    await invalid(()=>q(sql,[...values.slice(0,6),"Different note",request,null]));
+    await apply(f.e,r);await decide(f.e,"reverse",r);const before=await snapshot(f.run),after=await state(f.run);
+    assert.equal((await q(sql,values)).rows[0].id,r);assert.deepEqual(await snapshot(f.run),before);assert.deepEqual(await state(f.run),after);
   });
   test("writers: request reuse with different input conflicts",async()=>{
     const f=await fixture(),p=await edit(f.e),another=await report(f.run,"departure.scheduled",{seconds:34200});
@@ -167,19 +207,42 @@ export function registerWriterTests(context: () => Context) {
     await invalid(()=>apply(e,review),["40001"]);assert.equal((await snapshot(f.run)).data.departure_seconds,28800);
   });
   test("writers: a revoked reviewer cannot apply an old approval",async()=>{
-    const f=await fixture(),r=await decide(f.e);await q("UPDATE v2_review_roles SET revoked_at=statement_timestamp(),reason_code='revoked_fixture' WHERE user_id=$1",[context().other]);
+    const f=await fixture(),r=await decide(f.e);await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','fixture')",[context().user]);
+    await q("SELECT v2_change_review_role($1,$2,'reviewer','revoke','revoked_fixture')",[context().user,context().other]);
     await invalid(()=>apply(f.e,r));assert.equal((await snapshot(f.run)).data.departure_seconds,28800);
   });
   test("writers: parent edits make reviewed reads stale and do not revive after values change back",async()=>{
     const f=await fixture(),r=await decide(f.e);await apply(f.e,r);await q("UPDATE v2_operators SET display_name='Changed parent' WHERE subject_id=$1",[f.operator]);
     assert.deepEqual(await read(f.run),{status:"stale",snapshot:null});
     await q("UPDATE v2_operators SET display_name='Target bus' WHERE subject_id=$1",[f.operator]);assert.equal((await read(f.run)).status,"stale");
-    const events=(await q("SELECT action FROM v2_transport_edit_events WHERE edit_id=$1 ORDER BY revision",[f.e])).rows.map(x=>x.action);assert.deepEqual(events,["apply","invalidate"]);
+    const events=(await q("SELECT action FROM v2_transport_edit_events WHERE edit_id=$1 ORDER BY revision",[f.e])).rows.map(x=>x.action);assert.deepEqual(events,["review","apply","invalidate"]);
   });
   test("writers: withdrawing the reviewed report invalidates authority and downstream selections",async()=>{
     const f=await fixture();await apply(f.e,await decide(f.e));await q("SELECT v2_withdraw_observation($1,$2,1,$3,NULL)",[context().user,f.r.observation,randomUUID()]);
     assert.equal((await read(f.run)).status,"stale");assert.equal((await q("SELECT count(*) FROM v2_transport_edit_heads WHERE subject_id=$1",[f.run])).rows[0].count,"0");
     const again=await state(f.run);await invalid(()=>apply(f.e,randomUUID()),["23514","40001"]);assert.deepEqual(await state(f.run),again);
+  });
+  test("writers: moving a reviewed observation invalidates old materialisations without undoing the identity link",async()=>{
+    await roles();const f=await transport(),r=await report(f.stop,"stop.location",{cityId:context().origin,name:"Reviewed place",precision:"named_place"}),e=await propose(r);await apply(e,await decide(e));
+    const runReport=await report(f.run,"departure.scheduled",{seconds:32400}),runEdit=await propose(runReport);await apply(runEdit,await decide(runEdit));
+    const destination=await subject("stop");await q("SET CONSTRAINTS ALL DEFERRED");await q("INSERT INTO v2_stops(subject_id,city_id,name) VALUES($1,$2,'Resolved target')",[destination,context().origin]);
+    const l=await link(r,destination);await resolve(r,l);
+    assert.equal(await effective(r.observation),destination);assert.equal((await read(f.stop)).status,"stale");assert.equal((await read(f.run)).status,"stale");
+    assert.equal((await q("SELECT invalidated FROM v2_association_decisions WHERE id=$1",[l.id])).rows[0].invalidated,false);
+    assert.equal((await q("SELECT count(*) FROM v2_association_links WHERE decision_id=$1",[l.id])).rows[0].count,"1");await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
+  test("writers: pending proposal erasure removes snapshots and prevents old receipt reuse",async()=>{
+    const f=await fixture(),p=await edit(f.e);await q("DELETE FROM v2_contributions WHERE id=$1",[f.r.contribution]);
+    const erased=await edit(f.e);assert.equal(erased.erased,true);assert.equal(erased.before_snapshot,null);assert.equal(erased.after_snapshot,null);assert.equal(erased.observation_scope,null);
+    await invalid(()=>q("SELECT v2_propose_transport_edit($1,$2,$3,$4,$5)",[context().other,f.run,p.expected_subject_revision,f.r.observation,p.request_id]));
+    assert.equal((await read(f.run)).status,"unreviewed");await q("SET CONSTRAINTS ALL IMMEDIATE");
+  });
+  test("writers: observation validity columns cannot broaden a run outside the reported period",async()=>{
+    await roles();const f=await transport(),r=await report(f.run,"departure.scheduled",{seconds:32400});
+    // Observation values are immutable; insert a genuinely bounded report.
+    const bounded=(await q("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key,effective_from,effective_to) VALUES($1,$2,'departure.scheduled','{\"seconds\":32400}','{\"schemaVersion\":\"1.0\"}',$3,$3,'2026-10-12','2026-10-20') RETURNING id",[r.contribution,f.run,key])).rows[0].id as string;
+    await invalid(()=>propose({...r,observation:bounded}));
+    await q("UPDATE v2_runs SET validity_from='2026-10-12',validity_to='2026-10-20' WHERE subject_id=$1",[f.run]);const e=await propose({...r,observation:bounded});await apply(e,await decide(e));
   });
   test("writers: reversing an older edit cannot overwrite a later reviewed projection",async()=>{
     const f=await fixture(),first=await decide(f.e);await apply(f.e,first);
@@ -217,7 +280,7 @@ export function registerWriterTests(context: () => Context) {
     await roles();const f=await transport();await q("UPDATE v2_runs SET arrival_seconds=33000 WHERE subject_id=$1",[f.run]);
     const r=await report(f.run,"departure.scheduled",{seconds:36000}),e=await propose(r),review=await decide(e),before=await snapshot(f.run),s=await state(f.run),jobs=(await q("SELECT count(*) FROM v2_jobs")).rows[0].count;
     await invalid(()=>apply(e,review));assert.deepEqual(await snapshot(f.run),before);assert.deepEqual(await state(f.run),s);
-    assert.equal((await q("SELECT count(*) FROM v2_transport_edit_events WHERE edit_id=$1",[e])).rows[0].count,"0");assert.equal((await q("SELECT count(*) FROM v2_jobs")).rows[0].count,jobs);
+    assert.equal((await q("SELECT count(*) FROM v2_transport_edit_events WHERE edit_id=$1 AND action='apply'",[e])).rows[0].count,"0");assert.equal((await q("SELECT count(*) FROM v2_jobs")).rows[0].count,jobs);
   });
   test("writers: endpoint integrity failure leaves no published pattern version or origin",async()=>{
     await roles();const f=await transport(),a=await subject("stop"),b=await subject("stop");
