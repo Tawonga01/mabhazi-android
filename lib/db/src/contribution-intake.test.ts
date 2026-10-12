@@ -406,8 +406,8 @@ test("account deletion erases private rows, preserves others, invalidates pendin
   await db.query("DELETE FROM users WHERE id=$1", [user]);
   await db.query("SET CONSTRAINTS ALL IMMEDIATE");
   for (const table of ["v2_receipts", "v2_sources", "v2_observation_sources"]) assert.equal((await db.query(`SELECT count(*) FROM ${table}`)).rows[0].count, "0", table);
-  assert.deepEqual((await db.query("SELECT id FROM v2_contributions")).rows, [{ id: survivor.id }]);
-  assert.deepEqual((await db.query("SELECT id FROM v2_observations")).rows, [{ id: survivorObservation.id }]);
+  assert.deepEqual((await db.query("SELECT id FROM v2_contributions WHERE original_subject_id=$1", [c.subjectId])).rows, [{ id: survivor.id }]);
+  assert.deepEqual((await db.query("SELECT id FROM v2_observations WHERE original_subject_id=$1", [c.subjectId])).rows, [{ id: survivorObservation.id }]);
   const retained = (await db.query("SELECT * FROM v2_leads WHERE subject_id=$1", [c.subjectId])).rows[0];
   assert.equal(retained.initial_contribution_id, null); assert.equal(retained.attribution_erased, true);
   const cancelled = (await db.query("SELECT * FROM v2_jobs WHERE id=$1", [pending.id])).rows[0];

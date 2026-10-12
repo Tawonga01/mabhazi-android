@@ -24,7 +24,7 @@ BEGIN
    AND jsonb_typeof(request->'schemaVersion')='string' AND request->>'schemaVersion'='1.0' AND public.v2_json_uuid(request->'clientSubmissionId')
    AND request->>'entrySurface' IN('contribute_tab','search_empty','search_result','route_detail','own_contribution','reviewer_context')
    AND jsonb_typeof(request->'target')='object' AND request->'target' ? 'newLead'
-   AND request->'target'-'newLead'='{}'::jsonb AND jsonb_typeof(request->'observations')='array',false)
+   AND (request->'target')-'newLead'='{}'::jsonb AND jsonb_typeof(request->'observations')='array',false)
    OR octet_length(request::text)>65536 THEN
   RAISE EXCEPTION 'v2_intake_request_invalid' USING ERRCODE='23514'; END IF;
  n:=jsonb_array_length(request->'observations');
