@@ -79,6 +79,7 @@ export const v2AvailabilityWindowsTable = pgTable("v2_availability_windows", {
   startSeconds: integer("start_seconds"), endSeconds: integer("end_seconds"), bookingNote: text("booking_note"),
 });
 export const v2ActualJourneysTable = pgTable("v2_actual_journeys", {
+  initialContributionId: uuid("initial_contribution_id"),
   subjectId: uuid("subject_id").primaryKey(),
   subjectKind: text("subject_kind", { enum: ["actual_journey"] }).notNull().default("actual_journey"),
   reportedServiceDate: date("reported_service_date"), timezone: text("timezone"), intendedSubjectId: uuid("intended_subject_id"),

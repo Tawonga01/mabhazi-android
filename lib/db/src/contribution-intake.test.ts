@@ -31,6 +31,7 @@ import { registerObservationTargetTests } from "./observation-targets.cases";
 import { registerSourceIdentityTests } from "./source-identity.cases";
 import { registerAssessmentTests } from "./evidence-assessments.cases";
 import { registerFieldResolutionTests } from "./field-resolution.cases";
+import { registerActualIntakeTests } from "./actual-journey-intake.cases";
 import { registerServiceRunTests } from "./service-run-creation.cases";
 import { registerRoutePatternTests } from "./route-pattern-creation.cases";
 import { registerTransportCreationTests } from "./transport-creation.cases";
@@ -80,7 +81,7 @@ before(async () => {
   await db.query("BEGIN");
   await db.query("CREATE SCHEMA mabhazi_migrations; REVOKE ALL ON SCHEMA mabhazi_migrations FROM PUBLIC");
   await db.query("CREATE TABLE mabhazi_migrations.applied(name text PRIMARY KEY,checksum text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql", "0017_transport_uuid_normalization.sql", "0018_transport_creation.sql", "0019_route_pattern_creation.sql"]) {
+  for (const name of ["0000_initial.sql", "0001_api_role.sql", "0002_contribution_intake.sql", "0003_transport_structure.sql", "0004_review_decisions.sql", "0005_derived_decisions.sql", "0006_observation_registry.sql", "0007_observation_events.sql", "0008_observation_targets.sql", "0009_source_identity.sql", "0010_evidence_assessments.sql", "0011_field_resolution.sql", "0012_affiliation_issuers.sql", "0013_prompt_tasks.sql", "0014_transport_propagation.sql", "0015_transport_writers.sql", "0016_lead_creation.sql", "0017_transport_uuid_normalization.sql", "0018_transport_creation.sql", "0019_route_pattern_creation.sql", "0020_service_run_creation.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     // 0001 predates multi-database tests and creates a cluster-wide role.
     // Reuse that role in this isolated database without changing the shipped
@@ -179,10 +180,30 @@ before(async () => {
   const patternCreation=(await db.query("SELECT v2_propose_pattern_creation($1,$2,$3,$4,$5,$6,gen_random_uuid()) id",[upgradeUser,originIntake.subjectId,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision,patternObservation,createdRoute,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[createdRoute])).rows[0].revision])).rows[0].id;
   const patternReview=(await db.query("SELECT v2_review_transport_creation($1,$2,1,$3,'accept','upgrade_pattern',NULL,gen_random_uuid(),NULL) id",[upgradeUser,patternCreation,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision])).rows[0].id;
   await db.query("SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())",[upgradeUser,patternCreation,patternReview]);
+  // Preserve real0020 plan/run creation alongside a legacy actual report with no birth provenance.
+  const createdPattern=(await db.query("SELECT target_subject_id FROM v2_transport_creations WHERE id=$1",[patternCreation])).rows[0].target_subject_id;
+  const modeObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'service.mode',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[originIntake.contributionId,originIntake.subjectId,{mode:'fixed_time'}])).rows[0].id;
+  const planCreation=(await db.query("SELECT v2_propose_service_plan_creation($1,$2,$3,$4,$5,$6,gen_random_uuid()) id",[upgradeUser,originIntake.subjectId,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision,modeObservation,createdPattern,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[createdPattern])).rows[0].revision])).rows[0].id;
+  const planReview=(await db.query("SELECT v2_review_transport_creation($1,$2,1,$3,'accept','upgrade_plan',NULL,gen_random_uuid(),NULL) id",[upgradeUser,planCreation,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision])).rows[0].id;
+  await db.query("SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())",[upgradeUser,planCreation,planReview]);
+  const createdPlan=(await db.query("SELECT target_subject_id FROM v2_transport_creations WHERE id=$1",[planCreation])).rows[0].target_subject_id;
+  const runObservation=(await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'departure.scheduled',$3,$4,v2_assessment_hash($4),v2_assessment_hash($3)) RETURNING id",[originIntake.contributionId,originIntake.subjectId,{seconds:25200},{schemaVersion:'1.0'}])).rows[0].id;
+  const runCreation=(await db.query("SELECT v2_propose_run_creation($1,$2,$3,$4,$5,$6,gen_random_uuid()) id",[upgradeUser,originIntake.subjectId,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision,runObservation,createdPlan,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[createdPlan])).rows[0].revision])).rows[0].id;
+  const runReview=(await db.query("SELECT v2_review_transport_creation($1,$2,1,$3,'accept','upgrade_run',NULL,gen_random_uuid(),NULL) id",[upgradeUser,runCreation,(await db.query("SELECT revision FROM v2_subjects WHERE id=$1",[originIntake.subjectId])).rows[0].revision])).rows[0].id;
+  await db.query("SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())",[upgradeUser,runCreation,runReview]);
+  const createdRun=(await db.query("SELECT target_subject_id FROM v2_transport_creations WHERE id=$1",[runCreation])).rows[0].target_subject_id;
+  await db.query("SET CONSTRAINTS public.v2_subject_subtype DEFERRED");const legacyActual=randomUUID(),legacyContribution=randomUUID();
+  await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'actual_journey')",[legacyActual]);
+  await db.query("INSERT INTO v2_actual_journeys(subject_id,reported_service_date,timezone,intended_subject_id,intended_subject_kind,matched_run_subject_id,association_status) VALUES($1,'2026-10-01','Africa/Harare',$2,'route',$3,'matched')",[legacyActual,createdRoute,createdRun]);
+  await db.query("INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,$2,gen_random_uuid(),'1.0','route_detail',$3,'{}',$4)",[legacyContribution,upgradeUser,'a'.repeat(64),legacyActual]);
+  await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'departure.actual',$3,$4,v2_assessment_hash($4),v2_assessment_hash($3))",[legacyContribution,legacyActual,{time:'08:20'},{schemaVersion:'1.0',serviceDate:'2026-10-01',timezone:'Africa/Harare'}]);
+  await db.query("SET CONSTRAINTS public.v2_subject_subtype IMMEDIATE");
+  const legacyActualSnapshot=async()=>Promise.all([db.query("SELECT v2_transport_snapshot($1) snapshot",[legacyActual]),db.query("SELECT to_jsonb(t) row FROM v2_contributions t WHERE id=$1",[legacyContribution]),db.query("SELECT to_jsonb(t) row FROM v2_observations t WHERE original_subject_id=$1 ORDER BY id",[legacyActual])]).then(items=>items.map(item=>item.rows));
+  const upgradeActual=await legacyActualSnapshot();
   const parentSnapshot=async()=>Promise.all(["v2_transport_creation_dependencies","v2_pattern_creation_origins"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
   const upgradeParents=await parentSnapshot();assert.equal(upgradeParents[1]!.length,1);
   const creationSnapshot=async()=>Promise.all(["v2_transport_creations","v2_transport_creation_events","v2_transport_creation_origins","v2_transport_creation_heads"].map(async table=>(await db.query(`SELECT to_jsonb(t) row FROM ${table} t ORDER BY to_jsonb(t)::text`)).rows));
-  const upgradeCreations=await creationSnapshot();assert.equal(upgradeCreations[0]!.length,4);
+  const upgradeCreations=await creationSnapshot();assert.equal(upgradeCreations[0]!.length,6);
   const upgradeOrigins=await originSnapshot();
   const upgradePrompts=await promptSnapshot();
   await db.query("UPDATE v2_operators SET country_code='ZW' WHERE subject_id=$1",[upgradeOperator]);
@@ -190,7 +211,7 @@ before(async () => {
   const upgradePropagation=await propagationSnapshot();
   assert.ok(upgradePropagation[0]!.length>0);
   // Model hosted defaults granting client roles access to newly created tables.
-  //0020 explicitly revokes hosted defaults for the new context operations.
+  //0021 explicitly revokes hosted defaults for actual intake/origin helpers.
   for (const role of ["anon", "authenticated"]) {
     if (!(await db.query("SELECT 1 FROM pg_roles WHERE rolname=$1", [role])).rowCount) {
       await db.query(`CREATE ROLE ${role} NOLOGIN`);
@@ -201,7 +222,7 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0020_service_run_creation.sql/);
+  assert.match(await migrate(), /Applied 0021_actual_journey_intake.sql/);
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -225,6 +246,9 @@ before(async () => {
   assert.deepEqual(await originSnapshot(),upgradeOrigins);
   assert.deepEqual(await creationSnapshot(),upgradeCreations);
   assert.deepEqual(await parentSnapshot(),upgradeParents);
+  assert.deepEqual(await legacyActualSnapshot(),upgradeActual);
+  assert.equal((await db.query("SELECT initial_contribution_id FROM v2_actual_journeys WHERE subject_id=$1",[legacyActual])).rows[0].initial_contribution_id,null);
+  assert.equal((await db.query("SELECT count(*) FROM v2_subject_revisions WHERE subject_id=$1",[legacyActual])).rows[0].count,"0");
   assert.equal((await db.query("SELECT count(*) FROM v2_source_issuers")).rows[0].count,"0");
   preservedIntakeUpgrade = true;
   // Remove only this synthetic setup fixture; each behavioural case rolls back.
@@ -301,7 +325,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 21);
+  assert.equal(ledger.length, 22);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -547,3 +571,5 @@ registerTransportCreationTests(() => ({ db, connectionString, user, other, origi
 registerRoutePatternTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerServiceRunTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

@@ -190,7 +190,7 @@ export function registerTransportTests(context: () => Context) {
     await reject("UPDATE v2_availability_windows SET service_plan_subject_id=$1 WHERE service_plan_subject_id=$2", [unknown, full], ["23503"]);
     await reject("UPDATE v2_service_plans SET mode='fixed_time' WHERE subject_id=$1", [freq], ["23503"]);
     await query("SET CONSTRAINTS ALL IMMEDIATE");
-    assert.equal((await query("SELECT count(*) FROM v2_runs")).rows[0].count, "0");
+    assert.equal((await query("SELECT count(*) FROM v2_runs WHERE service_plan_subject_id=ANY($1::uuid[])", [[fixed,freq,full,demand,unknown]])).rows[0].count, "0");
   });
 
   test("transport: external identities are namespaced, typed and unique only while active", async () => {
