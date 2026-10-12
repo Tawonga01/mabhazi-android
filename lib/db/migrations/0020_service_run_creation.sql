@@ -65,7 +65,7 @@ BEGIN
  ELSIF kind='service_plan' AND o.field_key='service.mode' AND parent IS NOT NULL THEN
   PERFORM public.v2_creation_pattern_context(o.original_subject_id,parent);
   SELECT * INTO pat FROM public.v2_patterns WHERE subject_id=parent;
-  SELECT * INTO pv FROM public.v2_pattern_versions WHERE pattern_subject_id=parent AND version=pat.current_pattern_version AND sealed;
+  SELECT v.* INTO pv FROM public.v2_pattern_versions v WHERE v.pattern_subject_id=parent AND v.version=pat.current_pattern_version AND v.sealed;
   IF pv.pattern_subject_id IS NULL THEN RAISE EXCEPTION 'v2_creation_sealed_pattern_required' USING ERRCODE='23514';END IF;
   lower_date:=o.effective_from;upper_date:=o.effective_to;
   IF lower_date>upper_date OR lower_date<pv.effective_from OR upper_date>pv.effective_to OR upper_date<pv.effective_from OR lower_date>pv.effective_to THEN RAISE EXCEPTION 'v2_creation_service_validity_mismatch' USING ERRCODE='23514';END IF;
@@ -77,7 +77,7 @@ BEGIN
   IF EXISTS(SELECT 1 FROM public.v2_runs r WHERE r.subject_id=o.original_subject_id AND r.service_plan_subject_id<>parent) THEN RAISE EXCEPTION 'v2_creation_run_plan_context_mismatch' USING ERRCODE='23514';END IF;
   IF (o.scope->>'timezone' IS NOT NULL AND o.scope->>'timezone' IS DISTINCT FROM plan.timezone)
    OR (o.scope->>'calendarId' IS NOT NULL AND (o.scope->>'calendarId')::uuid IS DISTINCT FROM plan.calendar_id) THEN RAISE EXCEPTION 'v2_creation_run_temporal_context_mismatch' USING ERRCODE='23514';END IF;
-  SELECT * INTO pv FROM public.v2_pattern_versions WHERE pattern_subject_id=plan.pattern_subject_id AND version=plan.pattern_version AND sealed;
+  SELECT v.* INTO pv FROM public.v2_pattern_versions v WHERE v.pattern_subject_id=plan.pattern_subject_id AND v.version=plan.pattern_version AND v.sealed;
   IF pv.pattern_subject_id IS NULL THEN RAISE EXCEPTION 'v2_creation_sealed_pattern_required' USING ERRCODE='23514';END IF;
   lower_date:=greatest(o.effective_from,(o.scope->>'effectiveFrom')::date);
   upper_date:=least(o.effective_to,(o.scope->>'effectiveTo')::date);service_date:=(o.scope->>'serviceDate')::date;
