@@ -11,7 +11,7 @@ import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import * as SecureStore from "expo-secure-store";
-import { resolveApiBaseUrl } from "@/lib/api-base";
+import { resolveApiBaseUrl, mobileAuthRedirectUri } from "@/lib/api-base";
 import { leadDrafts } from '@/lib/lead-drafts';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -261,7 +261,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async () => {
     if (loginInProgress.current) return;
     loginInProgress.current = true;
-    const redirectUri = "mabhazicom://auth/callback";
+    const redirectUri = mobileAuthRedirectUri();
     // Fresh verifier per attempt. It never leaves this device except over HTTPS
     // to the backend during the single-use code exchange.
     const verifier = (Crypto.randomUUID() + Crypto.randomUUID()).replace(/-/g, "");
@@ -282,7 +282,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
       const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
       if (result.type !== "success") return;
       const callback = new URL(result.url);
-      if (callback.protocol !== "mabhazicom:" || callback.hostname !== "auth" ||
+      if (callback.protocol !== new URL(redirectUri).protocol || callback.hostname !== "auth" ||
           callback.pathname !== "/callback" || callback.username || callback.password ||
           callback.searchParams.has("error")) {
         throw new Error("Google sign-in was not completed.");

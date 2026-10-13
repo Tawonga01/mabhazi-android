@@ -3,6 +3,16 @@
     "appVersionSource": "local"
   },
   "build": {
+    "preview": {
+      "distribution": "internal",
+      "developmentClient": false,
+      "credentialsSource": "remote",
+      "autoIncrement": false,
+      "environment": "preview",
+      "pnpm": "10.26.1",
+      "env": { "EXPO_PUBLIC_APP_VARIANT": "preview" },
+      "android": { "buildType": "apk", "image": "latest" }
+    },
     "production": {
       "distribution": "store",
       "developmentClient": false,

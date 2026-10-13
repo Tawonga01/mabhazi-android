@@ -12,7 +12,10 @@ export function resolveApiBaseUrl(
     process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ||
     process.env.EXPO_PUBLIC_DOMAIN?.trim()
   ),
+  variant = process.env.EXPO_PUBLIC_APP_VARIANT || 'production',
 ): string {
+  if (!['production','preview'].includes(variant)) throw new Error('[Mabhazi] Unknown app variant.');
+  if (variant === 'preview' && !configuredValue) throw new Error('[Mabhazi] Preview API configuration is required.');
   const candidate = configuredValue
     ? /^https?:\/\//i.test(configuredValue)
       ? configuredValue
@@ -24,8 +27,12 @@ export function resolveApiBaseUrl(
     if (url.protocol !== "https:") {
       throw new Error("the API URL must use HTTPS");
     }
+    if (variant === 'preview' && (url.username || url.password || url.pathname !== '/' || url.search || url.hash ||
+      ['api.mabhazi.com','mabhazi.com','www.mabhazi.com'].includes(url.hostname) ||
+      /(^|\.)(replit\.com|replit\.dev|replit\.app|repl\.co)$/.test(url.hostname))) throw new Error('Preview requires an isolated API origin.');
     return url.origin;
   } catch (error) {
+    if (variant === 'preview') throw new Error('[Mabhazi] Preview requires its own valid HTTPS API origin; production fallback is disabled.');
     const isDevelopment =
       typeof __DEV__ !== "undefined" && Boolean(__DEV__);
     if (isDevelopment) {
@@ -42,3 +49,8 @@ export function resolveApiBaseUrl(
 }
 
 export { PRODUCTION_API_BASE_URL };
+
+export function mobileAuthRedirectUri(variant = process.env.EXPO_PUBLIC_APP_VARIANT || 'production'): string {
+  if (!['production','preview'].includes(variant)) throw new Error('[Mabhazi] Unknown app variant.');
+  return variant === 'preview' ? 'mabhazipreview://auth/callback' : 'mabhazicom://auth/callback';
+}

@@ -46,6 +46,8 @@ jobs:
         run: pnpm --dir lib/db run migrate
       - name: Verify minimum-lead HTTP, commit and recovery boundaries
         run: pnpm --dir artifacts/api-server exec tsx --test src/routes/contributionsV2.test.ts src/lib/minimumLead.test.ts tests/leadDraftRecovery.test.ts
+      - name: Verify isolated preview API and native-client target binding
+        run: pnpm --dir artifacts/api-server exec tsx --test src/lib/deploymentTarget.test.ts tests/preview-client.test.ts
       - run: pnpm --dir artifacts/api-server exec tsx --test src/lib/origins.test.ts src/lib/supabaseAuth.test.ts src/lib/identityDeletion.test.ts src/routes/adminAuth.test.ts src/routes/auth.test.ts
       - name: Verify contribution storage and populated upgrade
         run: pnpm --dir lib/db run test:intake

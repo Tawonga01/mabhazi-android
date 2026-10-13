@@ -47,4 +47,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { runReleasePreflight };
+module.exports = { runReleasePreflight, validateApiOrigin };

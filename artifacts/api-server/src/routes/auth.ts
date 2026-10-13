@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { createSupabaseAuth, type SupabaseTokens } from "../lib/supabaseAuth";
 import { Router, type IRouter, type Request, type Response } from "express";
+import { mobileAuthRedirect } from '../lib/deploymentTarget';
 import {
   GetCurrentAuthUserResponse,
   ExchangeMobileAuthorizationCodeResponse,
@@ -229,7 +230,7 @@ router.post("/mobile-auth/start", (req: Request, res: Response) => {
   }
   // Only the registered application callback is accepted, never client input.
   res.setHeader("Cache-Control", "no-store");
-  res.json({ url: createSupabaseAuth().authorizeUrl("mabhazicom://auth/callback", challenge) });
+  res.json({ url: createSupabaseAuth().authorizeUrl(mobileAuthRedirect(), challenge) });
 });
 
 router.post("/mobile-auth/token-exchange", async (req: Request, res: Response) => {

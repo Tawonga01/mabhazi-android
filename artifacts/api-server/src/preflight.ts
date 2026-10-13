@@ -2,6 +2,7 @@ import pg from "pg";
 
 import { getAllowedOrigins } from "./lib/origins";
 import { supabaseConfiguration } from "./lib/supabaseAuth";
+import { validateDeploymentTarget } from './lib/deploymentTarget';
 const REQUIRED_ENVIRONMENT = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_SECRET", "PUBLIC_ORIGIN"] as const;
 
 const requiredColumns: Record<string, readonly string[]> = {
@@ -87,6 +88,7 @@ export async function runProductionPreflight(
   }
 
   validateProductionOrigins(env);
+  validateDeploymentTarget(env);
   supabaseConfiguration(env);
   await verifyDatabaseSchema(env.DATABASE_URL as string);
 }
