@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { draftErrors, emptyLeadDraft, prepareLead, recoverOrSubmit, type LeadDraft } from '../../mobile/lib/minimum-lead-model';
-import { LeadDraftStore, type DraftRecord, type DraftStorage } from '../../mobile/lib/lead-draft-store';
+import { createRequire } from 'node:module';
+import type { LeadDraft } from '../../mobile/lib/minimum-lead-model';
+import type { DraftRecord, DraftStorage } from '../../mobile/lib/lead-draft-store';
+// The mobile package intentionally uses Metro's module mode, not Node ESM.
+// Load its actual exports through tsx's CJS bridge without changing app packaging.
+const require = createRequire(import.meta.url);
+const { draftErrors, emptyLeadDraft, prepareLead, recoverOrSubmit } = require('../../mobile/lib/minimum-lead-model.ts') as typeof import('../../mobile/lib/minimum-lead-model');
+const { LeadDraftStore } = require('../../mobile/lib/lead-draft-store.ts') as typeof import('../../mobile/lib/lead-draft-store');
 const city=(id:number)=>({id,name:'City '+id,placeType:'city'});
 const draft:LeadDraft={origin:city(1),destination:city(2),time:'00:00',operator:'Known bus'};
 const frozen=()=>({actor:'account-a',request:prepareLead(draft,randomUUID())});
