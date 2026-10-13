@@ -1,0 +1,35 @@
+name: API contract generation
+on:
+  pull_request:
+    paths:
+      - 'lib/api-spec/**'
+      - 'lib/api-client-react/**'
+      - 'lib/api-zod/**'
+      - '.github/workflows/api-contract-generation.yml'
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@10.26.1
+      - run: pnpm install --frozen-lockfile
+      - name: Generate actual clients and validators from OpenAPI
+        run: pnpm --dir lib/api-spec exec orval --config ./orval.config.ts
+      - name: Export generated source for connector-only implementation
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          for (const root of ['lib/api-client-react/src/generated','lib/api-zod/src/generated']) {
+            for (const file of fs.readdirSync(root,{recursive:true}).sort()) {
+              const path = root+'/'+file;
+              if (fs.statSync(path).isFile()) console.log('MABHAZI_GENERATED '+JSON.stringify({path,base64:fs.readFileSync(path).toString('base64')}));
+            }
+          }
+          JS
+      - run: pnpm run typecheck:libs
