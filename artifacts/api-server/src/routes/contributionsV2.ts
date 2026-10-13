@@ -33,7 +33,9 @@ router.get('/capabilities', async (_req, res) => {
   try { ready = await enabled(); } catch { /* Fail closed during unavailable schema/database. */ }
   res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready });
 });
-router.use(async (_req, res, next) => {
+router.use(async (req, res, next) => {
+  // Pausing new intake must not prevent an account checking a committed receipt.
+  if (req.method === 'GET' && req.path.startsWith('/receipts/')) { next(); return; }
   try {
     if (!await enabled()) { failure(res, 503, 'CAPABILITY_UNAVAILABLE', 'The new contribution form is not available yet.'); return; }
     next();
@@ -64,10 +66,12 @@ router.get('/receipts/:clientSubmissionId', async (req, res) => {
     res.json({ found: true, initialReceipt: receipt });
   } catch { failure(res, 503, 'TEMPORARILY_UNAVAILABLE', 'The saved receipt could not be checked. Keep this draft and try again.'); }
 });
-router.post('/contributions', requireCurrentTerms, async (req, res) => {
-  if (!req.isAuthenticated()) return;
-  // This is an expected-account assertion, never the authority for actor identity.
+router.post('/contributions', (req, res, next) => {
+  if (!req.isAuthenticated()) { failure(res, 401, 'AUTH_REQUIRED', 'Sign in before submitting.'); return; }
   if (req.get('X-Mabhazi-Account') !== req.user.id) { failure(res, 409, 'ACCOUNT_CHANGED', 'The active account changed. Reopen your own draft.'); return; }
+  next();
+}, requireCurrentTerms, async (req, res) => {
+  if (!req.isAuthenticated()) return;
   // JSON-only writes plus an explicit browser-origin check protect cookie sessions.
   if (!req.is('application/json')) { failure(res, 415, 'JSON_REQUIRED', 'Submit the contribution as JSON.'); return; }
   if (req.headers.origin && !isAllowedOrigin(req.headers.origin) ||

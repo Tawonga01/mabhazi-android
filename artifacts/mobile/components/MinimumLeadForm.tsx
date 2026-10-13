@@ -172,7 +172,7 @@ function AccountLeadForm({ owner, login, openFullForm }: { owner: string | null;
         {owner ? terms.isAccepted ? <Text style={styles.note}>Current Terms accepted.</Text> : <TermsAcceptanceCard terms={terms} /> : <Text style={styles.note}>Sign in with Google to save. Nothing submits automatically. On the web, allow the sign-in popup to keep your draft.</Text>}
         {pending ? <Text style={styles.note}>These answers are locked while a previous save is checked. Reference: {pending.request.clientSubmissionId}</Text> : null}
         {capabilityBusy ? <ActivityIndicator accessibilityLabel="Checking contribution availability" /> : !enabled ? <View><Text style={styles.note}>The new form is not available on this server yet. Your answers are kept.</Text><Pressable style={styles.secondary} onPress={checkCapability}><Text>Check availability again</Text></Pressable></View> : null}
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: !enabled || busy }} disabled={!enabled || busy} style={[styles.button, (!enabled || busy) && styles.disabled]} onPress={submit}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: (!enabled && !pending) || busy }} disabled={(!enabled && !pending) || busy} style={[styles.button, ((!enabled && !pending) || busy) && styles.disabled]} onPress={submit}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{authExpired ? 'Sign in to check saved receipt' : pending ? 'Check and retry' : owner ? 'Save contribution' : 'Sign in to save'}</Text>}
         </Pressable>
       </> : !ready ? <ActivityIndicator accessibilityLabel="Loading saved draft" /> : null}

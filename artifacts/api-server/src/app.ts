@@ -65,5 +65,12 @@ app.use(authMiddleware);
 
 app.use("/api", router);
 
+const v2UnexpectedErrors: ErrorRequestHandler = (_error, _req, res, next) => {
+  if (res.headersSent) { next(_error); return; }
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(503).json({ error: 'The request could not be confirmed. Keep your draft and check its receipt before retrying.', code: 'TEMPORARILY_UNAVAILABLE' });
+};
+app.use('/api/v2', v2UnexpectedErrors);
+
 export default app;
 

@@ -90,6 +90,15 @@ test('minimum API: strict fields and an explicit valid clock, never hidden defau
   const input=body(); assert.equal((await request('/v2/contributions',{...input,actor:accounts[1]})).status,422);
   assert.equal((await request('/v2/contributions',{...input,observations:[{}]})).status,422);
 });
+test('minimum API: paused new intake still permits private committed receipt recovery', async () => {
+  const input=body(), saved=await request('/v2/contributions',input);assert.equal(saved.status,200);
+  delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
+  try {
+    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
+    assert.equal((await request('/v2/contributions',body())).status,503);
+    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value,{found:false});
+  } finally { process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true'; }
+});
 test('minimum API: changed replay conflicts, identical concurrent retry has one logical receipt', async () => {
   const input=body(), results=await Promise.all([request('/v2/contributions',input),request('/v2/contributions',input)]);
   assert.equal(results[0].status,200);assert.equal(results[1].status,200);assert.equal(results[0].value.contributionId,results[1].value.contributionId);

@@ -222,7 +222,12 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  assert.match(await migrate(), /Applied 0021_actual_journey_intake.sql/);
+  const upgradeLog = await migrate();
+  assert.match(upgradeLog, /Applied 0021_actual_journey_intake.sql/);
+  assert.match(upgradeLog, /Applied 0022_minimum_lead_api.sql/);
+  assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
+    has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
+    has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
   assert.doesNotMatch(await migrate(), /Applied /);
   assert.deepEqual((await db.query("SELECT to_jsonb(l) AS lead,to_jsonb(c) AS contribution FROM v2_leads l JOIN v2_contributions c ON c.id=l.initial_contribution_id WHERE l.subject_id=$1", [upgradeSubject])).rows, intakeSnapshot);
   assert.deepEqual((await db.query("SELECT * FROM v2_observations WHERE id=$1", [upgradeObservation.id])).rows[0], upgradeObservation);
@@ -325,7 +330,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 22);
+  assert.equal(ledger.length, 23);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
