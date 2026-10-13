@@ -76,6 +76,8 @@ try {
   {
     const s = await session();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
+    const saveBox=await s.page.getByRole('button',{name:'Save contribution',exact:true}).boundingBox();
+    assert.ok(saveBox && saveBox.y+saveBox.height<=760,'Save should fit above the bottom navigation in the accepted-Terms fixture');
     await s.page.screenshot({path:path.join(output,'minimum-form.png'),fullPage:true});
     await s.fill();
     await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();

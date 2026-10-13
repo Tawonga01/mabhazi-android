@@ -36,8 +36,8 @@ function CityPicker({ title, close, select }: { title: string; close(): void; se
       {busy ? <ActivityIndicator accessibilityLabel="Searching cities" /> : null}
       {error ? <><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Pressable style={styles.secondary} onPress={() => setRetry(value => value + 1)}><Text>Try city search again</Text></Pressable></> : null}
       {!busy && !error && !cities.length ? <Text style={styles.note}>No matching city. Try a different spelling.</Text> : null}
-      <ScrollView keyboardShouldPersistTaps="handled">{cities.map(city => <Pressable key={city.id} style={styles.city} onPress={() => select(city)} accessibilityRole="button" accessibilityLabel={`${city.name}, ${city.placeType}, reference ${city.id}`}>
-        <Text style={styles.label}>{city.name}</Text><Text style={styles.note}>{city.placeType} · Reference {city.id}</Text>
+      <ScrollView keyboardShouldPersistTaps="handled">{cities.map(city => <Pressable key={city.id} style={styles.city} onPress={() => select(city)} accessibilityRole="button" accessibilityLabel={`${city.name}, ${city.placeType}`}>
+        <Text style={styles.label}>{city.name}</Text><Text style={styles.note}>{city.placeType}</Text>
       </Pressable>)}</ScrollView>
     </View>
   </Modal>;
@@ -169,7 +169,7 @@ function AccountLeadForm({ owner, login, openFullForm }: { owner: string | null;
         <Text style={styles.label}>Bus operator *</Text>
         <TextInput ref={operatorRef} accessibilityLabel="Bus operator name" editable={!locked} value={draft.operator} onChangeText={value => update('operator', value)} maxLength={120} placeholder="Bus company name" style={styles.input} />
         {errors.operator ? <Text style={styles.error}>{errors.operator}</Text> : null}
-        {owner ? <TermsAcceptanceCard terms={terms} /> : <Text style={styles.note}>Sign in with Google to save. Your answers stay here during sign-in; nothing submits automatically.</Text>}
+        {owner ? terms.isAccepted ? <Text style={styles.note}>Current Terms accepted.</Text> : <TermsAcceptanceCard terms={terms} /> : <Text style={styles.note}>Sign in with Google to save. Nothing submits automatically. On the web, allow the sign-in popup to keep your draft.</Text>}
         {pending ? <Text style={styles.note}>These answers are locked while a previous save is checked. Reference: {pending.request.clientSubmissionId}</Text> : null}
         {capabilityBusy ? <ActivityIndicator accessibilityLabel="Checking contribution availability" /> : !enabled ? <View><Text style={styles.note}>The new form is not available on this server yet. Your answers are kept.</Text><Pressable style={styles.secondary} onPress={checkCapability}><Text>Check availability again</Text></Pressable></View> : null}
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: !enabled || busy }} disabled={!enabled || busy} style={[styles.button, (!enabled || busy) && styles.disabled]} onPress={submit}>
