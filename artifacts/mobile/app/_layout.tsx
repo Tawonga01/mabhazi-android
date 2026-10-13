@@ -19,6 +19,7 @@ import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/lib/auth";
 import { resolveApiBaseUrl } from "@/lib/api-base";
+import { AccountQueryBoundary } from '@/components/AccountQueryBoundary';
 
 const AUTH_TOKEN_KEY = "mabhazi_session_v2";
 
@@ -82,11 +83,13 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
+            <AccountQueryBoundary>
             <GestureHandlerRootView>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>
             </GestureHandlerRootView>
+            </AccountQueryBoundary>
           </AuthProvider>
         </QueryClientProvider>
       </ErrorBoundary>
@@ -131,3 +134,4 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
 });
+

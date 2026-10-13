@@ -12,6 +12,7 @@ import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import * as SecureStore from "expo-secure-store";
 import { resolveApiBaseUrl } from "@/lib/api-base";
+import { leadDrafts } from '@/lib/lead-drafts';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -101,6 +102,7 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
       } else {
         await storage.removeItem(AUTH_TOKEN_KEY);
         setUser(null);
+        await leadDrafts.clear();
       }
     } catch {
       setUser(null);
@@ -211,6 +213,7 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     await storage.removeItem(AUTH_TOKEN_KEY);
     setUser(null);
+    await leadDrafts.clear();
   }, [apiBase]);
 
   return (
@@ -247,7 +250,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error("Account lookup failed");
       const data = await response.json();
       setUser(data.user ?? null);
-      if (!data.user) await storage.removeItem(AUTH_TOKEN_KEY);
+      if (!data.user) { await storage.removeItem(AUTH_TOKEN_KEY); await leadDrafts.clear(); }
     } finally { setIsLoading(false); }
   }, [apiBase]);
 
@@ -313,6 +316,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
     } finally {
       await storage.removeItem(AUTH_TOKEN_KEY);
       setUser(null);
+      await leadDrafts.clear();
     }
   }, [apiBase]);
 
@@ -333,3 +337,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth(): AuthContextValue {
   return useContext(AuthContext);
 }
+

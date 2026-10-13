@@ -467,10 +467,170 @@ export interface ProposedAssociationsEnvelope {
   proposals: ProposedAssociation[];
 }
 
+export type V2CapabilitiesSchemaVersion =
+  (typeof V2CapabilitiesSchemaVersion)[keyof typeof V2CapabilitiesSchemaVersion];
+
+export const V2CapabilitiesSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export interface V2Capabilities {
+  schemaVersion: V2CapabilitiesSchemaVersion;
+  minimumLeadEnabled: boolean;
+}
+
+export interface V2City {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  id: number;
+  name: string;
+  placeType: string;
+}
+
+export interface V2Cities {
+  /** @maxItems 20 */
+  cities: V2City[];
+}
+
+export interface V2NamedOperator {
+  /**
+   * A trimmed reported bus company name. Unknown, n/a, dash and control characters are invalid. A name is not a resolved operator identity.
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+}
+
+export interface V2MinimumLeadCore {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  originCityId: number;
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  destinationCityId: number;
+  /**
+   * Explicit clock answer. Midnight is valid only when explicitly entered. No default, recurring calendar, date or timezone is inferred.
+   * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+   */
+  departureTime: string;
+  operator: V2NamedOperator;
+}
+
+export interface V2MinimumLeadTarget {
+  newLead: V2MinimumLeadCore;
+}
+
+export type V2MinimumLeadRequestSchemaVersion =
+  (typeof V2MinimumLeadRequestSchemaVersion)[keyof typeof V2MinimumLeadRequestSchemaVersion];
+
+export const V2MinimumLeadRequestSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export type V2MinimumLeadRequestEntrySurface =
+  (typeof V2MinimumLeadRequestEntrySurface)[keyof typeof V2MinimumLeadRequestEntrySurface];
+
+export const V2MinimumLeadRequestEntrySurface = {
+  contribute_tab: "contribute_tab",
+} as const;
+
+export type V2MinimumLeadRequestObservationsItem = { [key: string]: unknown };
+
+export interface V2MinimumLeadRequest {
+  schemaVersion: V2MinimumLeadRequestSchemaVersion;
+  clientSubmissionId: string;
+  entrySurface: V2MinimumLeadRequestEntrySurface;
+  target: V2MinimumLeadTarget;
+  /**
+   * This capability accepts the four minimum answers only. Optional typed facts remain in the full roadmap and are not discarded into legacy fields.
+   * @maxItems 0
+   */
+  observations: V2MinimumLeadRequestObservationsItem[];
+}
+
+export type V2LeadReceiptSaveStatus =
+  (typeof V2LeadReceiptSaveStatus)[keyof typeof V2LeadReceiptSaveStatus];
+
+export const V2LeadReceiptSaveStatus = {
+  saved: "saved",
+} as const;
+
+export type V2LeadReceiptProcessingStatus =
+  (typeof V2LeadReceiptProcessingStatus)[keyof typeof V2LeadReceiptProcessingStatus];
+
+export const V2LeadReceiptProcessingStatus = {
+  queued: "queued",
+} as const;
+
+export type V2LeadReceiptAssociationStatus =
+  (typeof V2LeadReceiptAssociationStatus)[keyof typeof V2LeadReceiptAssociationStatus];
+
+export const V2LeadReceiptAssociationStatus = {
+  unresolved: "unresolved",
+} as const;
+
+export type V2LeadReceiptPublicationStatus =
+  (typeof V2LeadReceiptPublicationStatus)[keyof typeof V2LeadReceiptPublicationStatus];
+
+export const V2LeadReceiptPublicationStatus = {
+  pending: "pending",
+} as const;
+
+export interface V2LeadReceipt {
+  contributionId: string;
+  clientSubmissionId: string;
+  subjectId: string;
+  saveStatus: V2LeadReceiptSaveStatus;
+  processingStatus: V2LeadReceiptProcessingStatus;
+  associationStatus: V2LeadReceiptAssociationStatus;
+  publicationStatus: V2LeadReceiptPublicationStatus;
+  replayed: boolean;
+}
+
+export interface V2ReceiptLookup {
+  found: boolean;
+  initialReceipt?: V2LeadReceipt;
+}
+
+export type V2ErrorFieldErrorsItem = {
+  field: string;
+  message: string;
+};
+
+export interface V2Error {
+  error: string;
+  code: string;
+  currentVersion?: string;
+  fieldErrors?: V2ErrorFieldErrorsItem[];
+}
+
+/**
+ * Safe error with no raw payload, database message, token or private evidence
+ */
+export type V2ErrorResponse = V2Error;
+
+/**
+ * Expected signed-in account ID to reject a token/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.
+ */
+export type ExpectedAccountHeaderParameter = string;
+
 /**
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListV2CitiesParams = {
+  /**
+   * @maxLength 80
+   */
+  q?: string;
+};
 
 export type BeginBrowserLoginParams = {
   returnTo?: string;
@@ -478,8 +638,6 @@ export type BeginBrowserLoginParams = {
 
 export type HandleBrowserLoginCallbackParams = {
   code?: string;
-  state?: string;
-  iss?: string;
 };
 
 export type SearchJourneysParams = {

@@ -8,6 +8,160 @@
 import * as zod from "zod";
 
 /**
+ * @summary Discover the enabled minimum-lead intake contract
+ */
+export const GetV2CapabilitiesResponse = zod.object({
+  schemaVersion: zod.enum(["1.0"]),
+  minimumLeadEnabled: zod.boolean(),
+});
+
+/**
+ * @summary Search cities with stable IDs for new-lead intake
+ */
+export const listV2CitiesQueryQMax = 80;
+
+export const ListV2CitiesQueryParams = zod.object({
+  q: zod.coerce.string().max(listV2CitiesQueryQMax).optional(),
+});
+
+export const listV2CitiesResponseCitiesItemIdMax = 999999999;
+
+export const listV2CitiesResponseCitiesMax = 20;
+
+export const ListV2CitiesResponse = zod.object({
+  cities: zod
+    .array(
+      zod.object({
+        id: zod.number().min(1).max(listV2CitiesResponseCitiesItemIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+    )
+    .max(listV2CitiesResponseCitiesMax),
+});
+
+/**
+ * Server binds the authenticated account and current Terms. Saved does not mean associated, verified or published. This first capability supports minimum new leads only; other observations and target types remain separate future capabilities. No legacy fallback.
+ * @summary Atomically save the four-answer lead and its initial receipt
+ */
+export const submitV2LeadHeaderXMabhaziAccountMax = 256;
+
+export const SubmitV2LeadHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(submitV2LeadHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const submitV2LeadBodyTargetNewLeadOriginCityIdMax = 999999999;
+
+export const submitV2LeadBodyTargetNewLeadDestinationCityIdMax = 999999999;
+
+export const submitV2LeadBodyTargetNewLeadDepartureTimeRegExp = new RegExp(
+  "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+);
+export const submitV2LeadBodyTargetNewLeadOperatorNameMax = 120;
+
+export const submitV2LeadBodyObservationsMax = 0;
+
+export const SubmitV2LeadBody = zod.object({
+  schemaVersion: zod.enum(["1.0"]),
+  clientSubmissionId: zod.string().uuid(),
+  entrySurface: zod.enum(["contribute_tab"]),
+  target: zod.object({
+    newLead: zod.object({
+      originCityId: zod
+        .number()
+        .min(1)
+        .max(submitV2LeadBodyTargetNewLeadOriginCityIdMax),
+      destinationCityId: zod
+        .number()
+        .min(1)
+        .max(submitV2LeadBodyTargetNewLeadDestinationCityIdMax),
+      departureTime: zod
+        .string()
+        .regex(submitV2LeadBodyTargetNewLeadDepartureTimeRegExp)
+        .describe(
+          "Explicit clock answer. Midnight is valid only when explicitly entered. No default, recurring calendar, date or timezone is inferred.",
+        ),
+      operator: zod.object({
+        name: zod
+          .string()
+          .min(1)
+          .max(submitV2LeadBodyTargetNewLeadOperatorNameMax)
+          .describe(
+            "A trimmed reported bus company name. Unknown, n\/a, dash and control characters are invalid. A name is not a resolved operator identity.",
+          ),
+      }),
+    }),
+  }),
+  observations: zod
+    .array(zod.object({}))
+    .max(submitV2LeadBodyObservationsMax)
+    .describe(
+      "This capability accepts the four minimum answers only. Optional typed facts remain in the full roadmap and are not discarded into legacy fields.",
+    ),
+});
+
+export const SubmitV2LeadResponse = zod.object({
+  contributionId: zod.string().uuid(),
+  clientSubmissionId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  saveStatus: zod.enum(["saved"]),
+  processingStatus: zod.enum(["queued"]),
+  associationStatus: zod.enum(["unresolved"]),
+  publicationStatus: zod.enum(["pending"]),
+  replayed: zod.boolean(),
+});
+
+/**
+ * Returns found=false for missing or other-account keys. The initial receipt is historical save confirmation, not a current processing or publication status. Erasure removes the receipt.
+ * @summary Check this account's initial committed receipt before retrying
+ */
+export const GetV2LeadReceiptParams = zod.object({
+  clientSubmissionId: zod.coerce.string().uuid(),
+});
+
+export const getV2LeadReceiptHeaderXMabhaziAccountMax = 256;
+
+export const GetV2LeadReceiptHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2LeadReceiptHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const GetV2LeadReceiptResponse = zod.object({
+  found: zod.boolean(),
+  initialReceipt: zod
+    .object({
+      contributionId: zod.string().uuid(),
+      clientSubmissionId: zod.string().uuid(),
+      subjectId: zod.string().uuid(),
+      saveStatus: zod.enum(["saved"]),
+      processingStatus: zod.enum(["queued"]),
+      associationStatus: zod.enum(["unresolved"]),
+      publicationStatus: zod.enum(["pending"]),
+      replayed: zod.boolean(),
+    })
+    .optional(),
+});
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -41,23 +195,21 @@ export const GetCurrentAuthUserResponse = zod.object({
 });
 
 /**
- * @summary Start the browser OIDC login flow
+ * @summary Start the browser Google login flow through Supabase
  */
 export const BeginBrowserLoginQueryParams = zod.object({
   returnTo: zod.coerce.string().optional(),
 });
 
 /**
- * @summary Complete the browser OIDC login flow
+ * @summary Complete the browser Google login flow through Supabase
  */
 export const HandleBrowserLoginCallbackQueryParams = zod.object({
   code: zod.coerce.string().optional(),
-  state: zod.coerce.string().optional(),
-  iss: zod.coerce.string().url().optional(),
 });
 
 /**
- * @summary Clear the session and begin OIDC logout
+ * @summary Clear the Mabhazi browser session
  */
 export const LogoutBrowserSessionHeader = zod.object({
   Authorization: zod
@@ -67,12 +219,24 @@ export const LogoutBrowserSessionHeader = zod.object({
 });
 
 /**
- * @summary Exchange a mobile OIDC code for a session token
+ * @summary Exchange a Supabase PKCE code for a Mabhazi session token
  */
+export const exchangeMobileAuthorizationCodeBodyCodeMax = 2048;
+
+export const exchangeMobileAuthorizationCodeBodyCodeVerifierMin = 43;
+export const exchangeMobileAuthorizationCodeBodyCodeVerifierMax = 128;
+
+export const exchangeMobileAuthorizationCodeBodyCodeVerifierRegExp = new RegExp(
+  "^[A-Za-z0-9._~-]+$",
+);
 
 export const ExchangeMobileAuthorizationCodeBody = zod.object({
-  code: zod.string().min(1).max(2048),
-  code_verifier: zod.string().min(43).max(128).regex(/^[A-Za-z0-9._~-]+$/),
+  code: zod.string().min(1).max(exchangeMobileAuthorizationCodeBodyCodeMax),
+  code_verifier: zod
+    .string()
+    .min(exchangeMobileAuthorizationCodeBodyCodeVerifierMin)
+    .max(exchangeMobileAuthorizationCodeBodyCodeVerifierMax)
+    .regex(exchangeMobileAuthorizationCodeBodyCodeVerifierRegExp),
 });
 
 export const ExchangeMobileAuthorizationCodeResponse = zod.object({
