@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
-import { draftErrors, emptyLeadDraft, prepareLead, recoverOrSubmit, type LeadDraft } from './minimum-lead-model';
-import { LeadDraftStore, type DraftRecord, type DraftStorage } from './lead-draft-store';
+import { draftErrors, emptyLeadDraft, prepareLead, recoverOrSubmit, type LeadDraft } from '../../mobile/lib/minimum-lead-model';
+import { LeadDraftStore, type DraftRecord, type DraftStorage } from '../../mobile/lib/lead-draft-store';
 const city=(id:number)=>({id,name:'City '+id,placeType:'city'});
 const draft:LeadDraft={origin:city(1),destination:city(2),time:'00:00',operator:'Known bus'};
 const frozen=()=>({actor:'account-a',request:prepareLead(draft,randomUUID())});

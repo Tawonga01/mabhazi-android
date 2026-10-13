@@ -3,6 +3,9 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { before, after, test } from 'node:test';
 import pg from 'pg';
+import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse } from '@workspace/api-zod';
+import type { infer as Infer } from 'zod';
+type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse>;
 
 let admin: pg.Client, server: Server, base: string;
 const accounts = [randomUUID(), randomUUID(), randomUUID()], tokens = accounts.map(() => randomBytes(32).toString('hex'));
@@ -41,7 +44,7 @@ async function request(path: string, input?: unknown, account: number | null = 0
   const headers: Record<string,string> = { ...(input === undefined ? {} : { 'Content-Type':'application/json' }), ...extra };
   if (account !== null) { headers.Authorization = `Bearer ${tokens[account]}`; headers['X-Mabhazi-Account'] ??= accounts[account]; }
   const response = await fetch(base+path, { method: input === undefined ? 'GET' : 'POST', headers, ...(input === undefined ? {} : {body:JSON.stringify(input)}) });
-  return { status:response.status, value:await response.json(), headers:response.headers };
+  return { status:response.status, value:await response.json() as TestPayload, headers:response.headers };
 }
 test('minimum API: capability defaults off and does not write legacy or v2', async () => {
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
@@ -115,7 +118,7 @@ test('minimum API: erased receipt never survives account/contribution deletion o
 });
 test('minimum API: raw byte limit, malformed JSON, JSON-only and browser-origin protections', async () => {
   const headers={'Content-Type':'application/json',Authorization:`Bearer ${tokens[0]}`,'X-Mabhazi-Account':accounts[0]};
-  const huge=await fetch(base+'/v2/contributions',{method:'POST',headers,body:' '.repeat(65537)+'{}'});assert.equal(huge.status,413);assert.equal((await huge.json()).code,'BODY_TOO_LARGE');
+  const huge=await fetch(base+'/v2/contributions',{method:'POST',headers,body:' '.repeat(65537)+'{}'});assert.equal(huge.status,413);assert.equal((await huge.json() as {code:string}).code,'BODY_TOO_LARGE');
   const invalid=await fetch(base+'/v2/contributions',{method:'POST',headers,body:'{"secret":"unterminated'});assert.equal(invalid.status,400);assert.ok(!JSON.stringify(await invalid.json()).includes('unterminated'));
   assert.equal((await request('/v2/contributions',body(),0,{'Content-Type':'text/plain'})).status,415);
   assert.equal((await request('/v2/contributions',body(),0,{Origin:'https://attacker.invalid'})).status,403);

@@ -410,9 +410,10 @@ const EMPTY_FORM: FormData = {
 
 export default function ContributeScreen() {
   const [full, setFull] = useState(false);
+  const insets = useSafeAreaInsets();
   if (!full) return <MinimumLeadForm openFullForm={() => setFull(true)} />;
   return <View style={{ flex: 1 }}>
-    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to minimum route form</Text></TouchableOpacity>
+    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to minimum route form</Text></TouchableOpacity>
     <LegacyContributeScreen />
   </View>;
 }

@@ -169,7 +169,7 @@ function AccountLeadForm({ owner, login, openFullForm }: { owner: string | null;
         <Text style={styles.label}>Bus operator *</Text>
         <TextInput ref={operatorRef} accessibilityLabel="Bus operator name" editable={!locked} value={draft.operator} onChangeText={value => update('operator', value)} maxLength={120} placeholder="Bus company name" style={styles.input} />
         {errors.operator ? <Text style={styles.error}>{errors.operator}</Text> : null}
-        {owner ? <TermsAcceptanceCard /> : <Text style={styles.note}>Sign in with Google to save. Your answers stay here during sign-in; nothing submits automatically.</Text>}
+        {owner ? <TermsAcceptanceCard terms={terms} /> : <Text style={styles.note}>Sign in with Google to save. Your answers stay here during sign-in; nothing submits automatically.</Text>}
         {pending ? <Text style={styles.note}>These answers are locked while a previous save is checked. Reference: {pending.request.clientSubmissionId}</Text> : null}
         {capabilityBusy ? <ActivityIndicator accessibilityLabel="Checking contribution availability" /> : !enabled ? <View><Text style={styles.note}>The new form is not available on this server yet. Your answers are kept.</Text><Pressable style={styles.secondary} onPress={checkCapability}><Text>Check availability again</Text></Pressable></View> : null}
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: !enabled || busy }} disabled={!enabled || busy} style={[styles.button, (!enabled || busy) && styles.disabled]} onPress={submit}>
