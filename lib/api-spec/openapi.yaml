@@ -51,6 +51,7 @@ paths:
       summary: Atomically save the four-answer lead and its initial receipt
       description: Server binds the authenticated account and current Terms. Saved does not mean associated, verified or published. This first capability supports minimum new leads only; other observations and target types remain separate future capabilities. No legacy fallback.
       parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
       requestBody:
@@ -81,6 +82,7 @@ paths:
       summary: Check this account's initial committed receipt before retrying
       description: Returns found=false for missing or other-account keys. The initial receipt is historical save confirmation, not a current processing or publication status. Erasure removes the receipt.
       parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
         - name: clientSubmissionId
@@ -871,6 +873,12 @@ paths:
 
 components:
   parameters:
+    ExpectedAccountHeader:
+      name: X-Mabhazi-Account
+      in: header
+      required: true
+      description: Expected signed-in account ID to reject a token/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.
+      schema: {type: string, minLength: 1, maxLength: 256}
     AuthorizationSessionHeader:
       name: Authorization
       in: header
