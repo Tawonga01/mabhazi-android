@@ -119,7 +119,7 @@ END;$$;
 
 CREATE FUNCTION public.v2_propose_identity_binding(actor varchar,kind text,source uuid,expected_source bigint,target uuid,expected_target bigint,evidence uuid[],context jsonb,request uuid) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE s public.v2_subjects;t public.v2_subjects;receipt public.v2_identity_bindings;digest text;payload jsonb;epoch bigint;result uuid;case_id uuid;o public.v2_observations;prior_map uuid;BEGIN
+DECLARE s public.v2_subjects;t public.v2_subjects;receipt public.v2_identity_bindings;digest text;payload jsonb;epoch bigint;result uuid;case_id uuid;name_observation public.v2_observations;prior_map uuid;BEGIN
  PERFORM pg_advisory_xact_lock(hashtext(actor));UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;PERFORM public.v2_identity_require_actor(actor,kind='external_id');
  IF kind IS NULL OR kind NOT IN('operator_alias','external_id') OR source IS NULL OR target IS NULL OR request IS NULL OR expected_source IS NULL OR expected_target IS NULL
  OR evidence IS NULL OR cardinality(evidence) NOT BETWEEN 1 AND 100 OR cardinality(evidence)<>(SELECT count(DISTINCT x) FROM unnest(evidence) x) OR context IS NULL OR jsonb_typeof(context)<>'object'
@@ -134,9 +134,9 @@ DECLARE s public.v2_subjects;t public.v2_subjects;receipt public.v2_identity_bin
  AND os.status='active' AND o.original_subject_id=source AND public.v2_observation_subject(o.id)=source)<>cardinality(evidence) THEN RAISE EXCEPTION 'identity_evidence_unavailable' USING ERRCODE='23514';END IF;
  IF kind='operator_alias' THEN
   IF t.kind<>'operator' OR cardinality(evidence)<>1 OR context<>'{}'::jsonb THEN RAISE EXCEPTION 'identity_alias_context_invalid' USING ERRCODE='23514';END IF;
-  SELECT * INTO o FROM public.v2_observations WHERE id=evidence[1];
-  IF o.field_key<>'operator.reported' OR NOT o.value ? 'name' THEN RAISE EXCEPTION 'identity_alias_name_proof_required' USING ERRCODE='23514';END IF;
-  payload:=jsonb_build_object('name',o.value->>'name','key',public.v2_operator_search_key(o.value->>'name'));
+  SELECT * INTO name_observation FROM public.v2_observations WHERE id=evidence[1];
+  IF name_observation.field_key<>'operator.reported' OR NOT name_observation.value ? 'name' THEN RAISE EXCEPTION 'identity_alias_name_proof_required' USING ERRCODE='23514';END IF;
+  payload:=jsonb_build_object('name',name_observation.value->>'name','key',public.v2_operator_search_key(name_observation.value->>'name'));
  ELSE
   IF NOT context ?& ARRAY['namespace','externalId','version'] OR context-ARRAY['namespace','externalId','version']<>'{}'::jsonb
   OR EXISTS(SELECT 1 FROM jsonb_each(context) e WHERE jsonb_typeof(e.value)<>'string') THEN RAISE EXCEPTION 'identity_mapping_context_invalid' USING ERRCODE='23514';END IF;
