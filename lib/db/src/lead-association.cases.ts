@@ -9,14 +9,17 @@ export function registerLeadAssociationTests(context:()=>Context){
   await q('SAVEPOINT association_reject');try{await assert.rejects(action,(e:unknown)=>e instanceof Error && 'code' in e && String(e.code)===code);}
   finally{await q('ROLLBACK TO SAVEPOINT association_reject');await q('RELEASE SAVEPOINT association_reject');}
  }
- async function subject(kind:string,id=randomUUID()){await q('INSERT INTO v2_subjects(id,kind) VALUES($1,$2)',[id,kind]);return id;}
+ async function subject(kind:string,id=randomUUID()){await q('SET CONSTRAINTS public.v2_subject_subtype DEFERRED');await q('INSERT INTO v2_subjects(id,kind) VALUES($1,$2)',[id,kind]);return id;}
  async function operator(){const id=await subject('operator');await q("INSERT INTO v2_operators(subject_id,display_name) VALUES($1,'Same printed name')",[id]);return id;}
- async function fresh(options:{owner?:string;operatorId?:string;time?:string;reverse?:boolean}={}){
+ async function fresh(options:{owner?:string;operatorId?:string;time?:string;reverse?:boolean;basis?:'actual'|'scheduled'}={}){
   const owner=options.owner||context().user;await q("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=clock_timestamp() WHERE id=$1",[owner]);
   const request={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{
    originCityId:options.reverse?context().destination:context().origin,destinationCityId:options.reverse?context().origin:context().destination,
-   departureTime:options.time||'07:00',operator:options.operatorId?{id:options.operatorId}:{name:'Same printed name'}}},observations:[]};
-  const receipt=(await q("SELECT v2_api_submit_minimum_lead($1,'2026-09-12',$2) r",[owner,request])).rows[0].r;
+   departureTime:options.time||'07:00',operator:options.operatorId?{id:options.operatorId}:{name:'Same printed name'}}},observations:[],...(options.basis?{leadContext:{timeBasis:options.basis}}:{})};
+  // Public minimum capability stays name-only. Resolved/context fixtures use
+  // the existing owner-only typed writer, without broadening that API grant.
+  const sql=options.operatorId||options.basis?"SELECT v2_submit_lead($1,'2026-09-12',$2) r":"SELECT v2_api_submit_minimum_lead($1,'2026-09-12',$2) r";
+  const receipt=(await q(sql,[owner,request])).rows[0].r;
   const normalise=(await q("SELECT * FROM v2_jobs WHERE contribution_id=$1 AND kind='normalise'",[receipt.contributionId])).rows[0];
   await q("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE state='pending' AND kind='normalise' AND id<>$1",[normalise.id]);
   const w=(await q('SELECT to_jsonb(v2_worker_claim_normalise()) w')).rows[0].w;assert.equal(w.id,normalise.id);
@@ -57,6 +60,7 @@ export function registerLeadAssociationTests(context:()=>Context){
   await q('UPDATE v2_pattern_versions SET sealed=true WHERE pattern_subject_id=$1',[id]);return id;
  }
  async function addPatterns(route:string,stops:string[],count:number){
+  await q('SET CONSTRAINTS public.v2_subject_subtype DEFERRED');
   await q(`DO $$ DECLARE p uuid; BEGIN FOR n IN 1..${count} LOOP p:=gen_random_uuid();
    INSERT INTO v2_subjects(id,kind) VALUES(p,'pattern');
    INSERT INTO v2_patterns(subject_id,route_subject_id,corridor_id,current_pattern_version) VALUES(p,'${route}','${context().corridor}',1);
@@ -93,6 +97,12 @@ export function registerLeadAssociationTests(context:()=>Context){
   const op=await operator(),s=await structure(op);const afternoon=await subject('run');await q('INSERT INTO v2_runs(subject_id,service_plan_subject_id,pattern_subject_id,pattern_version,departure_seconds) VALUES($1,$2,$3,1,50400)',[afternoon,s.plan,s.p]);
   const a=await fresh({operatorId:op});await execute(a);const c=await candidates(a.subjectId);assert.ok(c.some(c=>c.to_subject_id===s.run));assert.ok(!c.some(c=>c.to_subject_id===afternoon));
   assert.equal((await q('SELECT departure_seconds FROM v2_runs WHERE subject_id=$1',[afternoon])).rows[0].departure_seconds,50400);
+ });
+ test('association worker: an actual clock cannot supply a scheduled-run identity',async()=>{
+  const op=await operator(),s=await structure(op),a=await fresh({operatorId:op,basis:'actual'});await execute(a);assert.ok(!(await candidates(a.subjectId)).some(c=>c.to_subject_id===s.run));
+ });
+ test('association worker: retired run parents are excluded from service candidates',async()=>{
+  const op=await operator(),s=await structure(op),a=await fresh({operatorId:op});await q("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[s.plan]);await execute(a);assert.ok(!(await candidates(a.subjectId)).some(c=>c.to_subject_id===s.run));
  });
  test('association worker: one lead may retain multiple ambiguous matching runs',async()=>{
   const op=await operator(),s=await structure(op);const second=await subject('run');await q('INSERT INTO v2_runs(subject_id,service_plan_subject_id,pattern_subject_id,pattern_version,departure_seconds) VALUES($1,$2,$3,1,25200)',[second,s.plan,s.p]);
