@@ -380,3 +380,17 @@ DO $identity_patch$ DECLARE definition text;body text;secure boolean;settings te
     WHERE observation_id=ANY(ARRAY[n.operator_observation_id,n.departure_observation_id,target_lead.operator_observation_id,target_lead.departure_observation_id]))) || CASE WHEN alias_context->>'status' IN('resolved','ambiguous') THEN jsonb_build_object('aliasContext',alias_context) ELSE '{}'::jsonb END);$new3$,chr(13)||chr(10),chr(10)));
  EXECUTE definition;
 END;$identity_patch$;
+
+DO $erase_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
+ SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_erase_review_evidence()'::regprocedure;
+ body:=replace(body,chr(13)||chr(10),chr(10));definition:=replace(definition,chr(13)||chr(10),chr(10));
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'a7e01a56d9b30b262e2365abc37723791720db4fbb00643a52e8e499c4c1432a' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'identity_prior_erase_function_changed';END IF;
+ IF position($erase_old$UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE case_id=ANY(changed_cases);$erase_old$ IN definition)=0 THEN RAISE EXCEPTION 'identity_erase_anchor_missing';END IF;
+ definition:=replace(definition,$erase_old$UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE case_id=ANY(changed_cases);$erase_old$,replace($erase_new$-- A single statement may delete both the reporter and a decision actor.
+  -- Clear an actor already absent in this statement before a redaction rechecks its FK.
+  -- The existing immutable-history trigger sets actor_erased and removes private notes.
+  UPDATE public.v2_review_decisions d SET actor_user_id=NULL WHERE d.case_id=ANY(changed_cases) AND d.actor_user_id IS NOT NULL
+   AND NOT EXISTS(SELECT 1 FROM public.users u WHERE u.id=d.actor_user_id);
+  UPDATE public.v2_review_decisions SET evidence_erased=true,private_reason=NULL WHERE case_id=ANY(changed_cases);$erase_new$,chr(13)||chr(10),chr(10)));
+ EXECUTE definition;
+END;$erase_patch$;
