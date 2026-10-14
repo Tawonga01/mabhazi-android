@@ -186,7 +186,7 @@ DECLARE p public.v2_identity_bindings;s public.v2_subjects;t public.v2_subjects;
  SELECT * INTO s FROM public.v2_subjects WHERE id=p.source_subject_id FOR UPDATE;SELECT * INTO t FROM public.v2_subjects WHERE id=p.target_subject_id FOR UPDATE;
  IF r.id IS NULL OR r.case_id<>p.case_id OR r.action<>'accept' OR r.actor_erased OR r.evidence_erased OR c.last_decision_id IS DISTINCT FROM approval OR c.candidate_id IS NOT NULL OR c.state<>'resolved'
  OR r.expected_subject_revision<>p.expected_source_revision OR s.lifecycle<>'active' OR s.revision<>p.expected_source_revision+1 OR s.input_generation<>p.expected_source_generation+1
- OR t.revision<>p.expected_target_revision+CASE WHEN s.id=t.id THEN 1 ELSE 0 END OR t.input_generation<>p.expected_target_generation+CASE WHEN s.id=t.id THEN 1 ELSE 0 END
+ OR t.revision<>p.expected_target_revision+(CASE WHEN s.id=t.id THEN 1 ELSE 0 END) OR t.input_generation<>p.expected_target_generation+(CASE WHEN s.id=t.id THEN 1 ELSE 0 END)
  OR NOT public.v2_identity_target_current(t.id) THEN RAISE EXCEPTION 'identity_apply_context_changed' USING ERRCODE='40001';END IF;
  SELECT array_agg(observation_id ORDER BY observation_id) INTO ids FROM public.v2_identity_binding_evidence WHERE binding_id=binding;
  IF ids IS NULL OR cardinality(ids)<>(SELECT count(*) FROM public.v2_review_decision_evidence WHERE decision_id=approval)
