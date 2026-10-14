@@ -37,3 +37,4 @@ export * from "./transportCreation";
 export * from "./routePatternCreation";
 
 export * from "./processing";
+export * from "./identityLookup";

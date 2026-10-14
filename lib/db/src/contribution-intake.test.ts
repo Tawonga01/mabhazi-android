@@ -11,6 +11,8 @@ import { processingTables } from "./schema/processing";
 import { registerProcessingTests } from "./processing.cases";
 import { registerLeadAssociationTests } from "./lead-association.cases";
 import { registerPatternAssociationTests } from "./pattern-association.cases";
+import { identityLookupTables } from "./schema/identityLookup";
+import { registerIdentityLookupTests } from "./identity-lookup.cases";
 import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
@@ -267,6 +269,13 @@ before(async () => {
     assert.equal((await db.query("SELECT to_regclass('public.v2_pattern_catalog') t")).rows[0].t,null);
     assert.equal((await db.query('SELECT count(*) n FROM mabhazi_migrations.applied')).rows[0].n,'25');
   }
+  // The hosted editor stores CRLF inside whole SQL scripts as well as prior bodies.
+  for(const name of ['0025_pattern_association_worker.sql','0026_identity_lookup.sql']){
+    const canonical=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');
+    await db.query('BEGIN');await db.query(name.startsWith('0026')?canonical.replace(/\r?\n/g,'\r\n'):canonical);
+    await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(canonical).digest('hex')]);
+    await db.query('COMMIT');previousStageLog+=`Applied ${name}\n`;
+  }
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
@@ -278,6 +287,7 @@ before(async () => {
   assert.match(upgradeLog, /Applied 0023_normalise_worker.sql/);
   assert.match(upgradeLog, /Applied 0024_lead_association_worker.sql/);
   assert.match(upgradeLog, /Applied 0025_pattern_association_worker.sql/);
+  assert.match(upgradeLog, /Applied 0026_identity_lookup.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -383,7 +393,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 26);
+  assert.equal(ledger.length, 27);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -392,7 +402,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...processingTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
+  for (const table of [...intakeTables, ...processingTables, ...identityLookupTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -576,10 +586,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...processingTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
+  const tables = [...intakeTables, ...processingTables, ...identityLookupTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_jobs", "v2_job_effects", ...processingTables.map(getTableName), "v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_jobs", "v2_job_effects", ...processingTables.map(getTableName), ...identityLookupTables.map(getTableName), "v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -636,3 +646,4 @@ registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, de
 registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+registerIdentityLookupTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

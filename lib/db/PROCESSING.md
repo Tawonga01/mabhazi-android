@@ -46,3 +46,7 @@ Private support links retain structural-origin observations. Withdrawal/deletion
 
 Migration0025 checks prior worker/review body hashes, SECURITY DEFINER and pinned search_path before adapting existing fences. Original0000–0024 remain immutable. Private helpers deny hosted clients/backend direct execution; the existing API facades remain fenced. A one-time activation queues pre-existing eligible patterns after live approval; new/sealed/changed patterns enqueue automatically. Exact CI, preview activation, independent-run proof and full remaining import/correction/actual-journey/reviewer/UI/evidence/publication/device/recovery work are tracked separately.
 
+# Reviewed identity lookup integration
+
+Migration0026 adds [reviewed aliases and namespaced mappings](IDENTITY-LOOKUP.md). The lead consumer preserves reported-name identity and adds reviewed/ambiguous alias hints to corridor candidates; catalog wakeups and erasure clear stale candidate projections. The current public minimum contract and existing worker facade/policy stay unchanged. Source-ID readers are ready for later import integration; no actual feed or public review workflow is completed by this migration.
+
