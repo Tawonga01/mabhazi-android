@@ -250,6 +250,23 @@ before(async () => {
   const workerSnapshot = async () => Promise.all(["v2_contributions","v2_receipts","v2_observations","v2_jobs"].map(async table =>
     (await db.query(`SELECT to_jsonb(t) row FROM ${table} t WHERE ${table === "v2_contributions" ? "id" : "contribution_id"}=$1 ORDER BY to_jsonb(t)::text`, [workerUpgrade.contributionId])).rows));
   const beforeWorker = await workerSnapshot();
+  // Exercise the actual hosted editor representation, preserving all function ACLs and fences.
+  const patternPriorNames=['v2_worker_finish_associate','v2_worker_claim_associate','v2_worker_heartbeat_associate','v2_worker_fail_associate','v2_worker_retry_associate','v2_association_catalog_change','v2_record_review','v2_apply_association_decision','v2_worker_drain_associate'];
+  const priorDefinitions=(await db.query('SELECT oid::regprocedure::text signature,pg_get_functiondef(oid) definition FROM pg_proc WHERE pronamespace=\'public\'::regnamespace AND proname=ANY($1::text[])',[patternPriorNames])).rows;
+  assert.equal(priorDefinitions.length,9);
+  for(const p of priorDefinitions)await db.query(p.definition.replace(/\r?\n/g,'\r\n'));
+  assert.equal((await db.query('SELECT count(*) n FROM pg_proc WHERE pronamespace=\'public\'::regnamespace AND proname=ANY($1::text[]) AND position(chr(13) IN prosrc)>0',[patternPriorNames])).rows[0].n,'9');
+  const patternMigration=await readFile(new URL('../migrations/0025_pattern_association_worker.sql',import.meta.url),'utf8');
+  const priorFinish=priorDefinitions.find(p=>p.signature==='v2_worker_finish_associate(uuid,uuid)')!;
+  // Line endings may vary; an unrecorded body or fence change must still abort the entire upgrade.
+  for(const changed of [priorFinish.definition.replace('AS $function$','AS $function$\n-- unrecorded body change'),priorFinish.definition.replace('SECURITY DEFINER','SECURITY INVOKER'),priorFinish.definition.replace('SET search_path TO \'pg_catalog\'','SET search_path TO \'public\'')]){
+    assert.notEqual(changed,priorFinish.definition);
+    await db.query('BEGIN');await db.query(changed);
+    await assert.rejects(()=>db.query(patternMigration),(e:unknown)=>e instanceof Error && e.message.includes('pattern_prior_function_changed'));
+    await db.query('ROLLBACK');
+    assert.equal((await db.query("SELECT to_regclass('public.v2_pattern_catalog') t")).rows[0].t,null);
+    assert.equal((await db.query('SELECT count(*) n FROM mabhazi_migrations.applied')).rows[0].n,'25');
+  }
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
