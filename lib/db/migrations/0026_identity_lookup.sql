@@ -239,10 +239,15 @@ CREATE FUNCTION public.v2_invalidate_identity_binding(binding uuid,erase boolean
 DECLARE p public.v2_identity_bindings;BEGIN
  SELECT * INTO p FROM public.v2_identity_bindings WHERE id=binding FOR UPDATE;
  IF p.id IS NULL OR p.erased OR (NOT erase AND p.state IN('invalidated','reversed','rejected')) THEN RETURN;END IF;
+ -- Referential actor cleanup may still be pending in a multi-account DELETE.
+ IF p.actor_user_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.users WHERE id=p.actor_user_id) THEN
+  UPDATE public.v2_identity_bindings SET actor_user_id=NULL WHERE id=binding;RETURN;
+ END IF;
  UPDATE public.v2_identity_bindings SET state=CASE WHEN erase THEN 'erased' WHEN reverse THEN 'reversed' ELSE 'invalidated' END,
  erased=erased OR erase,payload=CASE WHEN erase THEN NULL ELSE payload END,request_digest=CASE WHEN erase THEN NULL ELSE request_digest END WHERE id=binding;
  PERFORM public.v2_identity_detach(binding,erase);
- INSERT INTO public.v2_identity_binding_events(binding_id,operation,review_decision_id) VALUES(binding,CASE WHEN erase THEN 'erased' WHEN reverse THEN 'reversed' ELSE 'invalidated' END,p.review_decision_id);
+ INSERT INTO public.v2_identity_binding_events(binding_id,operation,review_decision_id) VALUES(binding,CASE WHEN erase THEN 'erased' WHEN reverse THEN 'reversed' ELSE 'invalidated' END,
+ CASE WHEN reverse THEN (SELECT last_decision_id FROM public.v2_review_cases WHERE id=p.case_id) ELSE p.review_decision_id END);
 END;$$;
 CREATE FUNCTION public.v2_reverse_identity_binding(actor varchar,binding uuid,expected_case bigint,reason text) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -330,6 +335,30 @@ CREATE FUNCTION public.v2_identity_alias_change() RETURNS trigger LANGUAGE plpgs
  END IF;RETURN NEW;
 END;$$;
 CREATE TRIGGER v2_identity_alias_change AFTER INSERT OR UPDATE ON public.v2_operator_aliases FOR EACH ROW EXECUTE FUNCTION public.v2_identity_alias_change();
+
+-- Generic review primitives must respect this bound workflow too; authority is not a UI convention.
+CREATE FUNCTION public.v2_identity_case_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$ BEGIN
+ IF EXISTS(SELECT 1 FROM public.v2_identity_bindings WHERE case_id=NEW.id) AND
+  (NEW.subject_id,NEW.subject_kind,NEW.kind,NEW.field_key,NEW.scope_key,NEW.candidate_id) IS DISTINCT FROM
+  (OLD.subject_id,OLD.subject_kind,OLD.kind,OLD.field_key,OLD.scope_key,OLD.candidate_id) THEN RAISE EXCEPTION 'identity_case_sealed' USING ERRCODE='23514';END IF;
+ RETURN NEW;
+END;$$;
+CREATE TRIGGER v2_identity_case_guard BEFORE UPDATE ON public.v2_review_cases FOR EACH ROW EXECUTE FUNCTION public.v2_identity_case_guard();
+CREATE FUNCTION public.v2_identity_review_guard() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE p public.v2_identity_bindings;s public.v2_subjects;t public.v2_subjects;BEGIN
+ SELECT * INTO p FROM public.v2_identity_bindings WHERE case_id=NEW.case_id;IF NOT FOUND THEN RETURN NEW;END IF;
+ PERFORM public.v2_identity_require_actor(NEW.actor_user_id,p.kind='external_id');
+ IF p.erased OR NEW.policy_version<>'identity-lookup/1' OR NEW.action NOT IN('accept','reject','needs_context','reverse') THEN RAISE EXCEPTION 'identity_bound_review_required' USING ERRCODE='23514';END IF;
+ IF NEW.action='reverse' THEN
+  IF p.state<>'applied' OR NEW.reverses_decision_id IS DISTINCT FROM p.review_decision_id OR NOT public.v2_identity_binding_current(p.id) THEN RAISE EXCEPTION 'identity_reverse_context_changed' USING ERRCODE='40001';END IF;
+ ELSE
+  SELECT * INTO s FROM public.v2_subjects WHERE id=p.source_subject_id;SELECT * INTO t FROM public.v2_subjects WHERE id=p.target_subject_id;
+  IF p.state<>'pending' OR NEW.expected_subject_revision<>p.expected_source_revision OR s.revision<>p.expected_source_revision OR s.input_generation<>p.expected_source_generation
+  OR t.revision<>p.expected_target_revision OR t.input_generation<>p.expected_target_generation OR NOT public.v2_identity_target_current(t.id)
+  THEN RAISE EXCEPTION 'identity_bound_review_context_changed' USING ERRCODE='40001';END IF;
+ END IF;RETURN NEW;
+END;$$;
+CREATE TRIGGER v2_identity_review_guard BEFORE INSERT ON public.v2_review_decisions FOR EACH ROW EXECUTE FUNCTION public.v2_identity_review_guard();
 
 -- Names and external IDs stay private to the restricted backend. Mutation facades remain owner-only.
 DO $$ DECLARE t text;r text;f record;BEGIN
