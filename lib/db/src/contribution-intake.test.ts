@@ -10,6 +10,7 @@ import pg from "pg";
 import { processingTables } from "./schema/processing";
 import { registerProcessingTests } from "./processing.cases";
 import { registerLeadAssociationTests } from "./lead-association.cases";
+import { registerPatternAssociationTests } from "./pattern-association.cases";
 import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
@@ -225,9 +226,9 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  // Exercise0024 with a committed0023 projection and pending association intent.
+  // Exercise0025 with committed0024 input and pending lead association intent.
   let previousStageLog = "";
-  for (const name of ["0021_actual_journey_intake.sql", "0022_minimum_lead_api.sql", "0023_normalise_worker.sql"]) {
+  for (const name of ["0021_actual_journey_intake.sql", "0022_minimum_lead_api.sql", "0023_normalise_worker.sql", "0024_lead_association_worker.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await db.query("BEGIN"); await db.query(sql);
     await db.query("INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)", [name, createHash("sha256").update(sql).digest("hex")]);
@@ -259,6 +260,7 @@ before(async () => {
   assert.match(upgradeLog, /Applied 0022_minimum_lead_api.sql/);
   assert.match(upgradeLog, /Applied 0023_normalise_worker.sql/);
   assert.match(upgradeLog, /Applied 0024_lead_association_worker.sql/);
+  assert.match(upgradeLog, /Applied 0025_pattern_association_worker.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -364,7 +366,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 25);
+  assert.equal(ledger.length, 26);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -616,3 +618,4 @@ registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, de
 
 registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

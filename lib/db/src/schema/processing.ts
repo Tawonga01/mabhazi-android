@@ -1,4 +1,4 @@
-import { bigint, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, integer, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 // Internal derived projection. Versioned SQL owns constraints, access and erasure.
 export const v2NormalisedLeadsTable = pgTable('v2_normalised_leads', {
@@ -24,4 +24,16 @@ export const v2AssociationScansTable = pgTable('v2_association_scans', {
   catalogRevision: bigint('catalog_revision', { mode: 'bigint' }).notNull(), inputDigest: text('input_digest').notNull(),
   cursorSubjectId: uuid('cursor_subject_id'), pagesCompleted: integer('pages_completed').notNull().default(0),
 });
-export const processingTables = [v2NormalisedLeadsTable, v2WorkerStatusTable, v2AssociationCatalogTable, v2AssociationScansTable] as const;
+export const v2PatternCatalogTable = pgTable('v2_pattern_catalog', {
+  routeSubjectId: uuid('route_subject_id').primaryKey(), revision: bigint('revision', { mode: 'bigint' }).notNull(),
+});
+export const v2PatternScansTable = pgTable('v2_pattern_scans', {
+  jobId: uuid('job_id').primaryKey(), subjectId: uuid('subject_id').notNull(),
+  sourceRevision: bigint('source_revision', { mode: 'bigint' }).notNull(), routeRevision: bigint('route_revision', { mode: 'bigint' }).notNull(),
+  corridorRevision: bigint('corridor_revision', { mode: 'bigint' }).notNull(), inputDigest: text('input_digest').notNull(),
+  cursorSubjectId: uuid('cursor_subject_id'), cursorKey: text('cursor_key'), pagesCompleted: integer('pages_completed').notNull().default(0),
+});
+export const v2PatternCandidateSupportTable = pgTable('v2_pattern_candidate_support', {
+  candidateId: uuid('candidate_id').notNull(), observationId: uuid('observation_id').notNull(),
+}, t => [primaryKey({ columns: [t.candidateId,t.observationId] })]);
+export const processingTables = [v2NormalisedLeadsTable, v2WorkerStatusTable, v2AssociationCatalogTable, v2AssociationScansTable, v2PatternCatalogTable, v2PatternScansTable, v2PatternCandidateSupportTable] as const;
