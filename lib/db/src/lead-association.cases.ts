@@ -106,7 +106,7 @@ export function registerLeadAssociationTests(context:()=>Context){
  });
  test('association worker: one lead may retain multiple ambiguous matching runs',async()=>{
   const op=await operator(),s=await structure(op);const second=await subject('run');await q('INSERT INTO v2_runs(subject_id,service_plan_subject_id,pattern_subject_id,pattern_version,departure_seconds) VALUES($1,$2,$3,1,25200)',[second,s.plan,s.p]);
-  const a=await fresh({operatorId:op});await execute(a);assert.equal((await candidates(a.subjectId)).filter(c=>c.relation==='same_service').length,2);assert.equal((await q('SELECT count(*) n FROM v2_association_links')).rows[0].n,'0');
+  const a=await fresh({operatorId:op});await execute(a);assert.equal((await candidates(a.subjectId)).filter(c=>c.relation==='same_service').length,2);assert.equal((await q('SELECT count(*) n FROM v2_association_links WHERE from_subject_id=$1',[a.subjectId])).rows[0].n,'0');
  });
  test('association worker: candidate retries deduplicate without rewriting sealed evidence',async()=>{
   const a=await fresh(),b=await fresh();const w=await execute(a),before=await candidates(a.subjectId);assert.equal(await finish(w),'lease_lost');
