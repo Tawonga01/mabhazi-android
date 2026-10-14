@@ -7,6 +7,8 @@ import { after, before, beforeEach, afterEach, test } from "node:test";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import pg from "pg";
+import { processingTables } from "./schema/processing";
+import { registerProcessingTests } from "./processing.cases";
 import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
@@ -222,9 +224,30 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  const upgradeLog = await migrate();
+  // Exercise0023 against a real minimum save already committed under0022.
+  let previousStageLog = "";
+  for (const name of ["0021_actual_journey_intake.sql", "0022_minimum_lead_api.sql"]) {
+    const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
+    await db.query("BEGIN"); await db.query(sql);
+    await db.query("INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)", [name, createHash("sha256").update(sql).digest("hex")]);
+    await db.query("COMMIT"); previousStageLog += `Applied ${name}\n`;
+  }
+  const workerUpgradeUser = randomUUID();
+  await db.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',clock_timestamp())", [workerUpgradeUser]);
+  const workerUpgrade = (await db.query("SELECT v2_api_submit_minimum_lead($1,'2026-09-12',$2) r", [workerUpgradeUser, {
+    schemaVersion:"1.0", clientSubmissionId:randomUUID(), entrySurface:"contribute_tab",
+    target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"08:00",operator:{name:"Pre-worker reported bus"}}}, observations:[]
+  }])).rows[0].r;
+  const workerSnapshot = async () => Promise.all(["v2_contributions","v2_receipts","v2_observations","v2_jobs"].map(async table =>
+    (await db.query(`SELECT to_jsonb(t) row FROM ${table} t WHERE ${table === "v2_contributions" ? "id" : "contribution_id"}=$1 ORDER BY to_jsonb(t)::text`, [workerUpgrade.contributionId])).rows));
+  const beforeWorker = await workerSnapshot();
+  const upgradeLog = previousStageLog + await migrate();
+  assert.deepEqual(await workerSnapshot(), beforeWorker);
+  assert.equal(beforeWorker[1]!.length,1); assert.equal(beforeWorker[2]!.length,2); assert.equal(beforeWorker[3]!.length,1);
+
   assert.match(upgradeLog, /Applied 0021_actual_journey_intake.sql/);
   assert.match(upgradeLog, /Applied 0022_minimum_lead_api.sql/);
+  assert.match(upgradeLog, /Applied 0023_normalise_worker.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -330,7 +353,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 23);
+  assert.equal(ledger.length, 24);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -339,7 +362,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
+  for (const table of [...intakeTables, ...processingTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -523,10 +546,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
+  const tables = [...intakeTables, ...processingTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_jobs", "v2_job_effects", ...processingTables.map(getTableName), "v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -538,7 +561,8 @@ test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while perm
     await db.query("RESET ROLE");
   }
   await db.query("SET LOCAL ROLE mabhazi_api");
-  const c = await lead(); await observation(c); await receipt(c); await job(c);
+  const c = await lead(); await observation(c); await receipt(c);
+  await rejectQuery("INSERT INTO v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id) VALUES('normalise',$1,1,'intake/1',gen_random_uuid())", [c.subjectId], ["42501"]);
   await db.query("SET CONSTRAINTS ALL IMMEDIATE");
   await db.query("DELETE FROM users WHERE id=$1", [user]);
   await db.query("RESET ROLE");
@@ -578,3 +602,5 @@ registerRoutePatternTests(() => ({ db, connectionString, user, other, origin, de
 registerServiceRunTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
