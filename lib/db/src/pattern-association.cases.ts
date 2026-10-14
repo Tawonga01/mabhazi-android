@@ -38,6 +38,8 @@ export function registerPatternAssociationTests(context:()=>Context){
   await q("INSERT INTO v2_observations(id,contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,$3,'pattern.stops',$4,'{}',v2_assessment_hash('{}'::jsonb),v2_assessment_hash($4::jsonb))",[o,c,p.id,value]);return {c,o,owner};
  }
  async function review(c:Record<string,any>,action='accept',evidence?:string[],reverse:string|null=null){
+  // Creation facades flush deferred checks; this fixture assembles review/association subtypes atomically.
+  await q('SET CONSTRAINTS ALL DEFERRED');
   await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture_role') ON CONFLICT DO NOTHING",[context().other]);
   let id=c.caseId as string|undefined;if(!id){id=(await q("SELECT v2_open_review_case($1,$2,'identity',NULL,NULL) id",[context().other,c.from_subject_id])).rows[0].id;await q('UPDATE v2_review_cases SET candidate_id=$1 WHERE id=$2',[c.id,id]);}
   const state=(await q('SELECT r.revision,s.revision subject_revision FROM v2_review_cases r JOIN v2_subjects s ON s.id=r.subject_id WHERE r.id=$1',[id])).rows[0];
