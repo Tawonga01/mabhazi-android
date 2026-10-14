@@ -130,7 +130,7 @@ END; $$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_finish_associate(uuid,uuid)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'220f0f9027422361042e78c9578af4c4b70ff651e7bca05579a94618e8f19939' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'220f0f9027422361042e78c9578af4c4b70ff651e7bca05579a94618e8f19939' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$v2_worker_finish_associate($old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$v2_worker_finish_associate($old0$,$new0$v2_worker_finish_lead($new0$);
  EXECUTE definition;
@@ -361,7 +361,7 @@ CREATE TRIGGER v2_generated_pattern_link_guard BEFORE INSERT ON public.v2_associ
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_claim_associate()'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'942b29b4d1c21239cba3278807265f7b9e8aad97e42b805f93c5dce188165b00' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'942b29b4d1c21239cba3278807265f7b9e8aad97e42b805f93c5dce188165b00' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$policy_version='association/1'$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$policy_version='association/1'$old0$,$new0$policy_version IN('association/1','pattern-association/1')$new0$);
  EXECUTE definition;
@@ -370,7 +370,7 @@ END; $verified_patch$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_heartbeat_associate(uuid,uuid)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'976257c8e62864ec3b150247fc1038050b3504f8fede1f5ccb8bd1900ad62399' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'976257c8e62864ec3b150247fc1038050b3504f8fede1f5ccb8bd1900ad62399' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$policy_version='association/1'$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$policy_version='association/1'$old0$,$new0$policy_version IN('association/1','pattern-association/1')$new0$);
  EXECUTE definition;
@@ -379,7 +379,7 @@ END; $verified_patch$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_fail_associate(uuid,uuid,text)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'8cf5e93b09c48632cd835aab829894af2ea1b2271f1c6c8558d0cbe32fa79197' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'8cf5e93b09c48632cd835aab829894af2ea1b2271f1c6c8558d0cbe32fa79197' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$policy_version='association/1'$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$policy_version='association/1'$old0$,$new0$policy_version IN('association/1','pattern-association/1')$new0$);
  EXECUTE definition;
@@ -388,7 +388,7 @@ END; $verified_patch$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_retry_associate(uuid)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'4db3540b24439b2c4eb5441667b46f2365931a9d2544097bfea544ee9e1e05fe' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'4db3540b24439b2c4eb5441667b46f2365931a9d2544097bfea544ee9e1e05fe' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$policy_version='association/1'$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$policy_version='association/1'$old0$,$new0$policy_version IN('association/1','pattern-association/1')$new0$);
  EXECUTE definition;
@@ -397,7 +397,7 @@ END; $verified_patch$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_association_catalog_change()'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'2b78d8c95490812b7b85bfea7b614798a0bc18285f03feb83a00a9ef0f2d17fb' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'2b78d8c95490812b7b85bfea7b614798a0bc18285f03feb83a00a9ef0f2d17fb' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$AND NEW.id IN(from_subject_id,to_subject_id);$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$AND NEW.id IN(from_subject_id,to_subject_id);$old0$,$new0$AND NEW.id IN(from_subject_id,to_subject_id)
     AND NOT public.v2_candidate_review_increment(id,NEW.id,OLD.revision,NEW.revision,OLD.input_generation,NEW.input_generation);$new0$);
@@ -407,9 +407,9 @@ END; $verified_patch$;
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_record_review(varchar,uuid,bigint,bigint,text,text,text,uuid[],text,uuid)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'363a8b43ce88449b576f0bf81e2de0d6e1d00ef38a83bc4bbdc922e29299e9fb' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'363a8b43ce88449b576f0bf81e2de0d6e1d00ef38a83bc4bbdc922e29299e9fb' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$AND o.original_subject_id=review_case.subject_id$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
- definition:=replace(definition,$old0$AND o.original_subject_id=review_case.subject_id$old0$,$new0$AND (o.original_subject_id=review_case.subject_id OR (review_case.kind='identity' AND review_case.candidate_id IS NOT NULL AND EXISTS(
+ definition:=replace(definition,$old0$AND o.original_subject_id=review_case.subject_id$old0$,$new0$AND (((review_case.kind<>'identity' OR review_case.candidate_id IS NULL) AND o.original_subject_id=review_case.subject_id) OR (review_case.kind='identity' AND review_case.candidate_id IS NOT NULL AND EXISTS(
          SELECT 1 FROM public.v2_association_candidates c WHERE c.id=review_case.candidate_id AND c.state='pending' AND NOT c.evidence_erased
           AND review_case.subject_id IN(c.from_subject_id,c.to_subject_id)
           AND (EXISTS(SELECT 1 FROM public.v2_candidate_evidence ce WHERE ce.candidate_id=c.id AND ce.observation_id=o.id)
@@ -419,8 +419,18 @@ END; $verified_patch$;
 
 -- Refuse an unrecorded body/security/search-path change before reusing a fence.
 DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
+ SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_apply_association_decision(uuid)'::regprocedure;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'5ed4d7a4bb1f66fd693c9a768ec87f120c86b72ef18d40b2c03c4c8683b2c61a' OR secure IS DISTINCT FROM false OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF position($old0$ELSIF NOT EXISTS(SELECT 1 FROM public.v2_candidate_evidence e JOIN public.v2_observation_states o ON o.observation_id=e.observation_id WHERE e.candidate_id=c.id AND o.status='active') THEN$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
+ definition:=replace(definition,$old0$ELSIF NOT EXISTS(SELECT 1 FROM public.v2_candidate_evidence e JOIN public.v2_observation_states o ON o.observation_id=e.observation_id WHERE e.candidate_id=c.id AND o.status='active') THEN$old0$,$new0$ELSIF NOT EXISTS(SELECT 1 FROM public.v2_candidate_evidence e JOIN public.v2_observation_states o ON o.observation_id=e.observation_id WHERE e.candidate_id=c.id AND o.status='active')
+    AND NOT (c.rule_version='pattern-association/1' AND EXISTS(SELECT 1 FROM public.v2_pattern_candidate_support ps JOIN public.v2_observation_states os ON os.observation_id=ps.observation_id WHERE ps.candidate_id=c.id AND os.status='active')) THEN$new0$);
+ EXECUTE definition;
+END; $verified_patch$;
+
+-- Refuse an unrecorded body/security/search-path change before reusing a fence.
+DO $verified_patch$ DECLARE definition text;body text;secure boolean;settings text[];BEGIN
  SELECT pg_get_functiondef(oid),prosrc,prosecdef,proconfig INTO definition,body,secure,settings FROM pg_proc WHERE oid='public.v2_worker_drain_associate(integer)'::regprocedure;
- IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'9fb82ce2b7dcf442ccf7a430bf3f7d4e53e6a5ca9128bb12c6807f40d051b592' OR NOT secure OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
+ IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'9fb82ce2b7dcf442ccf7a430bf3f7d4e53e6a5ca9128bb12c6807f40d051b592' OR secure IS DISTINCT FROM true OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog']::text[] THEN RAISE EXCEPTION 'pattern_prior_function_changed';END IF;
  IF position($old0$safe_code text;$old0$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;
  definition:=replace(definition,$old0$safe_code text;$old0$,$new0$safe_code text;pattern_done integer:=0;pattern_superseded integer:=0;pattern_failed integer:=0;pattern_continued integer:=0;$new0$);
  IF position($old1$ELSIF result='continued' THEN continued_count:=continued_count+1; END IF;$old1$ IN definition)=0 THEN RAISE EXCEPTION 'pattern_patch_anchor_missing';END IF;

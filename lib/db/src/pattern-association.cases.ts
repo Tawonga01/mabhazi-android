@@ -48,6 +48,22 @@ export function registerPatternAssociationTests(context:()=>Context){
   await q("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'association')",[id]);await q(`INSERT INTO v2_association_decisions(id,candidate_id,action,previous_decision_id,actor_kind,reviewer_decision_id,reason_code,policy_version,expected_from_revision,expected_to_revision,expected_candidate_revision)
    VALUES($1,$2,$3,$4,$5,$6,'fixture_relation','pattern-association/1',$7,$8,$9)`,[id,cId,action,c.last_decision_id,rId?'reviewer':'system',rId,from,to,c.revision]);await q('SELECT v2_apply_association_decision($1)',[id]);return id;
  }
+ async function reviewedContext(){
+  await q("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=clock_timestamp() WHERE id=$1",[context().user]);await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture_role') ON CONFLICT DO NOTHING",[context().other]);
+  const state=async(id:string)=>(await q('SELECT revision FROM v2_subjects WHERE id=$1',[id])).rows[0].revision;
+  async function lead(operator:unknown){return(await q("SELECT v2_submit_lead($1,'2026-09-12',$2) r",[context().user,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:context().origin,destinationCityId:context().destination,departureTime:'07:00',operator}},observations:[]}])).rows[0].r;}
+  async function materialize(sourceId:string,observation:string,kind:string,parent?:string){
+   const proposal=(await q(parent?'SELECT v2_propose_pattern_creation($1,$2,$3,$4,$5,$6,gen_random_uuid()) id':'SELECT v2_propose_transport_creation($1,$2,$3,$4,$5,gen_random_uuid()) id',parent?[context().other,sourceId,await state(sourceId),observation,parent,await state(parent)]:[context().other,sourceId,await state(sourceId),observation,kind])).rows[0].id;
+   const p=(await q('SELECT * FROM v2_transport_creations WHERE id=$1',[proposal])).rows[0],rev=(await q('SELECT revision FROM v2_review_cases WHERE id=$1',[p.case_id])).rows[0].revision;
+   const approval=(await q("SELECT v2_review_transport_creation($1,$2,$3,$4,'accept','fixture_creation',NULL,gen_random_uuid(),NULL) id",[context().other,proposal,rev,await state(sourceId)])).rows[0].id;await q('SELECT v2_apply_transport_creation($1,$2,$3,gen_random_uuid())',[context().other,proposal,approval]);return p.target_subject_id as string;
+  }
+  const initial=await lead({name:'Origin company'}),opObservation=(await q("SELECT id FROM v2_observations WHERE contribution_id=$1 AND field_key='operator.reported'",[initial.contributionId])).rows[0].id,op=await materialize(initial.subjectId,opObservation,'operator'),f=await lead({id:op});
+  const operatorReport=(await q("SELECT id FROM v2_observations WHERE contribution_id=$1 AND field_key='operator.reported'",[f.contributionId])).rows[0].id,r=await materialize(f.subjectId,operatorReport,'route');
+  async function report(field:string,value:unknown){return(await q("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,$3,$4,'{}',v2_assessment_hash('{}'),v2_assessment_hash($4)) RETURNING id",[f.contributionId,f.subjectId,field,value])).rows[0].id as string;}
+  const pickup=await report('boarding.pickup',{cityId:context().origin,name:'Start terminal'}),start=await materialize(f.subjectId,pickup,'stop'),dropoff=await report('alighting.dropoff',{cityId:context().destination,name:'End terminal'}),end=await materialize(f.subjectId,dropoff,'stop');
+  async function make(){const observation=await report('pattern.stops',{stops:[{place:{stopId:start},pickup:'allowed',dropoff:'allowed'},{place:{stopId:end},pickup:'allowed',dropoff:'allowed'}],stopsComplete:true}),id=await materialize(f.subjectId,observation,'pattern',r);return {p:{id,route:r,stops:[start,end],complete:true,permissions:['allowed','allowed'],sequences:[0,1]} as Pattern,observation};}
+  return {make,pickup,opObservation};
+ }
  test('pattern matching: complete equal known stop visits and permissions propose the same pattern',async()=>{
   const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops);const p=await all(a,b);assert.equal(p.filter(p=>p.relation==='same_pattern').length,1);assert.ok(p.find(p=>p.relation==='same_pattern')!.reasons.includes('known_permissions_equal'));assert.equal(p.some(p=>p.relation==='duplicate_of'),false);
  });
@@ -141,6 +157,15 @@ export function registerPatternAssociationTests(context:()=>Context){
  test('pattern worker: withdrawal invalidates support and queues reevaluation',async()=>{
   const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops);const x=await observe(a);await observe(b);await execute(a);const c=(await candidates(a,b)).find(c=>c.relation==='same_pattern');await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,x.o,randomUUID()]);assert.equal((await q('SELECT state FROM v2_association_candidates WHERE id=$1',[c.id])).rows[0].state,'obsolete');assert.ok(await jobFor(a));
  });
+ test('pattern provenance: reviewed construction declares original lead evidence and permits exact review',async()=>{
+  const f=await reviewedContext(),a=await f.make(),b=await f.make();await execute(a.p);const c=(await candidates(a.p,b.p)).find(c=>c.relation==='same_pattern');assert.ok(c);assert.equal((await q('SELECT count(*) n FROM v2_candidate_evidence WHERE candidate_id=$1',[c.id])).rows[0].n,'0');assert.equal((await q('SELECT count(*) n FROM v2_pattern_candidate_support WHERE candidate_id=$1',[c.id])).rows[0].n,'6');const approval=await review(c);await apply(c.id,'accept',approval.id);assert.equal((await q('SELECT count(*) n FROM v2_association_links WHERE candidate_id=$1',[c.id])).rows[0].n,'1');await q('SET CONSTRAINTS ALL IMMEDIATE');
+ });
+ test('pattern provenance: deleting parent-origin proof redacts dependent candidates and prevents reconstruction',async()=>{
+  const f=await reviewedContext(),a=await f.make(),b=await f.make();await execute(a.p);const c=(await candidates(a.p,b.p)).find(c=>c.relation==='same_pattern');await q('DELETE FROM v2_observations WHERE id=$1',[f.pickup]);assert.deepEqual((await q('SELECT state,evidence_erased,basis_digest,evidence_digest FROM v2_association_candidates WHERE id=$1',[c.id])).rows[0],{state:'obsolete',evidence_erased:true,basis_digest:null,evidence_digest:null});assert.equal((await q('SELECT v2_pattern_context($1) p',[a.p.id])).rows[0].p,null);await q('SET CONSTRAINTS ALL IMMEDIATE');
+ });
+ test('pattern provenance: parent proof withdrawal invalidates current proposals without deleting originals',async()=>{
+  const f=await reviewedContext(),a=await f.make(),b=await f.make();await execute(a.p);const c=(await candidates(a.p,b.p)).find(c=>c.relation==='same_pattern');await q('SELECT v2_withdraw_observation($1,$2,1,gen_random_uuid(),NULL)',[context().user,f.pickup]);assert.equal((await q('SELECT state FROM v2_association_candidates WHERE id=$1',[c.id])).rows[0].state,'obsolete');assert.ok((await q('SELECT id FROM v2_observations WHERE id=$1',[f.pickup])).rowCount);assert.equal((await q('SELECT v2_pattern_context($1) p',[a.p.id])).rows[0].p,null);
+ });
  test('pattern worker: automatic identity acceptance is denied despite matching structure',async()=>{
   const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops);await execute(a);const c=(await candidates(a,b)).find(c=>c.relation==='same_pattern');await invalid(()=>apply(c.id,'accept'), '42501');
  });
@@ -149,6 +174,11 @@ export function registerPatternAssociationTests(context:()=>Context){
  });
  test('pattern review: unrelated evidence cannot enter a candidate-bound identity case',async()=>{
   const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops),other=await pattern(r,stops);await observe(a);await observe(b);const wrong=await observe(other);await execute(a);const c=(await candidates(a,b)).find(c=>c.relation==='same_pattern');await invalid(()=>review(c,'accept',[wrong.o]));
+ });
+ test('pattern review: undeclared evidence from the reviewed endpoint is also rejected',async()=>{
+  const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops),x=await observe(a),y=await observe(b),from=a.id<b.id?a:b,contribution=from.id===a.id?x.c:y.c;
+  const o=(await q("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'boarding.pickup',$3,'{}',v2_assessment_hash('{}'),v2_assessment_hash($3)) RETURNING id",[contribution,from.id,{stopId:stops[0]}])).rows[0].id;
+  await execute(a);const c=(await candidates(a,b)).find(c=>c.relation==='same_pattern');assert.equal(c.from_subject_id,from.id);await invalid(()=>review(c,'accept',[o]));
  });
  test('pattern review: omitting declared support cannot accept the association',async()=>{
   const {r,stops}=await base(),a=await pattern(r,stops),b=await pattern(r,stops);await observe(a);await observe(b);await execute(a);const c=(await candidates(a,b)).find(c=>c.relation==='same_pattern'),one=(await q('SELECT observation_id FROM v2_candidate_evidence WHERE candidate_id=$1 LIMIT 1',[c.id])).rows[0].observation_id;const result=await review(c,'accept',[one]);await invalid(()=>apply(c.id,'accept',result.id));
