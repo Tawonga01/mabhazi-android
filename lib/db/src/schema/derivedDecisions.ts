@@ -5,7 +5,7 @@ const instant = (n: string) => timestamp(n, { withTimezone: true });
 const count = (n: string) => bigint(n, { mode: "bigint" });
 const object = (n: string) => jsonb(n).$type<Record<string, unknown>>();
 export const v2AssociationCandidatesTable = pgTable("v2_association_candidates", {
-  id: uuid("id").primaryKey().defaultRandom(), fromSubjectId: uuid("from_subject_id").notNull(), fromKind: text("from_kind").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(), basisDigest: text("basis_digest"), fromSubjectId: uuid("from_subject_id").notNull(), fromKind: text("from_kind").notNull(),
   toSubjectId: uuid("to_subject_id").notNull(), toKind: text("to_kind").notNull(), relation: text("relation").notNull(), evidenceDigest: text("evidence_digest"),
   reasonCodes: text("reason_codes").array().notNull(), ruleVersion: text("rule_version").notNull(),
   sourceRevision: count("source_revision").notNull(), targetRevision: count("target_revision").notNull(),

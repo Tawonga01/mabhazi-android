@@ -9,6 +9,7 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import pg from "pg";
 import { processingTables } from "./schema/processing";
 import { registerProcessingTests } from "./processing.cases";
+import { registerLeadAssociationTests } from "./lead-association.cases";
 import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
@@ -224,9 +225,9 @@ before(async () => {
   }
   await db.query("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC");
   await db.query("COMMIT");
-  // Exercise0023 against a real minimum save already committed under0022.
+  // Exercise0024 with a committed0023 projection and pending association intent.
   let previousStageLog = "";
-  for (const name of ["0021_actual_journey_intake.sql", "0022_minimum_lead_api.sql"]) {
+  for (const name of ["0021_actual_journey_intake.sql", "0022_minimum_lead_api.sql", "0023_normalise_worker.sql"]) {
     const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
     await db.query("BEGIN"); await db.query(sql);
     await db.query("INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)", [name, createHash("sha256").update(sql).digest("hex")]);
@@ -238,16 +239,25 @@ before(async () => {
     schemaVersion:"1.0", clientSubmissionId:randomUUID(), entrySurface:"contribute_tab",
     target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"08:00",operator:{name:"Pre-worker reported bus"}}}, observations:[]
   }])).rows[0].r;
+  await db.query("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE kind='normalise' AND state='pending' AND contribution_id IS DISTINCT FROM $1",[workerUpgrade.contributionId]);
+  const upgradeLease=(await db.query('SELECT to_jsonb(v2_worker_claim_normalise()) w')).rows[0].w;
+  assert.equal((await db.query('SELECT v2_worker_finish_normalise($1,$2) r',[upgradeLease.id,upgradeLease.lease_token])).rows[0].r,'done');
+  const associationUpgradeSnapshot=async()=>Promise.all(['v2_normalised_leads','v2_jobs'].map(async table=>
+    (await db.query(`SELECT to_jsonb(t) row FROM ${table} t WHERE subject_id=$1 ORDER BY to_jsonb(t)::text`,[workerUpgrade.subjectId])).rows));
+  const beforeAssociation=await associationUpgradeSnapshot();
   const workerSnapshot = async () => Promise.all(["v2_contributions","v2_receipts","v2_observations","v2_jobs"].map(async table =>
     (await db.query(`SELECT to_jsonb(t) row FROM ${table} t WHERE ${table === "v2_contributions" ? "id" : "contribution_id"}=$1 ORDER BY to_jsonb(t)::text`, [workerUpgrade.contributionId])).rows));
   const beforeWorker = await workerSnapshot();
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
+  assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
+  assert.equal((await db.query("SELECT count(*) n FROM v2_jobs WHERE subject_id=$1 AND kind='associate' AND state='pending'",[workerUpgrade.subjectId])).rows[0].n,'1');
   assert.equal(beforeWorker[1]!.length,1); assert.equal(beforeWorker[2]!.length,2); assert.equal(beforeWorker[3]!.length,1);
 
   assert.match(upgradeLog, /Applied 0021_actual_journey_intake.sql/);
   assert.match(upgradeLog, /Applied 0022_minimum_lead_api.sql/);
   assert.match(upgradeLog, /Applied 0023_normalise_worker.sql/);
+  assert.match(upgradeLog, /Applied 0024_lead_association_worker.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -604,3 +614,4 @@ registerServiceRunTests(() => ({ db, connectionString, user, other, origin, dest
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
