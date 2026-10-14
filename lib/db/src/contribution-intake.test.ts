@@ -239,7 +239,8 @@ before(async () => {
     schemaVersion:"1.0", clientSubmissionId:randomUUID(), entrySurface:"contribute_tab",
     target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:"08:00",operator:{name:"Pre-worker reported bus"}}}, observations:[]
   }])).rows[0].r;
-  await db.query("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE kind='normalise' AND state='pending' AND contribution_id IS DISTINCT FROM $1",[workerUpgrade.contributionId]);
+  // Select only the new worker fixture first; prior upgrade jobs must stay exact.
+  await db.query("UPDATE v2_jobs SET available_at='1970-01-01T00:00:00Z' WHERE contribution_id=$1 AND kind='normalise'",[workerUpgrade.contributionId]);
   const upgradeLease=(await db.query('SELECT to_jsonb(v2_worker_claim_normalise()) w')).rows[0].w;
   assert.equal((await db.query('SELECT v2_worker_finish_normalise($1,$2) r',[upgradeLease.id,upgradeLease.lease_token])).rows[0].r,'done');
   const associationUpgradeSnapshot=async()=>Promise.all(['v2_normalised_leads','v2_jobs'].map(async table=>
