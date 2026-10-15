@@ -8,11 +8,514 @@
 import * as zod from "zod";
 
 /**
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * @summary Save a typed actual-journey report without inferring a timetable
+ */
+export const submitV2ActualJourneyHeaderXMabhaziAccountMax = 256;
+
+export const SubmitV2ActualJourneyHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(submitV2ActualJourneyHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const submitV2ActualJourneyBodyTargetNewActualJourneyReportedServiceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyTargetNewActualJourneyTimezoneMax = 100;
+
+export const submitV2ActualJourneyBodyTargetNewActualJourneyIntendedSubjectExpectedRevisionMax = 9007199254740991;
+
+export const submitV2ActualJourneyBodyObservationsItemOneValueTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+export const submitV2ActualJourneyBodyObservationsItemOneScopeServiceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemOneScopeTimezoneMax = 100;
+
+export const submitV2ActualJourneyBodyObservationsItemOneScopeUtcOffsetRegExp =
+  new RegExp("^[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$");
+export const submitV2ActualJourneyBodyObservationsItemOneObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemOneObservedDateEndRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemOneEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemOneEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemOneSourcesMax = 10;
+
+export const submitV2ActualJourneyBodyObservationsItemTwoValueNameMax = 120;
+
+export const submitV2ActualJourneyBodyObservationsItemTwoObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemTwoObservedDateEndRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemTwoEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemTwoEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemTwoSourcesMax = 10;
+
+export const submitV2ActualJourneyBodyObservationsItemThreeValueCityIdMax = 999999999;
+
+export const submitV2ActualJourneyBodyObservationsItemThreeValueNameMax = 200;
+
+export const submitV2ActualJourneyBodyObservationsItemThreeValueInstructionsMax = 500;
+
+export const submitV2ActualJourneyBodyObservationsItemThreeObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemThreeObservedDateEndRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemThreeEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemThreeEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemThreeSourcesMax = 10;
+
+export const submitV2ActualJourneyBodyObservationsItemFourValueAmountMax = 13;
+
+export const submitV2ActualJourneyBodyObservationsItemFourValueAmountRegExp =
+  new RegExp("^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$");
+export const submitV2ActualJourneyBodyObservationsItemFourValueCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopeSegmentOriginCityIdMax = 999999999;
+
+export const submitV2ActualJourneyBodyObservationsItemFourScopeSegmentDestinationCityIdMax = 999999999;
+
+export const submitV2ActualJourneyBodyObservationsItemFourScopeServiceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopeQuotationDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopeSourceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopeEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopeEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourScopePassengerLabelMax = 120;
+
+export const submitV2ActualJourneyBodyObservationsItemFourScopeTicketLabelMax = 120;
+
+export const submitV2ActualJourneyBodyObservationsItemFourScopePaymentMethodMax = 120;
+
+export const submitV2ActualJourneyBodyObservationsItemFourObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourObservedDateEndRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2ActualJourneyBodyObservationsItemFourSourcesMax = 10;
+
+export const submitV2ActualJourneyBodyObservationsMax = 20;
+
+export const submitV2ActualJourneyBodyActualContextObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+
+export const SubmitV2ActualJourneyBody = zod.object({
+  schemaVersion: zod.enum(["1.0"]),
+  clientSubmissionId: zod.string().uuid(),
+  entrySurface: zod.enum([
+    "contribute_tab",
+    "search_empty",
+    "search_result",
+    "route_detail",
+    "own_contribution",
+  ]),
+  target: zod.object({
+    newActualJourney: zod.object({
+      reportedServiceDate: zod
+        .string()
+        .regex(
+          submitV2ActualJourneyBodyTargetNewActualJourneyReportedServiceDateRegExp,
+        )
+        .optional(),
+      timezone: zod
+        .string()
+        .min(1)
+        .max(submitV2ActualJourneyBodyTargetNewActualJourneyTimezoneMax)
+        .optional(),
+      intendedSubject: zod
+        .object({
+          id: zod.string().uuid(),
+          kind: zod.enum(["lead"]),
+          expectedRevision: zod
+            .number()
+            .min(1)
+            .max(
+              submitV2ActualJourneyBodyTargetNewActualJourneyIntendedSubjectExpectedRevisionMax,
+            ),
+        })
+        .optional(),
+    }),
+  }),
+  observations: zod
+    .array(
+      zod.union([
+        zod.object({
+          fieldKey: zod.enum(["departure.actual", "arrival.actual"]),
+          value: zod.object({
+            time: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemOneValueTimeRegExp,
+              ),
+          }),
+          scope: zod.object({
+            schemaVersion: zod.enum(["1.0"]),
+            serviceDate: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemOneScopeServiceDateRegExp,
+              )
+              .optional(),
+            timezone: zod
+              .string()
+              .min(1)
+              .max(submitV2ActualJourneyBodyObservationsItemOneScopeTimezoneMax)
+              .optional(),
+            utcOffset: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemOneScopeUtcOffsetRegExp,
+              )
+              .optional(),
+          }),
+          knowledgeBasis: zod
+            .enum([
+              "travelled",
+              "saw_operating",
+              "observed_sign",
+              "operator_statement",
+              "heard_from_other",
+              "unprovided",
+            ])
+            .optional(),
+          observedDate: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemOneObservedDateRegExp,
+            )
+            .optional(),
+          observedDateEnd: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemOneObservedDateEndRegExp,
+            )
+            .optional(),
+          effectiveFrom: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemOneEffectiveFromRegExp,
+            )
+            .optional(),
+          effectiveTo: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemOneEffectiveToRegExp,
+            )
+            .optional(),
+          sources: zod
+            .array(zod.string().uuid())
+            .max(submitV2ActualJourneyBodyObservationsItemOneSourcesMax)
+            .optional(),
+        }),
+        zod.object({
+          fieldKey: zod.enum(["operator.reported"]),
+          value: zod.object({
+            name: zod
+              .string()
+              .min(1)
+              .max(submitV2ActualJourneyBodyObservationsItemTwoValueNameMax)
+              .describe(
+                "A trimmed reported bus company name. Unknown, n\/a, dash and control characters are invalid. A name is not a resolved operator identity.",
+              ),
+          }),
+          scope: zod.object({}),
+          knowledgeBasis: zod
+            .enum([
+              "travelled",
+              "saw_operating",
+              "observed_sign",
+              "operator_statement",
+              "heard_from_other",
+              "unprovided",
+            ])
+            .optional(),
+          observedDate: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemTwoObservedDateRegExp,
+            )
+            .optional(),
+          observedDateEnd: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemTwoObservedDateEndRegExp,
+            )
+            .optional(),
+          effectiveFrom: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemTwoEffectiveFromRegExp,
+            )
+            .optional(),
+          effectiveTo: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemTwoEffectiveToRegExp,
+            )
+            .optional(),
+          sources: zod
+            .array(zod.string().uuid())
+            .max(submitV2ActualJourneyBodyObservationsItemTwoSourcesMax)
+            .optional(),
+        }),
+        zod.object({
+          fieldKey: zod.enum(["boarding.pickup", "alighting.dropoff"]),
+          value: zod.object({
+            cityId: zod
+              .number()
+              .min(1)
+              .max(
+                submitV2ActualJourneyBodyObservationsItemThreeValueCityIdMax,
+              ),
+            name: zod
+              .string()
+              .min(1)
+              .max(submitV2ActualJourneyBodyObservationsItemThreeValueNameMax),
+            instructions: zod
+              .string()
+              .max(
+                submitV2ActualJourneyBodyObservationsItemThreeValueInstructionsMax,
+              )
+              .optional(),
+          }),
+          scope: zod.object({}),
+          knowledgeBasis: zod
+            .enum([
+              "travelled",
+              "saw_operating",
+              "observed_sign",
+              "operator_statement",
+              "heard_from_other",
+              "unprovided",
+            ])
+            .optional(),
+          observedDate: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemThreeObservedDateRegExp,
+            )
+            .optional(),
+          observedDateEnd: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemThreeObservedDateEndRegExp,
+            )
+            .optional(),
+          effectiveFrom: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemThreeEffectiveFromRegExp,
+            )
+            .optional(),
+          effectiveTo: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemThreeEffectiveToRegExp,
+            )
+            .optional(),
+          sources: zod
+            .array(zod.string().uuid())
+            .max(submitV2ActualJourneyBodyObservationsItemThreeSourcesMax)
+            .optional(),
+        }),
+        zod.object({
+          fieldKey: zod.enum(["fare.paid", "fare.quoted", "fare.advertised"]),
+          value: zod.object({
+            amount: zod
+              .string()
+              .max(submitV2ActualJourneyBodyObservationsItemFourValueAmountMax)
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourValueAmountRegExp,
+              ),
+            currency: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourValueCurrencyRegExp,
+              ),
+          }),
+          scope: zod.object({
+            schemaVersion: zod.enum(["1.0"]),
+            segment: zod.object({
+              kind: zod.enum(["city_pair"]),
+              originCityId: zod
+                .number()
+                .min(1)
+                .max(
+                  submitV2ActualJourneyBodyObservationsItemFourScopeSegmentOriginCityIdMax,
+                ),
+              destinationCityId: zod
+                .number()
+                .min(1)
+                .max(
+                  submitV2ActualJourneyBodyObservationsItemFourScopeSegmentDestinationCityIdMax,
+                ),
+            }),
+            serviceDate: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourScopeServiceDateRegExp,
+              )
+              .optional(),
+            quotationDate: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourScopeQuotationDateRegExp,
+              )
+              .optional(),
+            sourceDate: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourScopeSourceDateRegExp,
+              )
+              .optional(),
+            effectiveFrom: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourScopeEffectiveFromRegExp,
+              )
+              .optional(),
+            effectiveTo: zod
+              .string()
+              .regex(
+                submitV2ActualJourneyBodyObservationsItemFourScopeEffectiveToRegExp,
+              )
+              .optional(),
+            passengerCategory: zod.enum([
+              "adult",
+              "child",
+              "concession",
+              "other",
+              "unknown",
+            ]),
+            passengerLabel: zod
+              .string()
+              .min(1)
+              .max(
+                submitV2ActualJourneyBodyObservationsItemFourScopePassengerLabelMax,
+              )
+              .optional(),
+            ticketBasis: zod.enum(["one_way", "return", "other", "unknown"]),
+            ticketLabel: zod
+              .string()
+              .min(1)
+              .max(
+                submitV2ActualJourneyBodyObservationsItemFourScopeTicketLabelMax,
+              )
+              .optional(),
+            paymentMethod: zod
+              .string()
+              .min(1)
+              .max(
+                submitV2ActualJourneyBodyObservationsItemFourScopePaymentMethodMax,
+              )
+              .optional(),
+            luggageIncluded: zod.boolean().optional(),
+            timeBasis: zod
+              .enum(["unspecified", "scheduled", "actual"])
+              .optional(),
+          }),
+          knowledgeBasis: zod
+            .enum([
+              "travelled",
+              "saw_operating",
+              "observed_sign",
+              "operator_statement",
+              "heard_from_other",
+              "unprovided",
+            ])
+            .optional(),
+          observedDate: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemFourObservedDateRegExp,
+            )
+            .optional(),
+          observedDateEnd: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemFourObservedDateEndRegExp,
+            )
+            .optional(),
+          effectiveFrom: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemFourEffectiveFromRegExp,
+            )
+            .optional(),
+          effectiveTo: zod
+            .string()
+            .regex(
+              submitV2ActualJourneyBodyObservationsItemFourEffectiveToRegExp,
+            )
+            .optional(),
+          sources: zod
+            .array(zod.string().uuid())
+            .max(submitV2ActualJourneyBodyObservationsItemFourSourcesMax)
+            .optional(),
+        }),
+      ]),
+    )
+    .min(1)
+    .max(submitV2ActualJourneyBodyObservationsMax),
+  actualContext: zod
+    .object({
+      knowledgeBasis: zod
+        .enum([
+          "travelled",
+          "saw_operating",
+          "observed_sign",
+          "operator_statement",
+          "heard_from_other",
+          "unprovided",
+        ])
+        .optional(),
+      observedDate: zod
+        .string()
+        .regex(submitV2ActualJourneyBodyActualContextObservedDateRegExp)
+        .optional(),
+    })
+    .optional(),
+});
+
+export const SubmitV2ActualJourneyResponse = zod.object({
+  contributionId: zod.string().uuid(),
+  clientSubmissionId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  saveStatus: zod.enum(["saved"]),
+  processingStatus: zod.enum(["queued"]),
+  associationStatus: zod.enum(["unresolved"]),
+  publicationStatus: zod.enum(["pending"]),
+  replayed: zod.boolean(),
+});
+
+/**
  * @summary Discover the enabled minimum-lead intake contract
  */
 export const GetV2CapabilitiesResponse = zod.object({
   schemaVersion: zod.enum(["1.0"]),
   minimumLeadEnabled: zod.boolean(),
+  actualJourneyEnabled: zod.boolean().optional(),
 });
 
 /**

@@ -10,4 +10,5 @@ import type { V2CapabilitiesSchemaVersion } from "./v2CapabilitiesSchemaVersion"
 export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
+  actualJourneyEnabled?: boolean;
 }

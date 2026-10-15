@@ -5,6 +5,7 @@ import { before, after, test } from 'node:test';
 import pg from 'pg';
 import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse } from '@workspace/api-zod';
 import type { infer as Infer } from 'zod';
+import { registerActualApiTests } from './actualJourney.cases';
 type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse>;
 
 let admin: pg.Client, server: Server, base: string;
@@ -48,7 +49,7 @@ async function request(path: string, input?: unknown, account: number | null = 0
 }
 test('minimum API: capability defaults off and does not write legacy or v2', async () => {
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
-  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false});
+  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false});
   assert.equal((await request('/v2/contributions',body())).status,503);
   process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';
   assert.equal((await request('/v2/capabilities')).value.minimumLeadEnabled,true);
@@ -144,3 +145,6 @@ test('minimum API: restricted facade cannot expose optional facts or privileged 
     await assert.rejects(admin.query('SELECT v2_api_submit_minimum_lead($1,$2,$3)',[accounts[0],'2026-09-12',invalid]),e => (e as Error).message==='v2_minimum_capability_only');
   } finally { await admin.query('RESET ROLE'); }
 });
+
+registerActualApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
+

@@ -53,6 +53,7 @@ import type {
   UpdateDisplayNameBody,
   UpdateDisplayNameRateLimitError,
   UpdateDisplayNameResult,
+  V2ActualJourneyRequest,
   V2Capabilities,
   V2Cities,
   V2ErrorResponse,
@@ -69,6 +70,94 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * @summary Save a typed actual-journey report without inferring a timetable
+ */
+export const getSubmitV2ActualJourneyUrl = () => {
+  return `/api/v2/actual-journeys`;
+};
+
+export const submitV2ActualJourney = async (
+  v2ActualJourneyRequest: V2ActualJourneyRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(getSubmitV2ActualJourneyUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2ActualJourneyRequest),
+  });
+};
+
+export const getSubmitV2ActualJourneyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    TError,
+    { data: BodyType<V2ActualJourneyRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>,
+  TError,
+  { data: BodyType<V2ActualJourneyRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2ActualJourney"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    { data: BodyType<V2ActualJourneyRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitV2ActualJourney(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2ActualJourneyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>
+>;
+export type SubmitV2ActualJourneyMutationBody =
+  BodyType<V2ActualJourneyRequest>;
+export type SubmitV2ActualJourneyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Save a typed actual-journey report without inferring a timetable
+ */
+export const useSubmitV2ActualJourney = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    TError,
+    { data: BodyType<V2ActualJourneyRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>,
+  TError,
+  { data: BodyType<V2ActualJourneyRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2ActualJourneyMutationOptions(options));
+};
 
 /**
  * @summary Discover the enabled minimum-lead intake contract

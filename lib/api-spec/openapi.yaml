@@ -40,6 +40,7 @@ paths:
         '400': {$ref: '#/components/responses/V2Error'}
         '401': {$ref: '#/components/responses/V2Error'}
         '403': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
         '409': {$ref: '#/components/responses/V2Error'}
         '413': {$ref: '#/components/responses/V2Error'}
         '415': {$ref: '#/components/responses/V2Error'}
@@ -1614,3 +1615,4 @@ components:
       content:
         application/json:
           schema: {$ref: '#/components/schemas/V2Error'}
+

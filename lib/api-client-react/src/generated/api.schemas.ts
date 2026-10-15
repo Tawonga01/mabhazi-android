@@ -477,6 +477,7 @@ export const V2CapabilitiesSchemaVersion = {
 export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
+  actualJourneyEnabled?: boolean;
 }
 
 export interface V2City {
@@ -608,6 +609,387 @@ export interface V2Error {
   code: string;
   currentVersion?: string;
   fieldErrors?: V2ErrorFieldErrorsItem[];
+}
+
+export type V2ActualIntentionKind =
+  (typeof V2ActualIntentionKind)[keyof typeof V2ActualIntentionKind];
+
+export const V2ActualIntentionKind = {
+  lead: "lead",
+} as const;
+
+export interface V2ActualIntention {
+  id: string;
+  kind: V2ActualIntentionKind;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+}
+
+export interface V2ActualCore {
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  reportedServiceDate?: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone?: string;
+  intendedSubject?: V2ActualIntention;
+}
+
+export interface V2ActualTarget {
+  newActualJourney: V2ActualCore;
+}
+
+export type V2ActualContextKnowledgeBasis =
+  (typeof V2ActualContextKnowledgeBasis)[keyof typeof V2ActualContextKnowledgeBasis];
+
+export const V2ActualContextKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2ActualContext {
+  knowledgeBasis?: V2ActualContextKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+}
+
+export type V2ActualClockScopeSchemaVersion =
+  (typeof V2ActualClockScopeSchemaVersion)[keyof typeof V2ActualClockScopeSchemaVersion];
+
+export const V2ActualClockScopeSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export interface V2ActualClockScope {
+  schemaVersion: V2ActualClockScopeSchemaVersion;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  serviceDate?: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone?: string;
+  /** @pattern ^[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$ */
+  utcOffset?: string;
+}
+
+export interface V2ActualPlace {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  cityId: number;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /** @maxLength 500 */
+  instructions?: string;
+}
+
+export type V2ActualFareScopeSchemaVersion =
+  (typeof V2ActualFareScopeSchemaVersion)[keyof typeof V2ActualFareScopeSchemaVersion];
+
+export const V2ActualFareScopeSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export type V2ActualFareScopeSegmentKind =
+  (typeof V2ActualFareScopeSegmentKind)[keyof typeof V2ActualFareScopeSegmentKind];
+
+export const V2ActualFareScopeSegmentKind = {
+  city_pair: "city_pair",
+} as const;
+
+export type V2ActualFareScopeSegment = {
+  kind: V2ActualFareScopeSegmentKind;
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  originCityId: number;
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  destinationCityId: number;
+};
+
+export type V2ActualFareScopePassengerCategory =
+  (typeof V2ActualFareScopePassengerCategory)[keyof typeof V2ActualFareScopePassengerCategory];
+
+export const V2ActualFareScopePassengerCategory = {
+  adult: "adult",
+  child: "child",
+  concession: "concession",
+  other: "other",
+  unknown: "unknown",
+} as const;
+
+export type V2ActualFareScopeTicketBasis =
+  (typeof V2ActualFareScopeTicketBasis)[keyof typeof V2ActualFareScopeTicketBasis];
+
+export const V2ActualFareScopeTicketBasis = {
+  one_way: "one_way",
+  return: "return",
+  other: "other",
+  unknown: "unknown",
+} as const;
+
+export type V2ActualFareScopeTimeBasis =
+  (typeof V2ActualFareScopeTimeBasis)[keyof typeof V2ActualFareScopeTimeBasis];
+
+export const V2ActualFareScopeTimeBasis = {
+  unspecified: "unspecified",
+  scheduled: "scheduled",
+  actual: "actual",
+} as const;
+
+export interface V2ActualFareScope {
+  schemaVersion: V2ActualFareScopeSchemaVersion;
+  segment: V2ActualFareScopeSegment;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  serviceDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  quotationDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  sourceDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveFrom?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveTo?: string;
+  passengerCategory: V2ActualFareScopePassengerCategory;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  passengerLabel?: string;
+  ticketBasis: V2ActualFareScopeTicketBasis;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  ticketLabel?: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  paymentMethod?: string;
+  luggageIncluded?: boolean;
+  timeBasis?: V2ActualFareScopeTimeBasis;
+}
+
+export type V2ActualClockObservationFieldKey =
+  (typeof V2ActualClockObservationFieldKey)[keyof typeof V2ActualClockObservationFieldKey];
+
+export const V2ActualClockObservationFieldKey = {
+  departureactual: "departure.actual",
+  arrivalactual: "arrival.actual",
+} as const;
+
+export type V2ActualClockObservationValue = {
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  time: string;
+};
+
+export type V2ActualClockObservationKnowledgeBasis =
+  (typeof V2ActualClockObservationKnowledgeBasis)[keyof typeof V2ActualClockObservationKnowledgeBasis];
+
+export const V2ActualClockObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2ActualClockObservation {
+  fieldKey: V2ActualClockObservationFieldKey;
+  value: V2ActualClockObservationValue;
+  scope: V2ActualClockScope;
+  knowledgeBasis?: V2ActualClockObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDateEnd?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveFrom?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveTo?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2ActualOperatorObservationFieldKey =
+  (typeof V2ActualOperatorObservationFieldKey)[keyof typeof V2ActualOperatorObservationFieldKey];
+
+export const V2ActualOperatorObservationFieldKey = {
+  operatorreported: "operator.reported",
+} as const;
+
+export type V2ActualOperatorObservationScope = { [key: string]: unknown };
+
+export type V2ActualOperatorObservationKnowledgeBasis =
+  (typeof V2ActualOperatorObservationKnowledgeBasis)[keyof typeof V2ActualOperatorObservationKnowledgeBasis];
+
+export const V2ActualOperatorObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2ActualOperatorObservation {
+  fieldKey: V2ActualOperatorObservationFieldKey;
+  value: V2NamedOperator;
+  scope: V2ActualOperatorObservationScope;
+  knowledgeBasis?: V2ActualOperatorObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDateEnd?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveFrom?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveTo?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2ActualPlaceObservationFieldKey =
+  (typeof V2ActualPlaceObservationFieldKey)[keyof typeof V2ActualPlaceObservationFieldKey];
+
+export const V2ActualPlaceObservationFieldKey = {
+  boardingpickup: "boarding.pickup",
+  alightingdropoff: "alighting.dropoff",
+} as const;
+
+export type V2ActualPlaceObservationScope = { [key: string]: unknown };
+
+export type V2ActualPlaceObservationKnowledgeBasis =
+  (typeof V2ActualPlaceObservationKnowledgeBasis)[keyof typeof V2ActualPlaceObservationKnowledgeBasis];
+
+export const V2ActualPlaceObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2ActualPlaceObservation {
+  fieldKey: V2ActualPlaceObservationFieldKey;
+  value: V2ActualPlace;
+  scope: V2ActualPlaceObservationScope;
+  knowledgeBasis?: V2ActualPlaceObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDateEnd?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveFrom?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveTo?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2ActualFareObservationFieldKey =
+  (typeof V2ActualFareObservationFieldKey)[keyof typeof V2ActualFareObservationFieldKey];
+
+export const V2ActualFareObservationFieldKey = {
+  farepaid: "fare.paid",
+  farequoted: "fare.quoted",
+  fareadvertised: "fare.advertised",
+} as const;
+
+export type V2ActualFareObservationValue = {
+  /**
+   * @maxLength 13
+   * @pattern ^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$
+   */
+  amount: string;
+  /** @pattern ^[A-Z]{3}$ */
+  currency: string;
+};
+
+export type V2ActualFareObservationKnowledgeBasis =
+  (typeof V2ActualFareObservationKnowledgeBasis)[keyof typeof V2ActualFareObservationKnowledgeBasis];
+
+export const V2ActualFareObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2ActualFareObservation {
+  fieldKey: V2ActualFareObservationFieldKey;
+  value: V2ActualFareObservationValue;
+  scope: V2ActualFareScope;
+  knowledgeBasis?: V2ActualFareObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDateEnd?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveFrom?: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  effectiveTo?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2ActualObservation =
+  | V2ActualClockObservation
+  | V2ActualOperatorObservation
+  | V2ActualPlaceObservation
+  | V2ActualFareObservation;
+
+export type V2ActualJourneyRequestSchemaVersion =
+  (typeof V2ActualJourneyRequestSchemaVersion)[keyof typeof V2ActualJourneyRequestSchemaVersion];
+
+export const V2ActualJourneyRequestSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export type V2ActualJourneyRequestEntrySurface =
+  (typeof V2ActualJourneyRequestEntrySurface)[keyof typeof V2ActualJourneyRequestEntrySurface];
+
+export const V2ActualJourneyRequestEntrySurface = {
+  contribute_tab: "contribute_tab",
+  search_empty: "search_empty",
+  search_result: "search_result",
+  route_detail: "route_detail",
+  own_contribution: "own_contribution",
+} as const;
+
+export interface V2ActualJourneyRequest {
+  schemaVersion: V2ActualJourneyRequestSchemaVersion;
+  clientSubmissionId: string;
+  entrySurface: V2ActualJourneyRequestEntrySurface;
+  target: V2ActualTarget;
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  observations: V2ActualObservation[];
+  actualContext?: V2ActualContext;
 }
 
 /**

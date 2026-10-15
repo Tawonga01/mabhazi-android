@@ -290,6 +290,7 @@ before(async () => {
   assert.match(upgradeLog, /Applied 0025_pattern_association_worker.sql/);
   assert.match(upgradeLog, /Applied 0026_identity_lookup.sql/);
   assert.match(upgradeLog, /Applied 0027_journey_processing.sql/);
+  assert.match(upgradeLog, /Applied 0028_actual_journey_api.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -395,7 +396,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 28);
+  assert.equal(ledger.length, 29);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -650,3 +651,4 @@ registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin,
 registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerIdentityLookupTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
