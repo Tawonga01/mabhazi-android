@@ -98,7 +98,9 @@ export function registerActualApiTests(context:()=>Context) {
   test('actual API: backend facade stays narrow and the actual constructor remains denied',async()=>{
     await q('SET ROLE mabhazi_api');try {
       const access=(await q("SELECT has_function_privilege(current_user,'v2_api_submit_actual_journey(varchar,text,jsonb)','EXECUTE') facade,has_function_privilege(current_user,'v2_submit_actual_journey(varchar,text,jsonb)','EXECUTE') constructor")).rows[0];assert.deepEqual(access,{facade:true,constructor:false});
-      for(const role of ['anon','authenticated']) assert.equal((await q("SELECT has_function_privilege($1,'v2_api_submit_actual_journey(varchar,text,jsonb)','EXECUTE') allowed",[role])).rows[0].allowed,false);
+      // A plain PostgreSQL CI cluster has no hosted-client roles. Verify PUBLIC
+      // here; the disposable storage fixture also checks real anon/authenticated.
+      assert.equal((await q("SELECT count(*) FROM pg_proc p CROSS JOIN LATERAL aclexplode(p.proacl) a WHERE p.oid='public.v2_api_submit_actual_journey(varchar,text,jsonb)'::regprocedure AND a.grantee=0")).rows[0].count,'0');
       const input=body();input.observations=[{fieldKey:'operator.reported',value:{id:randomUUID()},scope:{}}];
       await assert.rejects(q('SELECT v2_api_submit_actual_journey($1,$2,$3)',[context().accounts[0],'2026-09-12',input]),/v2_actual_capability_only/);
     } finally {await q('RESET ROLE');}

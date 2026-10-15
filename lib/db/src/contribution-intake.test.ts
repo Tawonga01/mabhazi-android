@@ -404,6 +404,16 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal((await db.query("SELECT count(*) FROM v2_leads WHERE corridor_id=$1", [corridor])).rows[0].count, "0");
 });
 
+test("actual HTTP facade grants only restricted backend execution, never constructor or hosted clients", async () => {
+  assert.equal((await db.query("SELECT has_function_privilege('mabhazi_api','public.v2_api_submit_actual_journey(varchar,text,jsonb)','EXECUTE') allowed")).rows[0].allowed,true);
+  assert.equal((await db.query("SELECT has_function_privilege('mabhazi_api','public.v2_submit_actual_journey(varchar,text,jsonb)','EXECUTE') allowed")).rows[0].allowed,false);
+  for(const role of ['anon','authenticated']) {
+    await db.query(`SET LOCAL ROLE ${role}`);
+    await rejectQuery("SELECT public.v2_api_submit_actual_journey($1,$2,$3)",[user,'2026-09-12',{}],['42501']);
+    await db.query('RESET ROLE');
+  }
+});
+
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
   for (const table of [...intakeTables, ...processingTables, ...identityLookupTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
     const name = getTableName(table);
