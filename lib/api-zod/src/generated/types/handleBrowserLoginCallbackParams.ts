@@ -8,6 +8,4 @@
 
 export type HandleBrowserLoginCallbackParams = {
   code?: string;
-  state?: string;
-  iss?: string;
 };

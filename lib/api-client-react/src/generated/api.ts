@@ -37,6 +37,7 @@ import type {
   JourneysEnvelope,
   LegalSummary,
   ListCitiesParams,
+  ListV2CitiesParams,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
@@ -52,6 +53,13 @@ import type {
   UpdateDisplayNameBody,
   UpdateDisplayNameRateLimitError,
   UpdateDisplayNameResult,
+  V2ActualJourneyRequest,
+  V2Capabilities,
+  V2Cities,
+  V2ErrorResponse,
+  V2LeadReceipt,
+  V2MinimumLeadRequest,
+  V2ReceiptLookup,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -62,6 +70,446 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * @summary Save a typed actual-journey report without inferring a timetable
+ */
+export const getSubmitV2ActualJourneyUrl = () => {
+  return `/api/v2/actual-journeys`;
+};
+
+export const submitV2ActualJourney = async (
+  v2ActualJourneyRequest: V2ActualJourneyRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(getSubmitV2ActualJourneyUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2ActualJourneyRequest),
+  });
+};
+
+export const getSubmitV2ActualJourneyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    TError,
+    { data: BodyType<V2ActualJourneyRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>,
+  TError,
+  { data: BodyType<V2ActualJourneyRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2ActualJourney"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    { data: BodyType<V2ActualJourneyRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitV2ActualJourney(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2ActualJourneyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>
+>;
+export type SubmitV2ActualJourneyMutationBody =
+  BodyType<V2ActualJourneyRequest>;
+export type SubmitV2ActualJourneyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Save a typed actual-journey report without inferring a timetable
+ */
+export const useSubmitV2ActualJourney = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2ActualJourney>>,
+    TError,
+    { data: BodyType<V2ActualJourneyRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2ActualJourney>>,
+  TError,
+  { data: BodyType<V2ActualJourneyRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2ActualJourneyMutationOptions(options));
+};
+
+/**
+ * @summary Discover the enabled minimum-lead intake contract
+ */
+export const getGetV2CapabilitiesUrl = () => {
+  return `/api/v2/capabilities`;
+};
+
+export const getV2Capabilities = async (
+  options?: RequestInit,
+): Promise<V2Capabilities> => {
+  return customFetch<V2Capabilities>(getGetV2CapabilitiesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2CapabilitiesQueryKey = () => {
+  return [`/api/v2/capabilities`] as const;
+};
+
+export const getGetV2CapabilitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2Capabilities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2Capabilities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetV2CapabilitiesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2Capabilities>>
+  > = ({ signal }) => getV2Capabilities({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2Capabilities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2CapabilitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2Capabilities>>
+>;
+export type GetV2CapabilitiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Discover the enabled minimum-lead intake contract
+ */
+
+export function useGetV2Capabilities<
+  TData = Awaited<ReturnType<typeof getV2Capabilities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2Capabilities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2CapabilitiesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Search cities with stable IDs for new-lead intake
+ */
+export const getListV2CitiesUrl = (params?: ListV2CitiesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/cities?${stringifiedParams}`
+    : `/api/v2/cities`;
+};
+
+export const listV2Cities = async (
+  params?: ListV2CitiesParams,
+  options?: RequestInit,
+): Promise<V2Cities> => {
+  return customFetch<V2Cities>(getListV2CitiesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListV2CitiesQueryKey = (params?: ListV2CitiesParams) => {
+  return [`/api/v2/cities`, ...(params ? [params] : [])] as const;
+};
+
+export const getListV2CitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2Cities>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: ListV2CitiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2Cities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListV2CitiesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listV2Cities>>> = ({
+    signal,
+  }) => listV2Cities(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2Cities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2CitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2Cities>>
+>;
+export type ListV2CitiesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Search cities with stable IDs for new-lead intake
+ */
+
+export function useListV2Cities<
+  TData = Awaited<ReturnType<typeof listV2Cities>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: ListV2CitiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2Cities>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2CitiesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Server binds the authenticated account and current Terms. Saved does not mean associated, verified or published. This first capability supports minimum new leads only; other observations and target types remain separate future capabilities. No legacy fallback.
+ * @summary Atomically save the four-answer lead and its initial receipt
+ */
+export const getSubmitV2LeadUrl = () => {
+  return `/api/v2/contributions`;
+};
+
+export const submitV2Lead = async (
+  v2MinimumLeadRequest: V2MinimumLeadRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(getSubmitV2LeadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2MinimumLeadRequest),
+  });
+};
+
+export const getSubmitV2LeadMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2Lead>>,
+    TError,
+    { data: BodyType<V2MinimumLeadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2Lead>>,
+  TError,
+  { data: BodyType<V2MinimumLeadRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2Lead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2Lead>>,
+    { data: BodyType<V2MinimumLeadRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitV2Lead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2LeadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2Lead>>
+>;
+export type SubmitV2LeadMutationBody = BodyType<V2MinimumLeadRequest>;
+export type SubmitV2LeadMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Atomically save the four-answer lead and its initial receipt
+ */
+export const useSubmitV2Lead = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2Lead>>,
+    TError,
+    { data: BodyType<V2MinimumLeadRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2Lead>>,
+  TError,
+  { data: BodyType<V2MinimumLeadRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2LeadMutationOptions(options));
+};
+
+/**
+ * Returns found=false for missing or other-account keys. The initial receipt is historical save confirmation, not a current processing or publication status. Erasure removes the receipt.
+ * @summary Check this account's initial committed receipt before retrying
+ */
+export const getGetV2LeadReceiptUrl = (clientSubmissionId: string) => {
+  return `/api/v2/receipts/${clientSubmissionId}`;
+};
+
+export const getV2LeadReceipt = async (
+  clientSubmissionId: string,
+  options?: RequestInit,
+): Promise<V2ReceiptLookup> => {
+  return customFetch<V2ReceiptLookup>(
+    getGetV2LeadReceiptUrl(clientSubmissionId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetV2LeadReceiptQueryKey = (clientSubmissionId: string) => {
+  return [`/api/v2/receipts/${clientSubmissionId}`] as const;
+};
+
+export const getGetV2LeadReceiptQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2LeadReceipt>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2LeadReceipt>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2LeadReceiptQueryKey(clientSubmissionId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2LeadReceipt>>
+  > = ({ signal }) =>
+    getV2LeadReceipt(clientSubmissionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientSubmissionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2LeadReceipt>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2LeadReceiptQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2LeadReceipt>>
+>;
+export type GetV2LeadReceiptQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Check this account's initial committed receipt before retrying
+ */
+
+export function useGetV2LeadReceipt<
+  TData = Awaited<ReturnType<typeof getV2LeadReceipt>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2LeadReceipt>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2LeadReceiptQueryOptions(
+    clientSubmissionId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Returns server health status
@@ -215,7 +663,7 @@ export function useGetCurrentAuthUser<
 }
 
 /**
- * @summary Start the browser OIDC login flow
+ * @summary Start the browser Google login flow through Supabase
  */
 export const getBeginBrowserLoginUrl = (params?: BeginBrowserLoginParams) => {
   const normalizedParams = new URLSearchParams();
@@ -285,7 +733,7 @@ export type BeginBrowserLoginQueryResult = NonNullable<
 export type BeginBrowserLoginQueryError = ErrorType<void>;
 
 /**
- * @summary Start the browser OIDC login flow
+ * @summary Start the browser Google login flow through Supabase
  */
 
 export function useBeginBrowserLogin<
@@ -312,7 +760,7 @@ export function useBeginBrowserLogin<
 }
 
 /**
- * @summary Complete the browser OIDC login flow
+ * @summary Complete the browser Google login flow through Supabase
  */
 export const getHandleBrowserLoginCallbackUrl = (
   params?: HandleBrowserLoginCallbackParams,
@@ -385,7 +833,7 @@ export type HandleBrowserLoginCallbackQueryResult = NonNullable<
 export type HandleBrowserLoginCallbackQueryError = ErrorType<void>;
 
 /**
- * @summary Complete the browser OIDC login flow
+ * @summary Complete the browser Google login flow through Supabase
  */
 
 export function useHandleBrowserLoginCallback<
@@ -415,7 +863,7 @@ export function useHandleBrowserLoginCallback<
 }
 
 /**
- * @summary Clear the session and begin OIDC logout
+ * @summary Clear the Mabhazi browser session
  */
 export const getLogoutBrowserSessionUrl = () => {
   return `/api/logout`;
@@ -466,7 +914,7 @@ export type LogoutBrowserSessionQueryResult = NonNullable<
 export type LogoutBrowserSessionQueryError = ErrorType<void>;
 
 /**
- * @summary Clear the session and begin OIDC logout
+ * @summary Clear the Mabhazi browser session
  */
 
 export function useLogoutBrowserSession<
@@ -490,7 +938,7 @@ export function useLogoutBrowserSession<
 }
 
 /**
- * @summary Exchange a mobile OIDC code for a session token
+ * @summary Exchange a Supabase PKCE code for a Mabhazi session token
  */
 export const getExchangeMobileAuthorizationCodeUrl = () => {
   return `/api/mobile-auth/token-exchange`;
@@ -558,7 +1006,7 @@ export type ExchangeMobileAuthorizationCodeMutationError =
   ErrorType<ErrorEnvelope>;
 
 /**
- * @summary Exchange a mobile OIDC code for a session token
+ * @summary Exchange a Supabase PKCE code for a Mabhazi session token
  */
 export const useExchangeMobileAuthorizationCode = <
   TError = ErrorType<ErrorEnvelope>,

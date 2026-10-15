@@ -1,0 +1,26 @@
+name: API contract generation
+on:
+  pull_request:
+    paths:
+      - 'lib/api-spec/**'
+      - 'lib/api-client-react/**'
+      - 'lib/api-zod/**'
+      - '.github/workflows/api-contract-generation.yml'
+permissions:
+  contents: read
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@10.26.1
+      - run: pnpm install --frozen-lockfile
+      - name: Generate actual clients and validators from OpenAPI
+        run: pnpm --dir lib/api-spec exec orval --config ./orval.config.ts
+      - name: Reject drift in checked-in clients and validators
+        run: git diff --exit-code -- lib/api-client-react/src/generated lib/api-zod/src/generated
+      - run: pnpm run typecheck:libs

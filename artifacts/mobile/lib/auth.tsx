@@ -11,7 +11,8 @@ import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
 import * as WebBrowser from "expo-web-browser";
 import * as SecureStore from "expo-secure-store";
-import { resolveApiBaseUrl } from "@/lib/api-base";
+import { resolveApiBaseUrl, mobileAuthRedirectUri } from "@/lib/api-base";
+import { leadDrafts } from '@/lib/lead-drafts';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -101,6 +102,7 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
       } else {
         await storage.removeItem(AUTH_TOKEN_KEY);
         setUser(null);
+        await leadDrafts.clear();
       }
     } catch {
       setUser(null);
@@ -211,6 +213,7 @@ function WebAuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     await storage.removeItem(AUTH_TOKEN_KEY);
     setUser(null);
+    await leadDrafts.clear();
   }, [apiBase]);
 
   return (
@@ -247,7 +250,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) throw new Error("Account lookup failed");
       const data = await response.json();
       setUser(data.user ?? null);
-      if (!data.user) await storage.removeItem(AUTH_TOKEN_KEY);
+      if (!data.user) { await storage.removeItem(AUTH_TOKEN_KEY); await leadDrafts.clear(); }
     } finally { setIsLoading(false); }
   }, [apiBase]);
 
@@ -258,7 +261,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async () => {
     if (loginInProgress.current) return;
     loginInProgress.current = true;
-    const redirectUri = "mabhazicom://auth/callback";
+    const redirectUri = mobileAuthRedirectUri();
     // Fresh verifier per attempt. It never leaves this device except over HTTPS
     // to the backend during the single-use code exchange.
     const verifier = (Crypto.randomUUID() + Crypto.randomUUID()).replace(/-/g, "");
@@ -279,7 +282,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
       const result = await WebBrowser.openAuthSessionAsync(url, redirectUri);
       if (result.type !== "success") return;
       const callback = new URL(result.url);
-      if (callback.protocol !== "mabhazicom:" || callback.hostname !== "auth" ||
+      if (callback.protocol !== new URL(redirectUri).protocol || callback.hostname !== "auth" ||
           callback.pathname !== "/callback" || callback.username || callback.password ||
           callback.searchParams.has("error")) {
         throw new Error("Google sign-in was not completed.");
@@ -313,6 +316,7 @@ function NativeAuthProvider({ children }: { children: ReactNode }) {
     } finally {
       await storage.removeItem(AUTH_TOKEN_KEY);
       setUser(null);
+      await leadDrafts.clear();
     }
   }, [apiBase]);
 
@@ -333,3 +337,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth(): AuthContextValue {
   return useContext(AuthContext);
 }
+

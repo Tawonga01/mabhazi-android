@@ -23,6 +23,7 @@ import { DaysPicker } from "@/components/DaysPicker";
 import { useCreateJourney } from "@workspace/api-client-react";
 import { SearchModal } from "@/components/SearchModal";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
+import { MinimumLeadForm } from '@/components/MinimumLeadForm';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -408,6 +409,16 @@ const EMPTY_FORM: FormData = {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributeScreen() {
+  const [full, setFull] = useState(false);
+  const insets = useSafeAreaInsets();
+  if (!full) return <MinimumLeadForm openFullForm={() => setFull(true)} />;
+  return <View style={{ flex: 1 }}>
+    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to minimum route form</Text></TouchableOpacity>
+    <LegacyContributeScreen />
+  </View>;
+}
+
+function LegacyContributeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -1062,3 +1073,4 @@ const styles = StyleSheet.create({
   },
   tySecondaryBtnText: { fontSize: 14 },
 });
+

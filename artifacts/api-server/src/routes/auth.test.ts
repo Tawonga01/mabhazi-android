@@ -71,3 +71,13 @@ test("mobile login rejects invalid PKCE and ignores caller-supplied callbacks", 
   const body = await response.json() as { url: string };
   assert.equal(new URL(body.url).searchParams.get("redirect_to"), "mabhazicom://auth/callback");
 });
+
+test('preview login uses the configured separate callback and ignores client redirect overrides', async () => {
+  process.env.MABHAZI_DEPLOYMENT='preview';
+  try {
+    const response=await fetch(baseUrl+'/api/mobile-auth/start',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code_challenge:'a'.repeat(43),redirect_to:'mabhazicom://auth/callback'})});
+    assert.equal(response.status,200);
+    const body=await response.json() as {url:string};assert.equal(new URL(body.url).searchParams.get('redirect_to'),'mabhazipreview://auth/callback');
+  } finally { delete process.env.MABHAZI_DEPLOYMENT; }
+});

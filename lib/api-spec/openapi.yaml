@@ -17,6 +17,118 @@ tags:
   - name: Legal
     description: Public privacy, terms, support, and account deletion surfaces.
 paths:
+  /v2/actual-journeys:
+    post:
+      operationId: submitV2ActualJourney
+      summary: Save a typed actual-journey report without inferring a timetable
+      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/V2ActualJourneyRequest'}
+      responses:
+        '200':
+          description: Initial committed receipt or exact historical replay
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2LeadReceipt'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '413': {$ref: '#/components/responses/V2Error'}
+        '415': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '428': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/capabilities:
+    get:
+      operationId: getV2Capabilities
+      summary: Discover the enabled minimum-lead intake contract
+      responses:
+        '200':
+          description: Capability is false until explicitly enabled with the installed writer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2Capabilities'
+  /v2/cities:
+    get:
+      operationId: listV2Cities
+      summary: Search cities with stable IDs for new-lead intake
+      parameters:
+        - name: q
+          in: query
+          schema: {type: string, maxLength: 80}
+      responses:
+        '200':
+          description: Up to twenty matching reference cities, never inferred from free text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2Cities'
+        '400': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/contributions:
+    post:
+      operationId: submitV2Lead
+      summary: Atomically save the four-answer lead and its initial receipt
+      description: Server binds the authenticated account and current Terms. Saved does not mean associated, verified or published. This first capability supports minimum new leads only; other observations and target types remain separate future capabilities. No legacy fallback.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/V2MinimumLeadRequest'
+      responses:
+        '200':
+          description: Committed initial receipt, including exact safe replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2LeadReceipt'
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '413': {$ref: '#/components/responses/V2Error'}
+        '415': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '428': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/receipts/{clientSubmissionId}:
+    get:
+      operationId: getV2LeadReceipt
+      summary: Check this account's initial committed receipt before retrying
+      description: Returns found=false for missing or other-account keys. The initial receipt is historical save confirmation, not a current processing or publication status. Erasure removes the receipt.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: clientSubmissionId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Private account-scoped receipt lookup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ReceiptLookup'
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
   /healthz:
     get:
       operationId: healthCheck
@@ -791,6 +903,12 @@ paths:
 
 components:
   parameters:
+    ExpectedAccountHeader:
+      name: X-Mabhazi-Account
+      in: header
+      required: true
+      description: Expected signed-in account ID to reject a token/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.
+      schema: {type: string, minLength: 1, maxLength: 256}
     AuthorizationSessionHeader:
       name: Authorization
       in: header
@@ -857,522 +975,7 @@ components:
           type: string
           minLength: 43
           maxLength: 128
-          pattern: '^[A-Za-z0-9._~-]+    MobileTokenExchangeSuccess:
-      type: object
-      required: [token]
-      properties:
-        token:
-          type: string
-
-    LogoutSuccess:
-      type: object
-      required: [success]
-      properties:
-        success:
-          type: boolean
-          const: true
-
-    ErrorEnvelope:
-      type: object
-      required: [error]
-      properties:
-        error:
-          type: string
-        code:
-          type: string
-        currentVersion:
-          type: string
-
-    TermsAcceptanceBody:
-      type: object
-      required: [version]
-      properties:
-        version:
-          type: string
-          minLength: 1
-          maxLength: 64
-
-    TermsAcceptanceStatus:
-      type: object
-      required: [currentVersion, acceptedVersion, acceptedAt, requiresAcceptance]
-      properties:
-        currentVersion:
-          type: string
-        acceptedVersion:
-          type: [string, 'null']
-        acceptedAt:
-          type: [string, 'null']
-          format: date-time
-        requiresAcceptance:
-          type: boolean
-
-    LegalSummary:
-      type: object
-      required: [title, operator, contactEmail, country, content]
-      properties:
-        title:
-          type: string
-        version:
-          type: string
-        operator:
-          type: string
-        contactEmail:
-          type: string
-          format: email
-        country:
-          type: [string, 'null']
-        content:
-          type: string
-
-    SupportSummary:
-      type: object
-      required: [title, operator, contactEmail, reportContent, reportUsers, blockUsers]
-      properties:
-        title:
-          type: string
-        operator:
-          type: string
-        contactEmail:
-          type: string
-          format: email
-        reportContent:
-          type: boolean
-        reportUsers:
-          type: boolean
-        blockUsers:
-          type: boolean
-
-    DeleteAccountBody:
-      type: object
-      required: [confirmation]
-      properties:
-        confirmation:
-          type: string
-          description: Must equal DELETE MY ACCOUNT.
-          enum: ["DELETE MY ACCOUNT"]
-        csrfToken:
-          type: string
-
-    DeleteAccountResult:
-      type: object
-      required: [success]
-      properties:
-        success:
-          type: boolean
-          const: true
-
-    JourneyStop:
-      type: object
-      required: [id, city, sequence]
-      properties:
-        id:
-          type: integer
-        city:
-          type: string
-        arrivalTime:
-          type: [string, 'null']
-        departureTime:
-          type: [string, 'null']
-        sequence:
-          type: integer
-        sourceAssociationId:
-          type: [integer, 'null']
-
-    CreateJourneyStop:
-      type: object
-      required: [city]
-      properties:
-        city:
-          type: string
-          minLength: 1
-        arrivalTime:
-          type: string
-        departureTime:
-          type: string
-
-    Journey:
-      type: object
-      required: [id, fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price, contributorId, contributorName, dataStatus, confidenceScore, confirmationCount, lastConfirmedAt, createdAt, averageRating, ratingCount, userRating, stops]
-      properties:
-        id:
-          type: integer
-        fromCity:
-          type: string
-        toCity:
-          type: string
-        departureTime:
-          type: string
-        arrivalTime:
-          type: string
-        scheduledDays:
-          type: string
-        busCompany:
-          type: string
-        pickupPoint:
-          type: string
-        dropoffPoint:
-          type: string
-        price:
-          type: number
-        contributorId:
-          type: [string, 'null']
-        contributorName:
-          type: string
-        dataStatus:
-          type: string
-          enum: [active, uncertain, inactive]
-        confidenceScore:
-          type: integer
-          minimum: 0
-          maximum: 100
-        confirmationCount:
-          type: integer
-          minimum: 0
-        lastConfirmedAt:
-          type: [string, 'null']
-          format: date-time
-        createdAt:
-          type: string
-        averageRating:
-          type: [number, 'null']
-        ratingCount:
-          type: integer
-        userRating:
-          type: [integer, 'null']
-        stops:
-          type: array
-          items:
-            $ref: "#/components/schemas/JourneyStop"
-
-    JourneysEnvelope:
-      type: object
-      required: [journeys]
-      properties:
-        journeys:
-          type: array
-          items:
-            $ref: "#/components/schemas/Journey"
-
-    CreateJourneyBody:
-      type: object
-      required: [fromCity, toCity, departureTime, arrivalTime, scheduledDays, busCompany, pickupPoint, dropoffPoint, price]
-      properties:
-        fromCity:
-          type: string
-          minLength: 1
-        toCity:
-          type: string
-          minLength: 1
-        departureTime:
-          type: string
-          minLength: 1
-        arrivalTime:
-          type: string
-          minLength: 1
-        scheduledDays:
-          type: string
-          minLength: 1
-        busCompany:
-          type: string
-          minLength: 1
-        pickupPoint:
-          type: string
-          minLength: 1
-        dropoffPoint:
-          type: string
-          minLength: 1
-        price:
-          type: number
-          minimum: 0
-        stops:
-          type: array
-          items:
-            $ref: "#/components/schemas/CreateJourneyStop"
-
-    JourneyComment:
-      type: object
-      required: [id, userId, authorName, content, createdAt]
-      properties:
-        id:
-          type: integer
-        userId:
-          type: [string, 'null']
-        authorName:
-          type: [string, 'null']
-        content:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-
-    JourneyDetails:
-      type: object
-      required: [comments, priceToday, priceYesterday, badTreatmentCount, breakdownCount, delays]
-      properties:
-        comments:
-          type: array
-          items:
-            $ref: "#/components/schemas/JourneyComment"
-        priceToday:
-          type: [number, 'null']
-        priceYesterday:
-          type: [number, 'null']
-        badTreatmentCount:
-          type: integer
-        breakdownCount:
-          type: integer
-        delays:
-          type: object
-          required: [count, avgMinutes]
-          properties:
-            count:
-              type: integer
-            avgMinutes:
-              type: [number, 'null']
-
-    SubmitJourneyReportBody:
-      type: object
-      required: [type]
-      properties:
-        type:
-          type: string
-          enum: [comment, bad_treatment, breakdown, departure_delay, price]
-        content:
-          type: string
-          minLength: 1
-          maxLength: 500
-        minutesLate:
-          type: integer
-          minimum: 0
-          maximum: 999
-        reportedPrice:
-          type: number
-          minimum: 0
-
-    AbuseReportBody:
-      type: object
-      required: [targetType, targetId, reason]
-      properties:
-        targetType:
-          type: string
-          enum: [journey, comment, user]
-        targetId:
-          oneOf:
-            - type: string
-            - type: integer
-        reason:
-          type: string
-          enum: [sexual_content, violent_content, harassment, hate_speech, spam, personal_information, misleading, other]
-        details:
-          type: string
-          maxLength: 1000
-
-    AbuseReportResult:
-      type: object
-      required: [success, reportId]
-      properties:
-        success:
-          type: boolean
-          const: true
-        reportId:
-          type: integer
-
-    RateJourneyBody:
-      type: object
-      required: [score]
-      properties:
-        score:
-          type: integer
-          minimum: 1
-          maximum: 5
-
-    RateJourneyResult:
-      type: object
-      required: [averageRating, ratingCount, userRating]
-      properties:
-        averageRating:
-          type: [number, 'null']
-        ratingCount:
-          type: integer
-        userRating:
-          type: integer
-
-    ConfirmJourneyResult:
-      type: object
-      required: [success, confidenceScore, confirmationCount, lastConfirmedAt]
-      properties:
-        success:
-          type: boolean
-          const: true
-        confidenceScore:
-          type: integer
-          minimum: 0
-          maximum: 100
-        confirmationCount:
-          type: integer
-          minimum: 0
-        lastConfirmedAt:
-          type: string
-          format: date-time
-
-    JourneyClaimInput:
-      type: object
-      required: [type, value]
-      properties:
-        type:
-          type: string
-          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
-        value:
-          type: object
-          required: [text]
-          properties:
-            text:
-              type: string
-              minLength: 1
-              maxLength: 240
-            reportedPrice:
-              type: number
-              minimum: 0
-
-    JourneyClaimResult:
-      type: object
-      required: [success, claimId, type, status, createdAt]
-      properties:
-        success:
-          type: boolean
-          const: true
-        claimId:
-          type: integer
-        type:
-          type: string
-          enum: [route_inactive, pickup_point, operator, price, schedule, stop]
-        status:
-          type: string
-          enum: [active, disputed, superseded]
-        createdAt:
-          type: string
-          format: date-time
-
-    UpdateDisplayNameBody:
-      type: object
-      required: [displayName]
-      properties:
-        displayName:
-          type: string
-          minLength: 2
-          maxLength: 30
-
-    UpdateDisplayNameResult:
-      type: object
-      required: [displayName, lastNameChange, nextChangeAvailable]
-      properties:
-        displayName:
-          type: string
-        lastNameChange:
-          type: string
-          format: date-time
-        nextChangeAvailable:
-          type: string
-          format: date-time
-
-    UpdateDisplayNameRateLimitError:
-      type: object
-      required: [error, nextChangeAvailable]
-      properties:
-        error:
-          type: string
-        nextChangeAvailable:
-          type: string
-          format: date-time
-
-    CitiesEnvelope:
-      type: object
-      required: [cities]
-      properties:
-        cities:
-          type: array
-          items:
-            type: string
-
-    BusCompany:
-      type: object
-      required: [id, name]
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-
-    BusCompaniesEnvelope:
-      type: object
-      required: [companies]
-      properties:
-        companies:
-          type: array
-          items:
-            $ref: "#/components/schemas/BusCompany"
-
-    SuccessEnvelope:
-      type: object
-      required: [success]
-      properties:
-        success:
-          type: boolean
-          const: true
-
-    ProposedAssociation:
-      type: object
-      required: [id, candidateJourneyId, parentJourneyId, proposedStopCity, relationType, confidenceScore, evidence, status, proposedAt, resolvedAt, parentFromCity, parentToCity, parentDepartureTime, parentArrivalTime, parentBusCompany]
-      properties:
-        id:
-          type: integer
-        candidateJourneyId:
-          type: integer
-        parentJourneyId:
-          type: integer
-        proposedStopCity:
-          type: string
-        proposedStopTime:
-          type: [string, 'null']
-        relationType:
-          type: string
-          enum: [contains_stop, same_service, duplicate, correction]
-        confidenceScore:
-          type: integer
-          minimum: 0
-          maximum: 100
-        evidence:
-          type: [object, 'null']
-          additionalProperties: true
-        status:
-          type: string
-          enum: [pending, confirmed, rejected, reversed]
-        proposedAt:
-          type: string
-          format: date-time
-        resolvedAt:
-          type: [string, 'null']
-          format: date-time
-        parentFromCity:
-          type: string
-        parentToCity:
-          type: string
-        parentDepartureTime:
-          type: string
-        parentArrivalTime:
-          type: string
-        parentBusCompany:
-          type: string
-
-    ProposedAssociationsEnvelope:
-      type: object
-      required: [proposals]
-      properties:
-        proposals:
-          type: array
-          items:
-            $ref: "#/components/schemas/ProposedAssociation"
-
+          pattern: '^[A-Za-z0-9._~-]+$'
 
     MobileTokenExchangeSuccess:
       type: object
@@ -1889,3 +1492,127 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProposedAssociation"
+
+    V2Capabilities:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, minimumLeadEnabled]
+      properties:
+        schemaVersion: {type: string, enum: ['1.0']}
+        minimumLeadEnabled: {type: boolean}
+        actualJourneyEnabled: {type: boolean}
+    V2City:
+      type: object
+      additionalProperties: false
+      required: [id, name, placeType]
+      properties:
+        id: {type: integer, minimum: 1, maximum: 999999999}
+        name: {type: string}
+        placeType: {type: string}
+    V2Cities:
+      type: object
+      additionalProperties: false
+      required: [cities]
+      properties:
+        cities:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/V2City'}
+    V2NamedOperator:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: A trimmed reported bus company name. Unknown, n/a, dash and control characters are invalid. A name is not a resolved operator identity.
+    V2MinimumLeadCore:
+      type: object
+      additionalProperties: false
+      required: [originCityId, destinationCityId, departureTime, operator]
+      properties:
+        originCityId: {type: integer, minimum: 1, maximum: 999999999}
+        destinationCityId: {type: integer, minimum: 1, maximum: 999999999}
+        departureTime:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+          description: Explicit clock answer. Midnight is valid only when explicitly entered. No default, recurring calendar, date or timezone is inferred.
+        operator: {$ref: '#/components/schemas/V2NamedOperator'}
+    V2MinimumLeadTarget:
+      type: object
+      additionalProperties: false
+      required: [newLead]
+      properties:
+        newLead: {$ref: '#/components/schemas/V2MinimumLeadCore'}
+    V2MinimumLeadRequest:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, clientSubmissionId, entrySurface, target, observations]
+      properties:
+        schemaVersion: {type: string, enum: ['1.0']}
+        clientSubmissionId: {type: string, format: uuid}
+        entrySurface: {type: string, enum: [contribute_tab]}
+        target: {$ref: '#/components/schemas/V2MinimumLeadTarget'}
+        observations:
+          type: array
+          maxItems: 0
+          items: {type: object, additionalProperties: false}
+          description: This capability accepts the four minimum answers only. Optional typed facts remain in the full roadmap and are not discarded into legacy fields.
+    V2LeadReceipt:
+      type: object
+      additionalProperties: false
+      required: [contributionId, clientSubmissionId, subjectId, saveStatus, processingStatus, associationStatus, publicationStatus, replayed]
+      properties:
+        contributionId: {type: string, format: uuid}
+        clientSubmissionId: {type: string, format: uuid}
+        subjectId: {type: string, format: uuid}
+        saveStatus: {type: string, enum: [saved]}
+        processingStatus: {type: string, enum: [queued]}
+        associationStatus: {type: string, enum: [unresolved]}
+        publicationStatus: {type: string, enum: [pending]}
+        replayed: {type: boolean}
+    V2ReceiptLookup:
+      type: object
+      additionalProperties: false
+      required: [found]
+      properties:
+        found: {type: boolean}
+        initialReceipt: {$ref: '#/components/schemas/V2LeadReceipt'}
+    V2Error:
+      type: object
+      additionalProperties: false
+      required: [error, code]
+      properties:
+        error: {type: string}
+        code: {type: string}
+        currentVersion: {type: string}
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: {type: string}
+              message: {type: string}
+    V2ActualIntention: {"type":"object","additionalProperties":false,"required":["id","kind","expectedRevision"],"properties":{"id":{"type":"string","format":"uuid"},"kind":{"type":"string","enum":["lead"]},"expectedRevision":{"type":"integer","minimum":1,"maximum":9007199254740991}}}
+    V2ActualCore: {"type":"object","additionalProperties":false,"required":[],"properties":{"reportedServiceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"timezone":{"type":"string","minLength":1,"maxLength":100},"intendedSubject":{"$ref":"#/components/schemas/V2ActualIntention"}}}
+    V2ActualTarget: {"type":"object","additionalProperties":false,"required":["newActualJourney"],"properties":{"newActualJourney":{"$ref":"#/components/schemas/V2ActualCore"}}}
+    V2ActualContext: {"type":"object","additionalProperties":false,"required":[],"properties":{"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}
+    V2ActualClockScope: {"type":"object","additionalProperties":false,"required":["schemaVersion"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"serviceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"timezone":{"type":"string","minLength":1,"maxLength":100},"utcOffset":{"type":"string","pattern":"^[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"}}}
+    V2ActualPlace: {"type":"object","additionalProperties":false,"required":["cityId","name"],"properties":{"cityId":{"type":"integer","minimum":1,"maximum":999999999},"name":{"type":"string","minLength":1,"maxLength":200},"instructions":{"type":"string","maxLength":500}}}
+    V2ActualFareScope: {"type":"object","additionalProperties":false,"required":["schemaVersion","segment","passengerCategory","ticketBasis"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"segment":{"type":"object","additionalProperties":false,"required":["kind","originCityId","destinationCityId"],"properties":{"kind":{"type":"string","enum":["city_pair"]},"originCityId":{"type":"integer","minimum":1,"maximum":999999999},"destinationCityId":{"type":"integer","minimum":1,"maximum":999999999}}},"serviceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"quotationDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sourceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"passengerCategory":{"type":"string","enum":["adult","child","concession","other","unknown"]},"passengerLabel":{"type":"string","minLength":1,"maxLength":120},"ticketBasis":{"type":"string","enum":["one_way","return","other","unknown"]},"ticketLabel":{"type":"string","minLength":1,"maxLength":120},"paymentMethod":{"type":"string","minLength":1,"maxLength":120},"luggageIncluded":{"type":"boolean"},"timeBasis":{"type":"string","enum":["unspecified","scheduled","actual"]}}}
+    V2ActualClockObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["departure.actual","arrival.actual"]},"value":{"type":"object","additionalProperties":false,"required":["time"],"properties":{"time":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"}}},"scope":{"$ref":"#/components/schemas/V2ActualClockScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualOperatorObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["operator.reported"]},"value":{"$ref":"#/components/schemas/V2NamedOperator"},"scope":{"type":"object","additionalProperties":false,"required":[],"properties":{}},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualPlaceObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["boarding.pickup","alighting.dropoff"]},"value":{"$ref":"#/components/schemas/V2ActualPlace"},"scope":{"type":"object","additionalProperties":false,"required":[],"properties":{}},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualFareObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["fare.paid","fare.quoted","fare.advertised"]},"value":{"type":"object","additionalProperties":false,"required":["amount","currency"],"properties":{"amount":{"type":"string","pattern":"^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$","maxLength":13},"currency":{"type":"string","pattern":"^[A-Z]{3}$"}}},"scope":{"$ref":"#/components/schemas/V2ActualFareScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualObservation: {"oneOf":[{"$ref":"#/components/schemas/V2ActualClockObservation"},{"$ref":"#/components/schemas/V2ActualOperatorObservation"},{"$ref":"#/components/schemas/V2ActualPlaceObservation"},{"$ref":"#/components/schemas/V2ActualFareObservation"}]}
+    V2ActualJourneyRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_empty","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2ActualTarget"},"observations":{"type":"array","minItems":1,"maxItems":20,"items":{"$ref":"#/components/schemas/V2ActualObservation"}},"actualContext":{"$ref":"#/components/schemas/V2ActualContext"}}}
+  responses:
+    V2Error:
+      description: Safe error with no raw payload, database message, token or private evidence
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/V2Error'}
+

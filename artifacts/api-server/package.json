@@ -10,7 +10,9 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "start:production": "NODE_ENV=production node --enable-source-maps ./dist/index.mjs",
     "test": "tsx --test src/routes/legal.test.ts && tsx --test src/routes/terms.test.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "worker:normalise": "tsx ./src/worker.ts drain",
+    "worker:health": "tsx ./src/worker.ts health"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

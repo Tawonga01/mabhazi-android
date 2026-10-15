@@ -6,8 +6,11 @@ import associationsRouter from "./associations";
 import adminRouter from "./admin";
 import busCompaniesRouter from "./busCompanies";
 import legalRouter from "./legal";
+import contributionsV2Router from "./contributionsV2";
 
 const router: IRouter = Router();
+
+router.use('/v2', contributionsV2Router);
 
 router.use(healthRouter);
 router.use(authRouter);
@@ -18,3 +21,4 @@ router.use(adminRouter);
 router.use(legalRouter);
 
 export default router;
+
