@@ -17,6 +17,35 @@ tags:
   - name: Legal
     description: Public privacy, terms, support, and account deletion surfaces.
 paths:
+  /v2/actual-journeys:
+    post:
+      operationId: submitV2ActualJourney
+      summary: Save a typed actual-journey report without inferring a timetable
+      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/V2ActualJourneyRequest'}
+      responses:
+        '200':
+          description: Initial committed receipt or exact historical replay
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2LeadReceipt'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '413': {$ref: '#/components/responses/V2Error'}
+        '415': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '428': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
   /v2/capabilities:
     get:
       operationId: getV2Capabilities
@@ -1470,6 +1499,7 @@ components:
       properties:
         schemaVersion: {type: string, enum: ['1.0']}
         minimumLeadEnabled: {type: boolean}
+        actualJourneyEnabled: {type: boolean}
     V2City:
       type: object
       additionalProperties: false
@@ -1565,6 +1595,19 @@ components:
             properties:
               field: {type: string}
               message: {type: string}
+    V2ActualIntention: {"type":"object","additionalProperties":false,"required":["id","kind","expectedRevision"],"properties":{"id":{"type":"string","format":"uuid"},"kind":{"type":"string","enum":["lead"]},"expectedRevision":{"type":"integer","minimum":1,"maximum":9007199254740991}}}
+    V2ActualCore: {"type":"object","additionalProperties":false,"required":[],"properties":{"reportedServiceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"timezone":{"type":"string","minLength":1,"maxLength":100},"intendedSubject":{"$ref":"#/components/schemas/V2ActualIntention"}}}
+    V2ActualTarget: {"type":"object","additionalProperties":false,"required":["newActualJourney"],"properties":{"newActualJourney":{"$ref":"#/components/schemas/V2ActualCore"}}}
+    V2ActualContext: {"type":"object","additionalProperties":false,"required":[],"properties":{"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}
+    V2ActualClockScope: {"type":"object","additionalProperties":false,"required":["schemaVersion"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"serviceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"timezone":{"type":"string","minLength":1,"maxLength":100},"utcOffset":{"type":"string","pattern":"^[+-]((0[0-9]|1[0-3]):[0-5][0-9]|14:00)$"}}}
+    V2ActualPlace: {"type":"object","additionalProperties":false,"required":["cityId","name"],"properties":{"cityId":{"type":"integer","minimum":1,"maximum":999999999},"name":{"type":"string","minLength":1,"maxLength":200},"instructions":{"type":"string","maxLength":500}}}
+    V2ActualFareScope: {"type":"object","additionalProperties":false,"required":["schemaVersion","segment","passengerCategory","ticketBasis"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"segment":{"type":"object","additionalProperties":false,"required":["kind","originCityId","destinationCityId"],"properties":{"kind":{"type":"string","enum":["city_pair"]},"originCityId":{"type":"integer","minimum":1,"maximum":999999999},"destinationCityId":{"type":"integer","minimum":1,"maximum":999999999}}},"serviceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"quotationDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sourceDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"passengerCategory":{"type":"string","enum":["adult","child","concession","other","unknown"]},"passengerLabel":{"type":"string","minLength":1,"maxLength":120},"ticketBasis":{"type":"string","enum":["one_way","return","other","unknown"]},"ticketLabel":{"type":"string","minLength":1,"maxLength":120},"paymentMethod":{"type":"string","minLength":1,"maxLength":120},"luggageIncluded":{"type":"boolean"},"timeBasis":{"type":"string","enum":["unspecified","scheduled","actual"]}}}
+    V2ActualClockObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["departure.actual","arrival.actual"]},"value":{"type":"object","additionalProperties":false,"required":["time"],"properties":{"time":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"}}},"scope":{"$ref":"#/components/schemas/V2ActualClockScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualOperatorObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["operator.reported"]},"value":{"$ref":"#/components/schemas/V2NamedOperator"},"scope":{"type":"object","additionalProperties":false,"required":[],"properties":{}},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualPlaceObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["boarding.pickup","alighting.dropoff"]},"value":{"$ref":"#/components/schemas/V2ActualPlace"},"scope":{"type":"object","additionalProperties":false,"required":[],"properties":{}},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualFareObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["fare.paid","fare.quoted","fare.advertised"]},"value":{"type":"object","additionalProperties":false,"required":["amount","currency"],"properties":{"amount":{"type":"string","pattern":"^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$","maxLength":13},"currency":{"type":"string","pattern":"^[A-Z]{3}$"}}},"scope":{"$ref":"#/components/schemas/V2ActualFareScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2ActualObservation: {"oneOf":[{"$ref":"#/components/schemas/V2ActualClockObservation"},{"$ref":"#/components/schemas/V2ActualOperatorObservation"},{"$ref":"#/components/schemas/V2ActualPlaceObservation"},{"$ref":"#/components/schemas/V2ActualFareObservation"}]}
+    V2ActualJourneyRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_empty","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2ActualTarget"},"observations":{"type":"array","minItems":1,"maxItems":20,"items":{"$ref":"#/components/schemas/V2ActualObservation"}},"actualContext":{"$ref":"#/components/schemas/V2ActualContext"}}}
   responses:
     V2Error:
       description: Safe error with no raw payload, database message, token or private evidence
