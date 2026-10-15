@@ -50,3 +50,7 @@ Migration0025 checks prior worker/review body hashes, SECURITY DEFINER and pinne
 
 Migration0026 adds [reviewed aliases and namespaced mappings](IDENTITY-LOOKUP.md). The lead consumer preserves reported-name identity and adds reviewed/ambiguous alias hints to corridor candidates; catalog wakeups and erasure clear stale candidate projections. The current public minimum contract and existing worker facade/policy stay unchanged. Source-ID readers are ready for later import integration; no actual feed or public review workflow is completed by this migration.
 
+# Corrected intake and actual journeys (0027)
+
+[Journey processing](JOURNEY-PROCESSING.md) extends current-leaf correction normalisation and reference-only actual input. The existing associate facade also dispatches actual-association/1, with50-target pages under explicit selected service context, catalog wakeups, review/context guards and separate health. Missing intention/lead-only context remains unresolved; no actual clock is converted into a scheduled run. Five new private tables remain backend SELECT only, new helpers owner-only. Existing CLI/Cron bounds and public API/phone contract stay unchanged. Exact-source CI and scoped preview application/proof are recorded separately; writing this capability is not live acceptance or full WP05 completion.
+

@@ -13,6 +13,7 @@ import { registerLeadAssociationTests } from "./lead-association.cases";
 import { registerPatternAssociationTests } from "./pattern-association.cases";
 import { identityLookupTables } from "./schema/identityLookup";
 import { registerIdentityLookupTests } from "./identity-lookup.cases";
+import { registerJourneyProcessingTests } from "./journey-processing.cases";
 import { intakeTables } from "./schema/contributionIntake";
 import { transportTables } from "./schema/transportStructure";
 import { reviewTables } from "./schema/reviewDecisions";
@@ -270,9 +271,9 @@ before(async () => {
     assert.equal((await db.query('SELECT count(*) n FROM mabhazi_migrations.applied')).rows[0].n,'25');
   }
   // The hosted editor stores CRLF inside whole SQL scripts as well as prior bodies.
-  for(const name of ['0025_pattern_association_worker.sql','0026_identity_lookup.sql']){
+  for(const name of ['0025_pattern_association_worker.sql','0026_identity_lookup.sql','0027_journey_processing.sql']){
     const canonical=await readFile(new URL(`../migrations/${name}`,import.meta.url),'utf8');
-    await db.query('BEGIN');await db.query(name.startsWith('0026')?canonical.replace(/\r?\n/g,'\r\n'):canonical);
+    await db.query('BEGIN');await db.query(!name.startsWith('0025')?canonical.replace(/\r?\n/g,'\r\n'):canonical);
     await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(canonical).digest('hex')]);
     await db.query('COMMIT');previousStageLog+=`Applied ${name}\n`;
   }
@@ -288,6 +289,7 @@ before(async () => {
   assert.match(upgradeLog, /Applied 0024_lead_association_worker.sql/);
   assert.match(upgradeLog, /Applied 0025_pattern_association_worker.sql/);
   assert.match(upgradeLog, /Applied 0026_identity_lookup.sql/);
+  assert.match(upgradeLog, /Applied 0027_journey_processing.sql/);
   assert.deepEqual((await db.query(`SELECT has_function_privilege('mabhazi_api','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') api,
     has_function_privilege('anon','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') anon,
     has_function_privilege('authenticated','v2_api_submit_minimum_lead(varchar,text,jsonb)','EXECUTE') authenticated`)).rows[0], { api: true, anon: false, authenticated: false });
@@ -393,7 +395,7 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 27);
+  assert.equal(ledger.length, 28);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -647,3 +649,4 @@ registerProcessingTests(() => ({ db, connectionString, user, other, origin, dest
 registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerIdentityLookupTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

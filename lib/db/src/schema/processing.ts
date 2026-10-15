@@ -36,4 +36,24 @@ export const v2PatternScansTable = pgTable('v2_pattern_scans', {
 export const v2PatternCandidateSupportTable = pgTable('v2_pattern_candidate_support', {
   candidateId: uuid('candidate_id').notNull(), observationId: uuid('observation_id').notNull(),
 }, t => [primaryKey({ columns: [t.candidateId,t.observationId] })]);
-export const processingTables = [v2NormalisedLeadsTable, v2WorkerStatusTable, v2AssociationCatalogTable, v2AssociationScansTable, v2PatternCatalogTable, v2PatternScansTable, v2PatternCandidateSupportTable] as const;
+export const v2NormalisedActualsTable = pgTable('v2_normalised_actuals', {
+  subjectId: uuid('subject_id').primaryKey(), contributionId: uuid('contribution_id').notNull(),
+  inputGeneration: bigint('input_generation', { mode: 'bigint' }).notNull(), intendedSubjectId: uuid('intended_subject_id'),
+  inputDigest: text('input_digest').notNull(), normalisedAt: timestamp('normalised_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const v2ActualInputEvidenceTable = pgTable('v2_actual_input_evidence', {
+  subjectId: uuid('subject_id').notNull(), observationId: uuid('observation_id').notNull(),
+  stateRevision: bigint('state_revision', { mode: 'bigint' }).notNull(),
+}, t => [primaryKey({ columns: [t.subjectId,t.observationId] })]);
+export const v2ActualCatalogTable = pgTable('v2_actual_catalog', {
+  intendedSubjectId: uuid('intended_subject_id').primaryKey(), revision: bigint('revision', { mode: 'bigint' }).notNull(),
+});
+export const v2ActualScansTable = pgTable('v2_actual_scans', {
+  jobId: uuid('job_id').primaryKey(), subjectId: uuid('subject_id').notNull(),
+  sourceRevision: bigint('source_revision', { mode: 'bigint' }).notNull(), catalogRevision: bigint('catalog_revision', { mode: 'bigint' }).notNull(),
+  inputDigest: text('input_digest').notNull(), cursorSubjectId: uuid('cursor_subject_id'), pagesCompleted: integer('pages_completed').notNull().default(0),
+});
+export const v2IntakeCorrectionMembersTable = pgTable('v2_intake_correction_members', {
+  observationId: uuid('observation_id').primaryKey(),
+});
+export const processingTables = [v2NormalisedLeadsTable, v2WorkerStatusTable, v2AssociationCatalogTable, v2AssociationScansTable, v2PatternCatalogTable, v2PatternScansTable, v2PatternCandidateSupportTable, v2NormalisedActualsTable, v2ActualInputEvidenceTable, v2ActualCatalogTable, v2ActualScansTable, v2IntakeCorrectionMembersTable] as const;
