@@ -25,7 +25,7 @@ import { SearchModal } from "@/components/SearchModal";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
 import { CaptureHome } from '@/components/capture/CaptureHome';
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -44,7 +44,7 @@ function formatDuration(h: number, m: number): string {
   return `${h}h ${m}m`;
 }
 
-// â”€â”€â”€ Numeric text input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Numeric text input ───────────────────────────────────────────────────────
 
 interface NumericInputProps {
   value: number;
@@ -100,7 +100,7 @@ const numStyles = StyleSheet.create({
   unit: { fontSize: 13 },
 });
 
-// â”€â”€â”€ Text field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Text field ──────────────────────────────────────────────────────────────
 
 interface FieldProps {
   label: string;
@@ -179,7 +179,7 @@ function PickerField({ label, icon, value, onPress, onClear, placeholder, colors
   );
 }
 
-// â”€â”€â”€ Thank-you overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Thank-you overlay ────────────────────────────────────────────────────────
 
 interface ThankYouOverlayProps {
   visible: boolean;
@@ -219,7 +219,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
           </Text>
           <View style={[styles.tyRouteBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <Text style={[styles.tyRoute, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {fromCity} â†’ {toCity}
+              {fromCity} → {toCity}
             </Text>
             {scheduledDays ? (
               <View style={styles.tyDaysRow}>
@@ -255,7 +255,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
   );
 }
 
-// â”€â”€â”€ Stop entry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Stop entry ───────────────────────────────────────────────────────────────
 
 interface StopEntry {
   city: string;
@@ -383,7 +383,7 @@ const stopStyles = StyleSheet.create({
   timeSep: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
 });
 
-// â”€â”€â”€ Form state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Form state ───────────────────────────────────────────────────────────────
 
 interface FormData {
   fromCity: string;
@@ -406,7 +406,7 @@ const EMPTY_FORM: FormData = {
   scheduledDays: "", pickupPoint: "", dropoffPoint: "", price: "",
 };
 
-// â”€â”€â”€ Main screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributeScreen() {
   const [full, setFull] = useState(false);
@@ -759,7 +759,7 @@ function LegacyContributeScreen() {
             <View style={[styles.readyBanner, { backgroundColor: "#ECFDF5", borderColor: "#6EE7B7" }]}>
               <Feather name="check-circle" size={14} color="#059669" />
               <Text style={[styles.readyBannerText, { color: "#059669", fontFamily: "Inter_500Medium" }]}>
-                Signed in â€” tap Submit Route to share
+                Signed in — tap Submit Route to share
               </Text>
             </View>
           ) : null}
@@ -781,7 +781,7 @@ function LegacyContributeScreen() {
             ) : isLoggingIn ? (
               <>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.submitBtnText}>Signing inâ€¦</Text>
+                <Text style={styles.submitBtnText}>Signing in…</Text>
               </>
             ) : (
               <>
