@@ -1,5 +1,7 @@
 # Mabhazi capture UI designs
 
+**User choice,22October:** FocusedFare is the default fare pop-up, with extra conditions revealed when needed. See [design decisions](DESIGN-DECISIONS.md). This supersedes the original import's pending default-variant status; other visual choices remain to settle.
+
 User-supplied React/CSS prototypes imported on 22 October 2026 from `Mabhazi-contribution-screen-designs.zip`. Original design source and styles are preserved byte-for-byte under [references/2026-10-22/mabhazi](references/2026-10-22/mabhazi/). [Import manifest](manifest.json) maps each file to its original export path and SHA256/Git blob hash.
 
 ## Screen index
