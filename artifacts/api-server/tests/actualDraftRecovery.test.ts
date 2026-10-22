@@ -62,6 +62,14 @@ test('actual input: removing a section clears hidden values; named place require
   assert.ok(actualErrors(place)['place.city']); place.place.city = city(4);
   assert.deepEqual(prepareActual(place, randomUUID()).observations[0], { fieldKey: 'boarding.pickup', value: { cityId: 4, name: 'Main rank' }, scope: {} });
 });
+test('actual input: dated operator and place do not refresh another fact or inherit journey context', () => {
+  const d = operatorDraft(); d.facts.push('place'); d.operatorDate = '2026-10-21'; d.serviceDate = '2026-10-22'; d.knowledgeBasis = 'operator_statement';
+  d.place = { kind: 'dropoff', city: city(3), name: 'Main rank', instructions: '', date: '' };
+  const r = prepareActual(d, randomUUID()); assert.equal(r.observations[0].observedDate, '2026-10-21'); assert.equal(r.observations[1].observedDate, undefined);
+  assert.deepEqual(r.actualContext, { knowledgeBasis: 'operator_statement' }); assert.equal(r.observations[0].knowledgeBasis, undefined);
+  assert.equal(toggleActualFact(d, 'operator').operatorDate, '');
+  assert.ok(actualErrors({ ...d, operatorDate: '2026-02-30' }).operatorDate);
+});
 test('actual drafts: partial answers, pending body and account isolation survive a storage restart', async () => {
   const f = fixture(), record = f.record(); record.pending = { actor: 'account-a', request: prepareActual(record.draft, randomUUID()) };
   await f.store.write(record); assert.deepEqual(await new ActualDraftStore(f.storage, () => 1000).read('account-a'), record);

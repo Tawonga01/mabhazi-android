@@ -151,9 +151,10 @@ try {
   {
     const s=await session(0,true,'journey');
     await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
+    await s.page.getByRole('button',{name:'Choose fare currency',exact:true}).click();
     assert.equal(await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).getAttribute('aria-checked'),'false');
-    await s.page.getByLabel('Fare amount',{exact:true}).fill('0');
     await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();
+    await s.page.getByLabel('Fare amount',{exact:true}).fill('0');
     await s.page.getByRole('radio',{name:'Fare basis: Paid',exact:true}).click();
     async function fareCity(label, name) {
       await s.page.getByRole('button',{name:label,exact:true}).click();
