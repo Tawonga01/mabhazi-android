@@ -34,7 +34,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
   const [enabled, setEnabled] = useState(false), [capabilityBusy, setCapabilityBusy] = useState(true);
   async function checkCapability() {
     setCapabilityBusy(true);
-    try { const result = await boundedRequest(signal => getV2Capabilities({ signal })); if (active()) setEnabled(result[options.capability]); }
+    try { const result = await boundedRequest(signal => getV2Capabilities({ signal })); if (active()) setEnabled(result[options.capability] === true); }
     catch { if (active()) setEnabled(false); }
     finally { if (active()) setCapabilityBusy(false); }
   }
@@ -79,12 +79,12 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
     if (busyRef.current || !ready || resume || receipt || (!reviewing && !pending)) return;
     if (!pending && Object.keys(options.errors(draft)).length) { review(); return; }
     busyRef.current = true; setBusy(true); setMessage('');
-    let frozenStored = !!pending;
+    let frozenStored = !!pending, signingIn = false;
     try {
       if (!owner || authExpired) {
         await options.store.write(record()); // Flush before a browser or native auth transition.
         if (!active()) return;
-        await auth.login();
+        signingIn = true; await auth.login();
         if (active()) { setAuthExpired(false); setMessage('Review your answers after sign-in, then tap Save. Nothing submits automatically.'); }
         return;
       }
@@ -108,7 +108,8 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
     } catch (error) {
       if (!active()) return;
       const problem = error as { status?: number; message?: string; data?: { error?: string; code?: string } };
-      if (!frozenStored && !problem.status) setMessage('A secure retry reference could not be saved. Nothing was sent. Keep this form open and try Save again.');
+      if (signingIn) setMessage('Sign-in did not finish. Your draft is kept. Try signing in again. Nothing was submitted automatically.');
+      else if (!frozenStored && !problem.status) setMessage('A secure retry reference could not be saved. Nothing was sent. Keep this form open and try Save again.');
       else if (problem.status === 428) { await terms.refetch(); if (active()) setMessage('Accept the current Terms, then check and retry. Your answers and reference are kept.'); }
       else if (problem.status === 401) { setAuthExpired(true); setMessage('Sign in again with this account to check its saved receipt. Your answers are kept.'); }
       else if (problem.status === 422) { setPending(undefined); setReviewing(false); setMessage(problem.data?.error ?? 'The server rejected these answers. Review and correct them.'); }
