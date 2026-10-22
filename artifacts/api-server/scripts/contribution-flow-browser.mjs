@@ -39,7 +39,7 @@ try {
   });
   await new Promise(resolve => webServer.listen(4173, '127.0.0.1', resolve));
   browser = await chromium.launch();
-  async function session(account = 0, loseResponse = false) {
+  async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
     let postCount = 0;
@@ -49,7 +49,7 @@ try {
       // Fail closed: no request reaches real Mabhazi, Google, Render or Supabase.
       if (url.origin !== 'https://preview.mabhazi.invalid') { await route.abort(); return; }
       const response = await route.fetch({url:'http://127.0.0.1:5000'+url.pathname+url.search});
-      if (url.pathname === '/api/v2/contributions' && request.method() === 'POST') {
+      if (['/api/v2/contributions','/api/v2/actual-journeys'].includes(url.pathname) && request.method() === 'POST') {
         postCount++;
         if (loseResponse) { loseResponse = false; await route.abort('failed'); return; }
       }
@@ -58,7 +58,9 @@ try {
     const page = await context.newPage();
     page.on('pageerror', error => consoleErrors.push(error.message));
     await page.goto('http://127.0.0.1:4173/contribute');
-    await page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();
+    await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
+    await page.getByRole('button',{name:mode === 'route' ? 'Add a route' : 'Report a journey',exact:true}).click();
+    await page.getByRole('heading',{name:mode === 'route' ? 'Add a bus route' : 'Report a journey',exact:true}).waitFor();
     async function fill() {
       await page.getByRole('button',{name:'Choose departure city',exact:true}).click();
       await page.getByLabel('Search cities',{exact:true}).fill('Flow Origin fixture');
@@ -76,10 +78,11 @@ try {
   {
     const s = await session();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
-    const saveBox=await s.page.getByRole('button',{name:'Save contribution',exact:true}).boundingBox();
-    assert.ok(saveBox && saveBox.y+saveBox.height<=760,'Save should fit above the bottom navigation in the accepted-Terms fixture');
+    const saveBox=await s.page.getByRole('button',{name:'Review route',exact:true}).boundingBox();
+    assert.ok(saveBox && saveBox.y+saveBox.height<=760,'Review should fit above the bottom navigation in the accepted-Terms fixture');
     await s.page.screenshot({path:path.join(output,'minimum-form.png'),fullPage:true});
     await s.fill();
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();
     await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
     await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
     assert.equal(s.posts(),1);
@@ -91,9 +94,11 @@ try {
   }
   {
     const s=await session(0,true), before=(await admin.query('SELECT count(*) FROM v2_contributions WHERE user_id=$1',[users[0]])).rows[0].count;
-    await s.fill();await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
+    await s.fill();await s.page.getByRole('button',{name:'Review route',exact:true}).click();
+    await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
     await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
-    assert.equal(await s.page.getByLabel('Bus operator name').isEditable(),false);
+    assert.equal(await s.page.getByRole('button',{name:'Edit answers',exact:true}).count(),0);
+    assert.equal(await s.page.getByLabel('Bus operator name').count(),0);
     await s.page.screenshot({path:path.join(output,'retry-result.png'),fullPage:true});
     await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();
     await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
@@ -103,9 +108,11 @@ try {
   }
   {
     const s=await session(1);await s.fill();
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();
     await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
     await s.page.getByText('Accept the current Terms, then tap Save.',{exact:false}).waitFor();
-    assert.equal(s.posts(),0);assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'Browser fixture bus');
+    assert.equal(s.posts(),0);await s.page.getByRole('button',{name:'Edit answers',exact:true}).click();
+    assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'Browser fixture bus');
     await s.page.screenshot({path:path.join(output,'terms-preserved.png'),fullPage:true});
     results.push('Terms gate retains all entered answers without automatic submission');
     await s.context.close();
@@ -113,16 +120,87 @@ try {
   {
     const s=await session();await s.fill();
     await s.page.getByLabel('Departure time in 24-hour format').fill('24:00');
-    await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();
     await s.page.getByText('Enter a departure time in 24-hour format, for example 08:30.',{exact:true}).waitFor();
     assert.equal(s.posts(),0);assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'24:00');
     results.push('invalid clock shows inline explanation and retains answers without submitting');
     await s.context.close();
   }
+  {
+    const s=await session(); await s.fill();
+    await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Continue route draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'Browser fixture bus');
+    assert.equal(s.posts(),0);
+    results.push('closing and explicit resumption retain route input without submitting'); await s.context.close();
+  }
+  {
+    const s=await session(0,false,'journey');
+    await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();
+    await s.page.getByLabel('Observed operator',{exact:true}).fill('Journey fixture bus');
+    await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
+    await s.page.screenshot({path:path.join(output,'journey-review.png'),fullPage:true});
+    await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor(); assert.equal(s.posts(),1);
+    const payloads=(await admin.query("SELECT payload FROM v2_contributions WHERE user_id=$1 AND payload->'target' ? 'newActualJourney'",[users[0]])).rows;
+    const payload=payloads.find(r=>r.payload.observations.some(o=>o.value.name==='Journey fixture bus')).payload;
+    assert.deepEqual(payload.target,{newActualJourney:{}});assert.equal(payload.observations.length,1);assert.equal(payload.observations[0].fieldKey,'operator.reported');
+    results.push('one operator observation saves as independent actual report without invented route/date/time'); await s.context.close();
+  }
+  {
+    const s=await session(0,true,'journey');
+    await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
+    assert.equal(await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).getAttribute('aria-checked'),'false');
+    await s.page.getByLabel('Fare amount',{exact:true}).fill('0');
+    await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();
+    await s.page.getByRole('radio',{name:'Fare basis: Paid',exact:true}).click();
+    async function fareCity(label, name) {
+      await s.page.getByRole('button',{name:label,exact:true}).click();
+      await s.page.getByLabel('Search cities',{exact:true}).fill(name);
+      await s.page.getByRole('button',{name:new RegExp(name+', city')}).click();
+    }
+    await fareCity('Choose fare departure city','Flow Origin fixture');
+    await fareCity('Choose fare destination city','Flow Destination fixture');
+    await s.page.getByRole('button',{name:'Fare conditions — choose passenger and ticket',exact:true}).click();
+    await s.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();
+    await s.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();
+    await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();
+    await s.page.getByText('Enter a valid date as YYYY-MM-DD. A paid fare needs its travel date.',{exact:true}).waitFor();assert.equal(s.posts(),0);
+    await s.page.getByLabel('Fare date',{exact:true}).fill('2026-10-22');
+    await s.page.screenshot({path:path.join(output,'focused-fare.png'),fullPage:true});
+    await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();
+    await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
+    await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
+    await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
+    await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Continue journey draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();assert.equal(s.posts(),1);
+    const rows=(await admin.query("SELECT payload FROM v2_contributions WHERE user_id=$1 AND payload->'target' ? 'newActualJourney'",[users[0]])).rows;
+    const fares=rows.flatMap(r=>r.payload.observations).filter(o=>o.fieldKey==='fare.paid');assert.equal(fares.length,1);
+    assert.deepEqual(fares[0].value,{amount:'0',currency:'USD'});assert.equal(fares[0].scope.serviceDate,'2026-10-22');assert.equal(fares[0].scope.passengerCategory,'unknown');assert.equal(fares[0].scope.ticketBasis,'unknown');
+    results.push('focused fare requires paid date, preserves explicit zero/unknown conditions and recovers receipt after close/resume with no duplicate POST'); await s.context.close();
+  }
+  {
+    const s=await session(0,false,'journey');
+    await s.page.setViewportSize({width:390,height:450});
+    await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
+    for(const name of ['Close form and keep draft','Preview fare','Skip fare']) {
+      const box=await s.page.getByRole('button',{name,exact:true}).boundingBox();assert.ok(box&&box.y>=0&&box.y+box.height<=450,`${name} remains visible at450px`);
+    }
+    const width=await s.page.locator('body').evaluate(el=>({scroll:el.scrollWidth,client:el.clientWidth}));assert.equal(width.scroll,width.client);
+    await s.page.getByLabel('Fare amount',{exact:true}).fill('12');
+    await s.page.getByRole('button',{name:'Skip fare',exact:true}).click();
+    await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();assert.equal(await s.page.getByLabel('Fare amount',{exact:true}).inputValue(),'');
+    await s.page.screenshot({path:path.join(output,'focused-fare-compact.png'),fullPage:true});
+    assert.equal(s.posts(),0);results.push('compact390x450 fare keeps close/primary/skip visible and removing a fact clears hidden answers');await s.context.close();
+  }
   assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   throw error;

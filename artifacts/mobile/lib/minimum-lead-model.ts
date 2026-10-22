@@ -19,13 +19,13 @@ export function prepareLead(draft: LeadDraft, key: string): V2MinimumLeadRequest
     target: { newLead: { originCityId: draft.origin!.id, destinationCityId: draft.destination!.id,
       departureTime: draft.time, operator: { name: draft.operator.trim() } } }, observations: [] };
 }
-export interface PendingLead { actor: string; request: V2MinimumLeadRequest }
-export interface LeadTransport {
+export interface PendingLead<R = V2MinimumLeadRequest> { actor: string; request: R }
+export interface LeadTransport<R = V2MinimumLeadRequest> {
   lookup(key: string): Promise<{ found: boolean; initialReceipt?: V2LeadReceipt }>;
-  submit(input: V2MinimumLeadRequest): Promise<V2LeadReceipt>;
+  submit(input: R): Promise<V2LeadReceipt>;
 }
 /** A lost response never invents another key or replaces its frozen answers. */
-export async function recoverOrSubmit(pending: PendingLead, transport: LeadTransport, currentActor: () => string | null) {
+export async function recoverOrSubmit<R extends { clientSubmissionId: string }>(pending: PendingLead<R>, transport: LeadTransport<R>, currentActor: () => string | null) {
   function guard() { if (pending.actor !== currentActor()) throw new Error('ACCOUNT_CHANGED'); }
   guard();
   const lookup = await transport.lookup(pending.request.clientSubmissionId);

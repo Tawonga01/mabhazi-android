@@ -23,9 +23,9 @@ import { DaysPicker } from "@/components/DaysPicker";
 import { useCreateJourney } from "@workspace/api-client-react";
 import { SearchModal } from "@/components/SearchModal";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
-import { MinimumLeadForm } from '@/components/MinimumLeadForm';
+import { CaptureHome } from '@/components/capture/CaptureHome';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -44,7 +44,7 @@ function formatDuration(h: number, m: number): string {
   return `${h}h ${m}m`;
 }
 
-// ─── Numeric text input ───────────────────────────────────────────────────────
+// â”€â”€â”€ Numeric text input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface NumericInputProps {
   value: number;
@@ -100,7 +100,7 @@ const numStyles = StyleSheet.create({
   unit: { fontSize: 13 },
 });
 
-// ─── Text field ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Text field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FieldProps {
   label: string;
@@ -179,7 +179,7 @@ function PickerField({ label, icon, value, onPress, onClear, placeholder, colors
   );
 }
 
-// ─── Thank-you overlay ────────────────────────────────────────────────────────
+// â”€â”€â”€ Thank-you overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ThankYouOverlayProps {
   visible: boolean;
@@ -219,7 +219,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
           </Text>
           <View style={[styles.tyRouteBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
             <Text style={[styles.tyRoute, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              {fromCity} → {toCity}
+              {fromCity} â†’ {toCity}
             </Text>
             {scheduledDays ? (
               <View style={styles.tyDaysRow}>
@@ -255,7 +255,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
   );
 }
 
-// ─── Stop entry ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Stop entry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface StopEntry {
   city: string;
@@ -383,7 +383,7 @@ const stopStyles = StyleSheet.create({
   timeSep: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
 });
 
-// ─── Form state ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Form state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FormData {
   fromCity: string;
@@ -406,14 +406,14 @@ const EMPTY_FORM: FormData = {
   scheduledDays: "", pickupPoint: "", dropoffPoint: "", price: "",
 };
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main screen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function ContributeScreen() {
   const [full, setFull] = useState(false);
   const insets = useSafeAreaInsets();
-  if (!full) return <MinimumLeadForm openFullForm={() => setFull(true)} />;
+  if (!full) return <CaptureHome openFullForm={() => setFull(true)} />;
   return <View style={{ flex: 1 }}>
-    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to minimum route form</Text></TouchableOpacity>
+    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to contribution menu</Text></TouchableOpacity>
     <LegacyContributeScreen />
   </View>;
 }
@@ -759,7 +759,7 @@ function LegacyContributeScreen() {
             <View style={[styles.readyBanner, { backgroundColor: "#ECFDF5", borderColor: "#6EE7B7" }]}>
               <Feather name="check-circle" size={14} color="#059669" />
               <Text style={[styles.readyBannerText, { color: "#059669", fontFamily: "Inter_500Medium" }]}>
-                Signed in — tap Submit Route to share
+                Signed in â€” tap Submit Route to share
               </Text>
             </View>
           ) : null}
@@ -781,7 +781,7 @@ function LegacyContributeScreen() {
             ) : isLoggingIn ? (
               <>
                 <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.submitBtnText}>Signing in…</Text>
+                <Text style={styles.submitBtnText}>Signing inâ€¦</Text>
               </>
             ) : (
               <>
