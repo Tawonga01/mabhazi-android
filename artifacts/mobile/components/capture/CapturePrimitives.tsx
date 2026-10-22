@@ -34,7 +34,9 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
     const listener = BackHandler.addEventListener('hardwareBackPress', () => { if (!busy) onClose(); return true; });
     return () => listener.remove();
   }, [onClose, busy]));
-  return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: 12 }]}>
+  // The existing web navigator overlays an84px bar. Android already reserves
+  // its navigator/system inset; reserving it again would introduce a gap.
+  return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: Platform.OS === 'web' ? 96 : 12 }]}>
     <KeyboardAvoidingView style={s.avoid} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
       <View style={s.panel}>
         <View style={s.header}><Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text>

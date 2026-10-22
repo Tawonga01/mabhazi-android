@@ -79,8 +79,8 @@ try {
     const s = await session();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     const saveBox=await s.page.getByRole('button',{name:'Review route',exact:true}).boundingBox();
-    assert.ok(saveBox && saveBox.y+saveBox.height<=760,'Review should fit above the bottom navigation in the accepted-Terms fixture');
     await s.page.screenshot({path:path.join(output,'minimum-form.png'),fullPage:true});
+    assert.ok(saveBox && saveBox.y+saveBox.height<=760,`Review should fit above the bottom navigation: ${JSON.stringify(saveBox)}`);
     await s.fill();
     await s.page.getByRole('button',{name:'Review route',exact:true}).click();
     await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
@@ -204,6 +204,7 @@ try {
   for(const name of ['minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
+  for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
   throw error;
 } finally {
   await browser?.close();
