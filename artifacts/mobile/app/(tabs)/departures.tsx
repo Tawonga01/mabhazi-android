@@ -204,7 +204,7 @@ export default function DeparturesScreen() {
             No departures from {fromCity}
           </Text>
           <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Select another city using the dropdown above
+            Try another city.
           </Text>
         </View>
       ) : (

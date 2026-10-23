@@ -20,7 +20,10 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { JourneyCard, type Journey } from "@/components/JourneyCard";
 import { JourneyDetailSheet } from "@/components/JourneyDetailSheet";
-import { useSearchJourneys, useRateJourney, getSearchJourneysQueryKey } from "@workspace/api-client-react";
+import { useSearchJourneys, useRateJourney, getSearchJourneysQueryKey, type V2City } from "@workspace/api-client-react";
+import { useCaptureEntry } from '@/lib/capture-context';
+import { searchViewState, searchRoutePrefill, type RoutePrefill } from '@/lib/contribution-moments';
+import { CaptureButton } from '@/components/capture/CapturePrimitives';
 import { SearchModal } from "@/components/SearchModal";
 import { filterBlockedContributors, useBlockedContributors } from "@/hooks/useBlockedContributors";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
@@ -34,6 +37,9 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function SearchScreen() {
   const colors = useColors();
+  const capture = useCaptureEntry();
+  const [fromChoice, setFromChoice] = useState<V2City | null>(null), [toChoice, setToChoice] = useState<V2City | null>(null);
+  const [searchedRoute, setSearchedRoute] = useState<RoutePrefill>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
@@ -42,6 +48,7 @@ export default function SearchScreen() {
     blockedContributorIds,
     isLoading: isBlockedContributorsLoading,
     error: blockedContributorsError,
+    retryBlockedContributors,
   } = useBlockedContributors();
   const params = useLocalSearchParams<{ fromCity?: string; toCity?: string }>();
 
@@ -73,6 +80,8 @@ export default function SearchScreen() {
     if (params.fromCity || params.toCity) {
       const fc = (params.fromCity as string) ?? "";
       const tc = (params.toCity as string) ?? "";
+      setFromChoice(null); setToChoice(null);
+      setSearchedRoute(searchRoutePrefill(fc, tc, null, null));
       setFromCity(fc);
       setToCity(tc);
       setSearchParams({ fromCity: fc || undefined, toCity: tc || undefined });
@@ -84,7 +93,7 @@ export default function SearchScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.fromCity, params.toCity]);
 
-  const { data, isLoading, isFetching } = useSearchJourneys(
+  const { data, isLoading, isFetching, isSuccess, isError, refetch } = useSearchJourneys(
     searchParams ?? {},
     {
       query: {
@@ -112,6 +121,9 @@ export default function SearchScreen() {
       ? filterBlockedContributors(journeys, blockedContributorIds)
       : [];
 
+  const viewState = searchViewState({ searched: hasSearched, loading: isLoading || isFetching, succeeded: isSuccess, failed: isError,
+    safetyLoading: isBlockedContributorsLoading, safetyFailed: !!blockedContributorsError, total: journeys.length, visible: visibleJourneys.length });
+
   const collapseSearch = useCallback(() => {
     Animated.timing(expandAnim, {
       toValue: 0,
@@ -132,20 +144,22 @@ export default function SearchScreen() {
   const handleSearch = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSearched(true);
+    setSearchedRoute(searchRoutePrefill(fromCity, toCity, fromChoice, toChoice));
     setSearchParams({
       fromCity: fromCity.trim() || undefined,
       toCity: toCity.trim() || undefined,
       day: selectedDay ?? undefined,
     });
     collapseSearch();
-  }, [fromCity, toCity, selectedDay, collapseSearch]);
+  }, [fromCity, toCity, fromChoice, toChoice, selectedDay, collapseSearch]);
 
   const swapCities = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFromChoice(toChoice); setToChoice(fromChoice);
     const temp = fromCity;
     setFromCity(toCity);
     setToCity(temp);
-  }, [fromCity, toCity]);
+  }, [fromCity, toCity, fromChoice, toChoice]);
 
   const toggleDay = useCallback((day: string) => {
     Haptics.selectionAsync();
@@ -257,9 +271,6 @@ export default function SearchScreen() {
         ]}
       >
         <Text style={[styles.appTitle, { color: "#FFFFFF" }]}>Mabhazi.com</Text>
-        <Text style={[styles.appSubtitle, { color: "rgba(255,255,255,0.7)" }]}>
-          Find intercity bus routes
-        </Text>
 
         {/* Compact bar shown after search */}
         <Animated.View
@@ -431,7 +442,7 @@ export default function SearchScreen() {
                   },
                 ]}
               >
-                Day of week — optional
+              Travel day (optional)
               </Text>
               <View style={styles.dayChips}>
                 {DAYS.map((day) => {
@@ -482,7 +493,7 @@ export default function SearchScreen() {
         </Animated.View>
       </View>
 
-      {isLoading || isFetching ? (
+      {viewState === 'loading' ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text
@@ -494,7 +505,12 @@ export default function SearchScreen() {
             Finding routes...
           </Text>
         </View>
-      ) : hasSearched && blockedContributorsError ? (
+      ) : viewState === 'error' ? (
+        <View style={styles.centered}>
+          <Text accessibilityRole="alert" style={[styles.emptyTitle, { color: colors.foreground }]}>Search could not load</Text>
+          <CaptureButton title="Try search again" onPress={() => void refetch()} />
+        </View>
+      ) : viewState === 'safety_error' ? (
         <View style={styles.centered}>
           <Feather name="alert-triangle" size={48} color={colors.destructive} />
           <Text
@@ -513,8 +529,9 @@ export default function SearchScreen() {
           >
             {blockedContributorsError}
           </Text>
+          <CaptureButton title="Try safety settings again" onPress={() => void retryBlockedContributors().catch(() => undefined)} />
         </View>
-      ) : hasSearched && isBlockedContributorsLoading ? (
+      ) : viewState === 'safety_loading' ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text
@@ -526,7 +543,9 @@ export default function SearchScreen() {
             Loading safety settings...
           </Text>
         </View>
-      ) : hasSearched && visibleJourneys.length === 0 ? (
+      ) : viewState === 'hidden' ? (
+        <View style={styles.centered}><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Results hidden by your block settings</Text></View>
+      ) : viewState === 'empty' ? (
         <View style={styles.centered}>
           <Feather name="inbox" size={48} color={colors.border} />
           <Text
@@ -543,10 +562,11 @@ export default function SearchScreen() {
               { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
             ]}
           >
-            Try different cities or a different day
+            Know a bus on this route?
           </Text>
+          <CaptureButton title="Add a route" disabled={capture.isOpen} onPress={() => capture.open({ kind: 'route', entrySurface: 'search_empty', prefill: searchedRoute })} />
         </View>
-      ) : !hasSearched ? (
+      ) : viewState === 'idle' ? (
         <View style={styles.centered}>
           <Feather name="compass" size={52} color={colors.border} />
           <Text
@@ -556,14 +576,6 @@ export default function SearchScreen() {
             ]}
           >
             Search for a route
-          </Text>
-          <Text
-            style={[
-              styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            Community-contributed bus routes across cities
           </Text>
         </View>
       ) : (
@@ -629,6 +641,7 @@ export default function SearchScreen() {
         visible={fromCityModal}
         onClose={() => setFromCityModal(false)}
         onSelect={setFromCity}
+        onSelectCity={setFromChoice}
         title="Departure City"
         mode="city"
       />
@@ -636,6 +649,7 @@ export default function SearchScreen() {
         visible={toCityModal}
         onClose={() => setToCityModal(false)}
         onSelect={setToCity}
+        onSelectCity={setToChoice}
         title="Destination City"
         mode="city"
       />

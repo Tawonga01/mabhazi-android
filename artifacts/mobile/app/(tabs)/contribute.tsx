@@ -16,14 +16,14 @@ import { Feather } from "@/components/VectorIcon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { DaysPicker } from "@/components/DaysPicker";
 import { useCreateJourney } from "@workspace/api-client-react";
 import { SearchModal } from "@/components/SearchModal";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
-import { MinimumLeadForm } from '@/components/MinimumLeadForm';
+import { CaptureHome } from '@/components/capture/CaptureHome';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -409,21 +409,24 @@ const EMPTY_FORM: FormData = {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributeScreen() {
-  const [full, setFull] = useState(false);
+  const params = useLocalSearchParams<{ full?: string; fromCity?: string; toCity?: string }>();
+  const router = useRouter();
+  const [full, setFull] = useState(params.full === '1');
+  useEffect(() => { if (params.full === '1') setFull(true); }, [params.full]);
   const insets = useSafeAreaInsets();
-  if (!full) return <MinimumLeadForm openFullForm={() => setFull(true)} />;
+  if (!full) return <CaptureHome openFullForm={() => setFull(true)} />;
   return <View style={{ flex: 1 }}>
-    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to minimum route form</Text></TouchableOpacity>
-    <LegacyContributeScreen />
+    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => { setFull(false); router.setParams({ full: '', fromCity: '', toCity: '' }); }}><Text>Back to contribution menu</Text></TouchableOpacity>
+    <LegacyContributeScreen fromCity={params.fromCity} toCity={params.toCity} />
   </View>;
 }
 
-function LegacyContributeScreen() {
+function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: string; toCity?: string }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [form, setForm] = useState<FormData>(() => ({ ...EMPTY_FORM, fromCity, toCity }));
   const [stops, setStops] = useState<StopEntry[]>([]);
   const [thankYouVisible, setThankYouVisible] = useState(false);
   const [lastSubmit, setLastSubmit] = useState({ fromCity: "", toCity: "", scheduledDays: "" });
@@ -672,15 +675,7 @@ function LegacyContributeScreen() {
             <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
               Operating Days
             </Text>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              Select all days this route runs
-            </Text>
             <DaysPicker value={form.scheduledDays} onChange={setStr("scheduledDays")} />
-            {form.scheduledDays ? (
-              <Text style={[styles.selectedDaysHint, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                {form.scheduledDays}
-              </Text>
-            ) : null}
           </View>
 
           {/* Stops & Fare */}
@@ -705,9 +700,6 @@ function LegacyContributeScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={[styles.stopHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Add cities this bus passes through. Helps others find partial-route journeys.
-            </Text>
 
             {stops.map((stop, i) => (
               <StopRow
@@ -753,16 +745,7 @@ function LegacyContributeScreen() {
             </View>
           ) : null}
 
-          <TermsAcceptanceCard terms={terms} />
-
-          {isAuthenticated && allFilled && !mutation.isPending ? (
-            <View style={[styles.readyBanner, { backgroundColor: "#ECFDF5", borderColor: "#6EE7B7" }]}>
-              <Feather name="check-circle" size={14} color="#059669" />
-              <Text style={[styles.readyBannerText, { color: "#059669", fontFamily: "Inter_500Medium" }]}>
-                Signed in — tap Submit Route to share
-              </Text>
-            </View>
-          ) : null}
+          {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
 
           <TouchableOpacity
             style={[

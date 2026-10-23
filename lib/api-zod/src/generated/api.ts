@@ -577,7 +577,7 @@ export const submitV2LeadBodyObservationsMax = 0;
 export const SubmitV2LeadBody = zod.object({
   schemaVersion: zod.enum(["1.0"]),
   clientSubmissionId: zod.string().uuid(),
-  entrySurface: zod.enum(["contribute_tab"]),
+  entrySurface: zod.enum(["contribute_tab", "search_empty"]),
   target: zod.object({
     newLead: zod.object({
       originCityId: zod

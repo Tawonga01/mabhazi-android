@@ -51,7 +51,7 @@ export function BlockedContributorsManager({
                 Blocked contributors
               </Text>
               <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                Blocked contributors&apos; public routes and comments are hidden on this device. You can unblock them at any time.
+                Routes and comments are hidden on this device. Unblock anytime.
               </Text>
             </View>
             <TouchableOpacity

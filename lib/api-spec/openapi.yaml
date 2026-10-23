@@ -1553,7 +1553,7 @@ components:
       properties:
         schemaVersion: {type: string, enum: ['1.0']}
         clientSubmissionId: {type: string, format: uuid}
-        entrySurface: {type: string, enum: [contribute_tab]}
+        entrySurface: {type: string, enum: [contribute_tab, search_empty]}
         target: {$ref: '#/components/schemas/V2MinimumLeadTarget'}
         observations:
           type: array

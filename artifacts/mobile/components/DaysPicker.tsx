@@ -36,6 +36,10 @@ export function DaysPicker({ value, onChange }: DaysPickerProps) {
         return (
           <TouchableOpacity
             key={day}
+            accessibilityRole="checkbox"
+            accessibilityLabel={`Operating day ${day}`}
+            accessibilityState={{ checked: isSelected }}
+            aria-checked={isSelected}
             style={[
               styles.chip,
               {
