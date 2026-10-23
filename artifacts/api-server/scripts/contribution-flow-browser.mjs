@@ -236,6 +236,8 @@ try {
     await s.page.getByRole('button',{name:'Choose destination city',exact:true}).getByText('Flow Destination fixture',{exact:true}).waitFor();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'');
+    // Wait for finite dialog transitions so the proof is the settled UI, not a fade frame.
+    await s.page.evaluate(async () => { await Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined))); });
     await s.page.screenshot({path:path.join(output,'empty-search-form.png'),fullPage:true});
     await s.page.getByLabel('Departure time in 24-hour format').fill('09:45');
     await s.page.getByLabel('Bus operator name').fill('Empty search fixture bus');
