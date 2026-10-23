@@ -1,8 +1,9 @@
-import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listV2Cities, type V2City } from '@workspace/api-client-react';
+import { CaptureFrameContext } from '@/lib/capture-context';
 import { Feather } from '@/components/VectorIcon';
 
 export const captureStyles = StyleSheet.create({
@@ -27,16 +28,16 @@ export const captureStyles = StyleSheet.create({
 });
 const s = captureStyles;
 export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '' }: { title: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
-  const insets = useSafeAreaInsets(), body = useRef<ScrollView>(null);
+  const insets = useSafeAreaInsets(), body = useRef<ScrollView>(null), presentation = useContext(CaptureFrameContext);
+  useEffect(() => presentation?.register(onClose, busy), [presentation, onClose, busy]);
   useEffect(() => { body.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
   useFocusEffect(useCallback(() => {
-    if (!onClose) return;
+    if (!onClose || presentation?.overlay) return;
     const listener = BackHandler.addEventListener('hardwareBackPress', () => { if (!busy) onClose(); return true; });
     return () => listener.remove();
-  }, [onClose, busy]));
-  // The existing web navigator overlays an84px bar. Android already reserves
-  // its navigator/system inset; reserving it again would introduce a gap.
-  return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: Platform.OS === 'web' ? 96 : 12 }]}>
+  }, [onClose, busy, presentation]));
+  // A root modal owns its system inset; a tab screen already has the Android inset.
+  return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: presentation?.overlay ? insets.bottom + 12 : Platform.OS === 'web' ? 96 : 12 }]}>
     <KeyboardAvoidingView style={s.avoid} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
       <View style={s.panel}>
         <View style={s.header}><Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text>
@@ -63,15 +64,15 @@ export function Field({ label, error, children, hint }: { label: string; error?:
 export const CaptureInput = forwardRef<TextInput, TextInputProps>(function CaptureInput(props, ref) {
   return <TextInput ref={ref} placeholderTextColor="#6D7D91" autoCorrect={false} {...props} style={[s.input, props.editable === false && s.disabled, props.style]} />;
 });
-export function CityField({ label, city, onPress, disabled, error }: { label: string; city: V2City | null; onPress(): void; disabled?: boolean; error?: string }) {
-  return <Field label={label} error={error}><Pressable accessibilityRole="button" accessibilityLabel={`Choose ${label.toLowerCase().replace(' *','')}`} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={[s.input, disabled && s.disabled]}><Text style={{ color: '#102744', fontSize: 16 }}>{city?.name ?? 'Choose a city'}</Text></Pressable></Field>;
+export function CityField({ label, city, onPress, disabled, error, hint }: { label: string; city: V2City | null; onPress(): void; disabled?: boolean; error?: string; hint?: string }) {
+  return <Field label={label} error={error}><Pressable accessibilityRole="button" accessibilityLabel={`Choose ${label.toLowerCase().replace(' *','')}`} accessibilityState={{ disabled: !!disabled }} disabled={disabled} onPress={onPress} style={[s.input, disabled && s.disabled]}><Text style={{ color: '#102744', fontSize: 16 }}>{city?.name ?? (hint ? hint + ' — choose a city' : 'Choose a city')}</Text></Pressable></Field>;
 }
 export function Choices<T extends string>({ label, value, options, onChange, disabled, error }: { label: string; value: T; options: readonly (readonly [T, string])[]; onChange(value: T): void; disabled?: boolean; error?: string }) {
   return <Field label={label} error={error}><View style={s.choices}>{options.map(([key, text]) => <Pressable key={key} accessibilityRole="radio" accessibilityLabel={`${label}: ${text}`} aria-checked={value === key} accessibilityState={{ checked: value === key, disabled: !!disabled }} disabled={disabled} onPress={() => onChange(key)} style={[s.choice, value === key && s.selected, disabled && s.disabled]}><Text style={s.secondaryText}>{text}</Text></Pressable>)}</View></Field>;
 }
 export function ReviewRow({ label, value }: { label: string; value: string }) { return <View style={{ gap: 4 }}><Text style={s.label}>{label}</Text><Text style={s.reviewValue}>{value}</Text></View>; }
-export function CityPicker({ title, close, select }: { title: string; close(): void; select(city: V2City): void }) {
-  const insets = useSafeAreaInsets(), [search, setSearch] = useState(''), [cities, setCities] = useState<V2City[]>([]);
+export function CityPicker({ title, close, select, initialQuery = '' }: { title: string; close(): void; select(city: V2City): void; initialQuery?: string }) {
+  const insets = useSafeAreaInsets(), [search, setSearch] = useState(initialQuery), [cities, setCities] = useState<V2City[]>([]);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController(); let alive = true;

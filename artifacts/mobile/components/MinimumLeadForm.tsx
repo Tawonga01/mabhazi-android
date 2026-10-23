@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { submitV2Lead, type V2City, type V2MinimumLeadRequest } from '@workspace/api-client-react';
+import type { RoutePrefill } from '@/lib/contribution-moments';
 import { useAuth } from '@/lib/auth';
 import { leadDrafts } from '@/lib/lead-drafts';
 import { emptyLeadDraft, draftErrors, prepareLead, type LeadDraft, type LeadField } from '@/lib/minimum-lead-model';
@@ -11,12 +12,17 @@ const options: CaptureOptions<LeadDraft, V2MinimumLeadRequest> = {
   empty: emptyLeadDraft, errors: draftErrors, prepare: prepareLead, store: leadDrafts,
   hasAnswers: d => !!(d.origin || d.destination || d.time || d.operator), capability: 'minimumLeadEnabled', submit: submitV2Lead,
 };
-export function MinimumLeadForm({ openFullForm, onClose }: { openFullForm(): void; onClose(): void }) {
+interface LeadFormProps { openFullForm(): void; onClose(): void; entrySurface?: 'contribute_tab' | 'search_empty'; prefill?: RoutePrefill }
+export function MinimumLeadForm({ openFullForm, onClose, entrySurface = 'contribute_tab', prefill }: LeadFormProps) {
   const { user, isLoading } = useAuth();
-  return isLoading ? <ActivityIndicator style={{ marginTop: 80 }} /> : <AccountLeadForm key={user?.id ?? 'guest'} owner={user?.id ?? null} openFullForm={openFullForm} onClose={onClose} />;
+  return isLoading ? <ActivityIndicator style={{ marginTop: 80 }} /> : <AccountLeadForm key={user?.id ?? 'guest'} owner={user?.id ?? null} entrySurface={entrySurface} prefill={prefill} openFullForm={openFullForm} onClose={onClose} />;
 }
-function AccountLeadForm({ owner, openFullForm, onClose }: { owner: string | null; openFullForm(): void; onClose(): void }) {
-  const c = useCapture(owner, options), [picker, setPicker] = useState<'origin' | 'destination' | null>(null);
+function AccountLeadForm({ owner, openFullForm, onClose, prefill, entrySurface }: LeadFormProps & { owner: string | null }) {
+  const seededOptions = useMemo(() => ({ ...options,
+    empty: () => ({ ...emptyLeadDraft(), origin: prefill?.origin ?? null, destination: prefill?.destination ?? null }),
+    prepare: (draft: LeadDraft, key: string) => prepareLead(draft, key, entrySurface),
+  }), [prefill, entrySurface]);
+  const c = useCapture(owner, seededOptions), [picker, setPicker] = useState<'origin' | 'destination' | null>(null);
   const timeRef = useRef<TextInput>(null), operatorRef = useRef<TextInput>(null);
   const review = () => { const field = c.review(); if (field === 'origin' || field === 'destination') setPicker(field); else if (field === 'time') timeRef.current?.focus(); else if (field) operatorRef.current?.focus(); };
   function update<K extends LeadField>(field: K, value: LeadDraft[K]) { c.change({ ...c.draft, [field]: value }); }
@@ -30,9 +36,9 @@ function AccountLeadForm({ owner, openFullForm, onClose }: { owner: string | nul
       {c.receipt ? <SavedMessage reference={c.receipt.clientSubmissionId} /> : c.resume ? <><Text style={s.label}>You have a saved draft</Text><Text style={s.note}>{c.resume.pending ? 'A previous save was not confirmed. Resume to check its receipt.' : 'Resume your answers and review them before saving.'}</Text></> : !c.ready ? <ActivityIndicator accessibilityLabel="Loading saved draft" /> : <>
         <View style={s.group}>
           {reviewing ? <><ReviewRow label="Departure city" value={c.draft.origin?.name ?? ''} /><ReviewRow label="Departure time" value={c.draft.time} /><ReviewRow label="Destination city" value={c.draft.destination?.name ?? ''} /><ReviewRow label="Bus operator" value={c.draft.operator.trim()} /></> : <>
-            <CityField label="Departure city *" city={c.draft.origin} disabled={c.locked} error={c.errors.origin} onPress={() => setPicker('origin')} />
+            <CityField label="Departure city *" city={c.draft.origin} hint={prefill?.originQuery} disabled={c.locked} error={c.errors.origin} onPress={() => setPicker('origin')} />
             <Field label="Departure time (24-hour) *" error={c.errors.time}><CaptureInput ref={timeRef} accessibilityLabel="Departure time in 24-hour format" editable={!c.locked} value={c.draft.time} onChangeText={value => update('time', value)} maxLength={5} placeholder="HH:MM" /></Field>
-            <CityField label="Destination city *" city={c.draft.destination} disabled={c.locked} error={c.errors.destination} onPress={() => setPicker('destination')} />
+            <CityField label="Destination city *" city={c.draft.destination} hint={prefill?.destinationQuery} disabled={c.locked} error={c.errors.destination} onPress={() => setPicker('destination')} />
             <Field label="Bus operator *" error={c.errors.operator}><CaptureInput ref={operatorRef} accessibilityLabel="Bus operator name" editable={!c.locked} value={c.draft.operator} onChangeText={value => update('operator', value)} maxLength={120} placeholder="Bus company name" /></Field>
           </>}
         </View>
@@ -41,6 +47,6 @@ function AccountLeadForm({ owner, openFullForm, onClose }: { owner: string | nul
       <CaptureMessages message={c.message} storageError={c.storageError} />
       {!reviewing && !c.pending && !c.receipt && !c.resume && !c.busy ? <CaptureButton title="More route details" secondary onPress={() => void c.close(openFullForm)} /> : null}
     </CaptureFrame>
-    {picker ? <CityPicker title={picker === 'origin' ? 'Departure city' : 'Destination city'} close={() => setPicker(null)} select={(city: V2City) => { update(picker, city); setPicker(null); }} /> : null}
+    {picker ? <CityPicker initialQuery={picker === 'origin' ? prefill?.originQuery : prefill?.destinationQuery} title={picker === 'origin' ? 'Departure city' : 'Destination city'} close={() => setPicker(null)} select={(city: V2City) => { update(picker, city); setPicker(null); }} /> : null}
   </>;
 }

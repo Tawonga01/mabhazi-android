@@ -90,7 +90,7 @@ try {
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     const saveBox=await s.page.getByRole('button',{name:'Review route',exact:true}).boundingBox();
     await s.page.screenshot({path:path.join(output,'minimum-form.png'),fullPage:true});
-    assert.ok(saveBox && saveBox.y+saveBox.height<=760,`Review should fit above the bottom navigation: ${JSON.stringify(saveBox)}`);
+    assert.ok(saveBox && saveBox.y>=0&&saveBox.y+saveBox.height<=832,`Review should fit inside the modal safe footer: ${JSON.stringify(saveBox)}`);
     await s.fill();
     await s.page.getByRole('button',{name:'Review route',exact:true}).click();
     await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
@@ -212,6 +212,76 @@ try {
     await s.page.screenshot({path:path.join(output,'focused-fare-compact.png'),fullPage:true});
     assert.equal(s.posts(),0);results.push('compact390x450 fare keeps close/primary/skip visible and removing a fact clears hidden answers');await s.context.close();
   }
+
+  async function emptySearch(page, custom = false) {
+    await page.getByText('Search for a route',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
+    for(const [label,name] of [['From city','Flow Origin fixture'],['To city','Flow Destination fixture']]) {
+      await page.getByText(label,{exact:true}).click();
+      await page.getByPlaceholder('Type a city name…',{exact:true}).fill(custom ? 'Unlisted city fixture' : name);
+      await page.getByText(custom ? 'Use "Unlisted city fixture"' : name,{exact:true}).click();
+    }
+    await page.getByText('Search Routes',{exact:true}).click();
+    await page.getByText('No routes found',{exact:true}).waitFor();
+  }
+  assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,'0');
+  {
+    const s=await session(0,true,'search');
+    await emptySearch(s.page);
+    assert.equal(await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).count(),0);
+    await s.page.screenshot({path:path.join(output,'empty-search.png'),fullPage:true});
+    await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Choose departure city',exact:true}).getByText('Flow Origin fixture',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Choose destination city',exact:true}).getByText('Flow Destination fixture',{exact:true}).waitFor();
+    assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
+    assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'');
+    await s.page.screenshot({path:path.join(output,'empty-search-form.png'),fullPage:true});
+    await s.page.getByLabel('Departure time in 24-hour format').fill('09:45');
+    await s.page.getByLabel('Bus operator name').fill('Empty search fixture bus');
+    await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
+    await s.page.getByText('No routes found',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
+    await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'Empty search fixture bus');
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();
+    await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
+    await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
+    await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
+    const rows=(await admin.query("SELECT entry_surface,payload FROM v2_contributions WHERE user_id=$1 AND entry_surface='search_empty'",[users[0]])).rows;
+    assert.equal(rows.length,1);assert.equal(rows[0].payload.target.newLead.originCityId,cities[0]);assert.equal(rows[0].payload.target.newLead.destinationCityId,cities[1]);
+    assert.equal(rows[0].payload.target.newLead.departureTime,'09:45');assert.equal('price' in rows[0].payload.target.newLead,false);
+    assert.equal(s.posts(),1);assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,'0');
+    results.push('true empty search opens only on tap, retains selected city IDs and draft, and saves one search_empty receipt after lost response without approved routes');
+    await s.context.close();
+  }
+  {
+    const s=await session(null,false,'search');await emptySearch(s.page,true);
+    await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
+    await s.page.getByRole('button',{name:'Choose departure city',exact:true}).getByText('Unlisted city fixture — choose a city',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();
+    await s.page.getByLabel('Search cities',{exact:true}).waitFor();
+    assert.equal(await s.page.getByLabel('Search cities').inputValue(),'Unlisted city fixture');
+    await s.page.getByRole('button',{name:'Close city search',exact:true}).click();
+    assert.equal(s.posts(),0);
+    results.push('unresolved search names remain visible lookup hints and require explicit city selection; guest input is allowed');
+    await s.context.close();
+  }
+  {
+    const s=await session(0,false,'search');let fail=true;
+    await s.context.route(/\/api\/journeys(?:\?|$)/,async route=>{if(fail) await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'fixture unavailable'})});else await route.fallback();});
+    await s.page.getByText('Search for a route',{exact:true}).waitFor();await s.page.getByText('Search Routes',{exact:true}).click();
+    await s.page.getByText('Search could not load',{exact:true}).waitFor({timeout:20000});
+    assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
+    await s.page.screenshot({path:path.join(output,'search-error.png'),fullPage:true});
+    fail=false;await s.page.getByRole('button',{name:'Try search again',exact:true}).click();
+    await s.page.getByText('No routes found',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Add a route',exact:true}).waitFor();
+    results.push('failed search never invites duplicate intake and an explicit retry recovers to the real empty state');
+    await s.context.close();
+  }
+
   // Same real exported app and API, now exercise the remaining principal
   // screens. This synthetic legacy fixture exists only in disposable CI.
   const legacy=(await admin.query("INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price,contributed_by,contributor_name) VALUES('Harare','Bulawayo','08:30','14:00','Mon, Tue, Wed, Thu, Fri, Sat, Sun','UI fixture bus','Fixture pickup','Fixture drop-off',12.50,$1,'UI fixture contributor') RETURNING id",[users[0]])).rows[0].id;
@@ -229,6 +299,19 @@ try {
     await s.page.getByText('Routes and comments are hidden on this device. Unblock anytime.',{exact:true}).waitFor();
     assert.equal(s.posts(),0);results.push('guest search/results opens real route details and local block manager with retained safety controls');await s.context.close();
   }
+
+  {
+    const s=await session(null,false,'search');
+    await s.context.addInitScript(id=>localStorage.setItem('mabhazi.blocked-contributors.v1',JSON.stringify([{id,name:'Blocked fixture',blockedAt:'2026-10-24T00:00:00Z'}])),users[0]);
+    await s.page.reload();await s.page.getByText('Search for a route',{exact:true}).waitFor();
+    await s.page.getByText('Search Routes',{exact:true}).click();
+    await s.page.getByText('Results hidden by your block settings',{exact:true}).waitFor();
+    assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
+    assert.equal(await s.page.getByText('UI fixture bus',{exact:true}).count(),0);
+    results.push('blocked existing results stay hidden and never become a missing-route invitation');
+    await s.context.close();
+  }
+
   {
     const s=await session(0,false,'profile');
     await s.page.getByRole('button',{name:'Edit display name',exact:true}).waitFor();
@@ -273,7 +356,7 @@ try {
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

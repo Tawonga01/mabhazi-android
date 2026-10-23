@@ -23,6 +23,7 @@ jobs:
       - run: pnpm run typecheck:libs
       - run: pnpm --dir artifacts/mobile run typecheck
       - run: node --test artifacts/mobile/scripts/preview-config.test.js
+      - run: node --test artifacts/mobile/scripts/contribution-moments.test.mjs
       - run: pnpm --dir artifacts/mobile run android:export
         env:
           EXPO_PUBLIC_API_BASE_URL: https://api.mabhazi.com

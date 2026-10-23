@@ -16,7 +16,7 @@ import { Feather } from "@/components/VectorIcon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { DaysPicker } from "@/components/DaysPicker";
@@ -409,21 +409,24 @@ const EMPTY_FORM: FormData = {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function ContributeScreen() {
-  const [full, setFull] = useState(false);
+  const params = useLocalSearchParams<{ full?: string; fromCity?: string; toCity?: string }>();
+  const router = useRouter();
+  const [full, setFull] = useState(params.full === '1');
+  useEffect(() => { if (params.full === '1') setFull(true); }, [params.full]);
   const insets = useSafeAreaInsets();
   if (!full) return <CaptureHome openFullForm={() => setFull(true)} />;
   return <View style={{ flex: 1 }}>
-    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => setFull(false)}><Text>Back to contribution menu</Text></TouchableOpacity>
-    <LegacyContributeScreen />
+    <TouchableOpacity accessibilityRole="button" style={{ padding: 16, paddingTop: insets.top + 12, minHeight: 48 }} onPress={() => { setFull(false); router.setParams({ full: '', fromCity: '', toCity: '' }); }}><Text>Back to contribution menu</Text></TouchableOpacity>
+    <LegacyContributeScreen fromCity={params.fromCity} toCity={params.toCity} />
   </View>;
 }
 
-function LegacyContributeScreen() {
+function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: string; toCity?: string }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
-  const [form, setForm] = useState<FormData>(EMPTY_FORM);
+  const [form, setForm] = useState<FormData>(() => ({ ...EMPTY_FORM, fromCity, toCity }));
   const [stops, setStops] = useState<StopEntry[]>([]);
   const [thankYouVisible, setThankYouVisible] = useState(false);
   const [lastSubmit, setLastSubmit] = useState({ fromCity: "", toCity: "", scheduledDays: "" });

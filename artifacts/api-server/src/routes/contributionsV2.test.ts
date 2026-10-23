@@ -80,6 +80,30 @@ test('minimum API: four answers commit a lead, two facts, receipt and durable jo
   assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,count);
   assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
 });
+
+test('minimum API: empty-search intake needs no approved route and preserves its surface on recovery', async () => {
+  const input={...body(),entrySurface:'search_empty'}, count=(await admin.query('SELECT count(*) FROM journeys')).rows[0].count;
+  const saved=await request('/v2/contributions',input);assert.equal(saved.status,200);assert.equal(saved.value.publicationStatus,'pending');
+  const row=(await admin.query('SELECT entry_surface,payload FROM v2_contributions WHERE id=$1',[saved.value.contributionId])).rows[0];
+  assert.equal(row.entry_surface,'search_empty');assert.equal(row.payload.entrySurface,'search_empty');
+  assert.equal((await request('/v2/contributions',input)).value.contributionId,saved.value.contributionId);
+  assert.equal((await request('/v2/receipts/'+input.clientSubmissionId)).value.initialReceipt?.contributionId,saved.value.contributionId);
+  assert.equal((await request('/v2/contributions',{...input,entrySurface:'contribute_tab'})).status,409);
+  assert.equal((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value.found,false);
+  assert.equal((await request('/v2/contributions',{...body(),entrySurface:'search_empty'},null)).status,401);
+  assert.equal((await request('/v2/contributions',{...body(),entrySurface:'search_empty'},2)).status,428);
+  assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,count);
+});
+test('minimum API: other surfaces and null still fail in both HTTP and restricted facade', async () => {
+  for(const entrySurface of [null,'route_detail','search_result','own_contribution','unknown']) {
+    const input={...body(),entrySurface};
+    assert.equal((await request('/v2/contributions',input)).status,422);
+    await admin.query('SET ROLE mabhazi_api');
+    try { await assert.rejects(admin.query('SELECT v2_api_submit_minimum_lead($1,$2,$3)',[accounts[0],'2026-09-12',input]), e=>(e as Error).message==='v2_minimum_capability_only'); }
+    finally { await admin.query('RESET ROLE'); }
+  }
+});
+
 test('minimum API: strict fields and an explicit valid clock, never hidden defaults', async () => {
   for(const patch of [{departureTime:''},{departureTime:'8:30'},{departureTime:'24:00'},{departureTime:'Leaves when full'},
     {operator:{name:'unknown'}},{operator:{name:' bus '}},{operator:{name:'Bus\nline'}},{originCityId:1.5},{destinationCityId:cities[0]}, {price:0}]) {

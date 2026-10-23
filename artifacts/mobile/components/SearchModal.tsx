@@ -17,9 +17,10 @@ import { Feather } from "@/components/VectorIcon";
 import { useColors } from "@/hooks/useColors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  useListCities,
+  useListV2Cities,
+  type V2City,
   useListBusCompanies,
-  getListCitiesQueryKey,
+  getListV2CitiesQueryKey,
   getListBusCompaniesQueryKey,
 } from "@workspace/api-client-react";
 
@@ -27,6 +28,7 @@ export interface SearchModalProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (value: string) => void;
+  onSelectCity?: (city: V2City | null) => void;
   title: string;
   mode: "city" | "company";
 }
@@ -37,6 +39,7 @@ export function SearchModal({
   visible,
   onClose,
   onSelect,
+  onSelectCity,
   title,
   mode,
 }: SearchModalProps) {
@@ -77,11 +80,11 @@ export function SearchModal({
   }, [visible, translateY, opacity]);
 
   const cityParams = { q: debouncedQuery || undefined };
-  const { data: citiesData, isLoading: citiesLoading } = useListCities(
+  const { data: citiesData, isLoading: citiesLoading } = useListV2Cities(
     cityParams,
     {
       query: {
-        queryKey: getListCitiesQueryKey(cityParams),
+        queryKey: getListV2CitiesQueryKey(cityParams),
         enabled: mode === "city" && visible && debouncedQuery.length >= 2,
         staleTime: 60 * 1000,
       },
@@ -96,12 +99,12 @@ export function SearchModal({
     },
   });
 
-  const suggestions: string[] =
+  const suggestions: { name: string; city?: V2City }[] =
     mode === "city"
-      ? (citiesData?.cities ?? [])
+      ? (citiesData?.cities ?? []).map(city => ({ name: city.name, city }))
       : (companiesData?.companies ?? [])
           .filter((c) => !query || c.name.toLowerCase().includes(query.toLowerCase()))
-          .map((c) => c.name);
+          .map((c) => ({ name: c.name }));
 
   const isLoading = mode === "city" && citiesLoading && debouncedQuery.length >= 2;
 
@@ -113,14 +116,14 @@ export function SearchModal({
   }, [isDismissing, onClose]);
 
   const handleSelect = useCallback(
-    (value: string) => {
+    (value: string, city: V2City | null = null) => {
       if (isDismissing) return;
       setIsDismissing(true);
       Keyboard.dismiss();
       onClose();
-      requestAnimationFrame(() => onSelect(value));
+      requestAnimationFrame(() => { onSelectCity?.(city); onSelect(value); });
     },
-    [isDismissing, onSelect, onClose],
+    [isDismissing, onSelect, onSelectCity, onClose],
   );
 
   const handleCustom = useCallback(() => {
@@ -197,20 +200,20 @@ export function SearchModal({
           ) : (
             <FlatList
               data={suggestions}
-              keyExtractor={(item, i) => `${item}-${i}`}
+              keyExtractor={(item, i) => `${item.city?.id ?? item.name}-${i}`}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 20 }}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[styles.item, { borderBottomColor: colors.border }]}
-                  onPress={() => handleSelect(item)}
+                  onPress={() => handleSelect(item.name, item.city ?? null)}
                   activeOpacity={0.7}
                 >
                   <View style={[styles.itemIcon, { backgroundColor: colors.secondary }]}>
                     <Feather name={iconName} size={14} color={colors.primary} />
                   </View>
-                  <Text style={[styles.itemText, { color: colors.foreground }]}>{item}</Text>
+                  <Text style={[styles.itemText, { color: colors.foreground }]}>{item.name}</Text>
                   <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
                 </TouchableOpacity>
               )}

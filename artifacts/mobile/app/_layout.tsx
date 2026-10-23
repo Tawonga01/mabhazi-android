@@ -60,6 +60,8 @@ function StartupScreen() {
   );
 }
 
+import { CaptureHost } from '@/components/capture/CaptureHost';
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -86,7 +88,7 @@ export default function RootLayout() {
             <AccountQueryBoundary>
             <GestureHandlerRootView>
               <KeyboardProvider>
-                <RootLayoutNav />
+                <CaptureHost><RootLayoutNav /></CaptureHost>
               </KeyboardProvider>
             </GestureHandlerRootView>
             </AccountQueryBoundary>

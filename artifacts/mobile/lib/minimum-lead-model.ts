@@ -13,9 +13,9 @@ export function draftErrors(draft: LeadDraft): Partial<Record<LeadField, string>
   if (!name || Array.from(name).length > 120 || /[\u0000-\u001f\u007f-\u009f]/.test(name) || ['unknown','n/a','-'].includes(name.toLowerCase())) errors.operator = 'Enter the bus operator name.';
   return errors;
 }
-export function prepareLead(draft: LeadDraft, key: string): V2MinimumLeadRequest {
+export function prepareLead(draft: LeadDraft, key: string, entrySurface: V2MinimumLeadRequest['entrySurface'] = 'contribute_tab'): V2MinimumLeadRequest {
   if (Object.keys(draftErrors(draft)).length) throw new Error('Check the four required answers.');
-  return { schemaVersion: '1.0', clientSubmissionId: key, entrySurface: 'contribute_tab',
+  return { schemaVersion: '1.0', clientSubmissionId: key, entrySurface,
     target: { newLead: { originCityId: draft.origin!.id, destinationCityId: draft.destination!.id,
       departureTime: draft.time, operator: { name: draft.operator.trim() } } }, observations: [] };
 }
