@@ -5,8 +5,10 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather } from "@/components/VectorIcon";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Image, Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
+
+const departuresIcon = require("../../assets/images/departures-bus.png");
 
 function NativeTabLayout() {
   return (
@@ -16,7 +18,7 @@ function NativeTabLayout() {
         <Label>Search</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="departures">
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
+        <Icon src={departuresIcon} />
         <Label>Departures</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="contribute">
@@ -104,12 +106,14 @@ function ClassicTabLayout() {
         name="departures"
         options={{
           title: "Departures",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="clock" tintColor={color} size={22} />
-            ) : (
-              <Feather name="clock" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => (
+            <Image
+              source={departuresIcon}
+              style={{ width: 22, height: 22, tintColor: color }}
+              resizeMode="contain"
+              accessible={false}
+            />
+          ),
         }}
       />
       <Tabs.Screen
