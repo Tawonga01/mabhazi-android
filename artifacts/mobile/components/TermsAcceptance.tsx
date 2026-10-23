@@ -126,13 +126,14 @@ export function TermsAcceptanceCard({
     >
       <TouchableOpacity
         accessibilityRole="checkbox"
+        aria-checked={terms.isAccepted}
         accessibilityState={{ checked: terms.isAccepted }}
         testID="terms-acceptance-toggle"
         onPress={() => {
           if (!terms.isAccepted) void terms.acceptCurrentTerms();
         }}
         disabled={terms.isAccepting}
-        style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 }}
       >
         <View
           style={{
@@ -200,7 +201,7 @@ export function TermsAcceptanceCard({
         </Text>
       ) : null}
       {!terms.isAccepted && !terms.isAccepting ? (
-        <TouchableOpacity onPress={() => void terms.acceptCurrentTerms()}>
+        <TouchableOpacity style={{ minHeight: 44, justifyContent: "center" }} onPress={() => void terms.acceptCurrentTerms()}>
           <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
             {terms.isAuthenticated ? "Tap the checkbox to accept" : "Sign in to accept"}
           </Text>
@@ -209,3 +210,4 @@ export function TermsAcceptanceCard({
     </View>
   );
 }
+
