@@ -562,12 +562,9 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                 </View>
               ) : (
                 <>
-                  <TermsAcceptanceCard terms={terms} />
+                  {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
                   {/* ── UGC safety controls ── */}
                   <Section title="Safety" icon="shield">
-                    <Text style={[ss.correctionIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Report objectionable route content or a contributor. Blocking is local to this device, reversible, and hides that contributor&apos;s public routes and comments.
-                    </Text>
                     <View style={ss.safetyActionRow}>
                       <UgcSafetyActions
                         journeyId={journey.id}
@@ -624,7 +621,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                           : "No community confirmations yet"}
                       </Text>
                       <Text style={[ss.confidenceMetaText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {lastConfirmedAt ? `Last confirmed ${timeAgo(lastConfirmedAt)}` : "Awaiting first confirmation"}
+                        {lastConfirmedAt ? `Last confirmed ${timeAgo(lastConfirmedAt)}` : "Date unknown"}
                       </Text>
                     </View>
 
@@ -632,7 +629,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                       <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
                         <Feather name="check-circle" size={15} color="#16A34A" />
                         <Text style={[ss.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                          Thanks — your confirmation strengthens this route.
+                          Confirmation saved.
                         </Text>
                       </View>
                     ) : isAuthenticated ? (
@@ -677,9 +674,6 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                   {/* ── Structured corrections ── */}
                   <Section title="Correct route details" icon="edit-3">
-                    <Text style={[ss.correctionIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Spotted something different? Small corrections help keep this route useful for everyone.
-                    </Text>
 
                     {isAuthenticated ? (
                       <>
@@ -781,7 +775,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                           <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
                             <Feather name="check-circle" size={15} color="#16A34A" />
                             <Text style={[ss.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                              Correction recorded — thank you for improving this route.
+                      Correction saved.
                             </Text>
                           </View>
                         ) : null}

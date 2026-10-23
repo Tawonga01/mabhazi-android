@@ -672,15 +672,7 @@ function LegacyContributeScreen() {
             <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
               Operating Days
             </Text>
-            <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              Select all days this route runs
-            </Text>
             <DaysPicker value={form.scheduledDays} onChange={setStr("scheduledDays")} />
-            {form.scheduledDays ? (
-              <Text style={[styles.selectedDaysHint, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                {form.scheduledDays}
-              </Text>
-            ) : null}
           </View>
 
           {/* Stops & Fare */}
@@ -705,9 +697,6 @@ function LegacyContributeScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={[styles.stopHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Add cities this bus passes through. Helps others find partial-route journeys.
-            </Text>
 
             {stops.map((stop, i) => (
               <StopRow
@@ -753,16 +742,7 @@ function LegacyContributeScreen() {
             </View>
           ) : null}
 
-          <TermsAcceptanceCard terms={terms} />
-
-          {isAuthenticated && allFilled && !mutation.isPending ? (
-            <View style={[styles.readyBanner, { backgroundColor: "#ECFDF5", borderColor: "#6EE7B7" }]}>
-              <Feather name="check-circle" size={14} color="#059669" />
-              <Text style={[styles.readyBannerText, { color: "#059669", fontFamily: "Inter_500Medium" }]}>
-                Signed in — tap Submit Route to share
-              </Text>
-            </View>
-          ) : null}
+          {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
 
           <TouchableOpacity
             style={[

@@ -74,6 +74,8 @@ function Stars({
           return (
             <TouchableOpacity
               key={score}
+              accessibilityRole="button"
+              accessibilityLabel={`Rate route accuracy: ${score} of 5`}
               onPress={() => { setHover(0); onSelect(score); }}
               onPressIn={() => setHover(score)}
               onPressOut={() => setHover(0)}
@@ -108,11 +110,9 @@ const starStyles = StyleSheet.create({
 function RatingSection({
   journey,
   onRate,
-  onPress,
 }: {
   journey: Journey;
   onRate?: (score: number) => void;
-  onPress?: () => void;
 }) {
   const colors = useColors();
   const hasRated = !!journey.userRating;
@@ -194,20 +194,6 @@ function RatingSection({
         </Animated.View>
       </View>
 
-      {!onRate && (
-        <Text style={[styles.signInHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          Sign in to rate this route
-        </Text>
-      )}
-
-      {onPress && (
-        <View style={[styles.tapHint, { borderTopColor: colors.border }]}>
-          <Feather name="info" size={11} color={colors.mutedForeground} />
-          <Text style={[styles.tapHintText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Tap card for community insights
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -350,13 +336,15 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
 
       <View style={[styles.ratingDivider, { backgroundColor: colors.border }]} />
 
-      <RatingSection journey={journey} onRate={onRate} onPress={onPress} />
+      <RatingSection journey={journey} onRate={onRate} />
     </View>
   );
 
   if (onPress) {
     return (
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`View route: ${journey.fromCity} to ${journey.toCity}, ${journey.busCompany}`}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={onPress}
         activeOpacity={0.92}

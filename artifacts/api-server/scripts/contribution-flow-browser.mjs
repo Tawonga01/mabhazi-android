@@ -41,7 +41,7 @@ try {
   browser = await chromium.launch();
   async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
-    await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
+    if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
     let postCount = 0;
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -57,7 +57,9 @@ try {
     });
     const page = await context.newPage();
     page.on('pageerror', error => consoleErrors.push(error.message));
-    await page.goto('http://127.0.0.1:4173/contribute');
+    const surfaces={search:'/',profile:'/profile',departures:'/departures'};
+    await page.goto('http://127.0.0.1:4173'+(surfaces[mode] ?? '/contribute'));
+    if (surfaces[mode]) return {context,page,posts:()=>postCount};
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
     if (!results.length) {
       await page.screenshot({path:path.join(output,'contribution-menu.png'),fullPage:true});
@@ -210,10 +212,68 @@ try {
     await s.page.screenshot({path:path.join(output,'focused-fare-compact.png'),fullPage:true});
     assert.equal(s.posts(),0);results.push('compact390x450 fare keeps close/primary/skip visible and removing a fact clears hidden answers');await s.context.close();
   }
-  assert.deepEqual(consoleErrors,[]);
+  // Same real exported app and API, now exercise the remaining principal
+  // screens. This synthetic legacy fixture exists only in disposable CI.
+  const legacy=(await admin.query("INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price,contributed_by,contributor_name) VALUES('Harare','Bulawayo','08:30','14:00','Mon, Tue, Wed, Thu, Fri, Sat, Sun','UI fixture bus','Fixture pickup','Fixture drop-off',12.50,$1,'UI fixture contributor') RETURNING id",[users[0]])).rows[0].id;
+  {
+    const s=await session(null,false,'search');
+    await s.page.getByText('Search for a route',{exact:true}).waitFor();
+    await s.page.screenshot({path:path.join(output,'search-home.png'),fullPage:true});
+    await s.page.getByText('Search Routes',{exact:true}).click();
+    const card=s.page.getByRole('button',{name:'View route: Harare to Bulawayo, UI fixture bus',exact:true});await card.waitFor();
+    await s.page.screenshot({path:path.join(output,'search-results.png'),fullPage:true});
+    await card.click();await s.page.getByText('Route confidence',{exact:true}).waitFor();
+    await s.page.getByText('Manage blocked contributors',{exact:true}).waitFor();
+    await s.page.screenshot({path:path.join(output,'route-details.png'),fullPage:true});
+    await s.page.getByText('Manage blocked contributors',{exact:true}).click();
+    await s.page.getByText('Routes and comments are hidden on this device. Unblock anytime.',{exact:true}).waitFor();
+    assert.equal(s.posts(),0);results.push('guest search/results opens real route details and local block manager with retained safety controls');await s.context.close();
+  }
+  {
+    const s=await session(0,false,'profile');
+    await s.page.getByRole('button',{name:'Edit display name',exact:true}).waitFor();
+    await s.page.screenshot({path:path.join(output,'profile.png'),fullPage:true});
+    await s.page.getByRole('button',{name:'Edit display name',exact:true}).click();
+    await s.page.getByLabel('Display name',{exact:true}).fill('Unsaved UI name');
+    await s.page.getByText('You can change your name once every 30 days.',{exact:true}).waitFor();
+    await s.page.getByText('Cancel',{exact:true}).click();
+    await s.page.getByText('Delete my account',{exact:true}).click();
+    await s.page.getByText('Type DELETE MY ACCOUNT to confirm',{exact:true}).waitFor();
+    await s.page.getByText('This permanently deletes your Mabhazi account,',{exact:false}).waitFor();
+    assert.equal(await s.page.getByText('Delete permanently',{exact:true}).isVisible(),true);
+    await s.page.getByText('Cancel',{exact:true}).click();assert.equal(s.posts(),0);
+    assert.equal((await admin.query('SELECT count(*) FROM users WHERE id=$1',[users[0]])).rows[0].count,'1');
+    results.push('signed-in profile retains name edit/cancel, limit guidance and deletion warning/confirmation; no deletion performed');await s.context.close();
+  }
+  {
+    const s=await session(null,false,'profile');
+    await s.page.getByText('Join Mabhazi',{exact:true}).waitFor();
+    await s.page.getByText('Sign in to contribute.',{exact:true}).waitFor();
+    await s.page.getByText('Manage blocked contributors',{exact:true}).waitFor();
+    await s.page.getByText('Privacy',{exact:true}).waitFor();await s.page.getByText('Terms',{exact:true}).waitFor();
+    await s.page.screenshot({path:path.join(output,'guest-profile.png'),fullPage:true});
+    assert.equal(s.posts(),0);results.push('guest profile keeps sign-in, safety and legal/help links without the repeated feature list');await s.context.close();
+  }
+  {
+    const s=await session(null,false,'departures');
+    await s.page.getByText('UI fixture bus',{exact:true}).waitFor();
+    await s.page.screenshot({path:path.join(output,'departures.png'),fullPage:true});
+    assert.equal(s.posts(),0);results.push('departures renders operator and schedule data after copy cleanup');await s.context.close();
+  }
+  {
+    const s=await session();
+    await s.page.getByRole('button',{name:'More route details',exact:true}).click();
+    await s.page.getByText('Contribute a Route',{exact:true}).waitFor();
+    const monday=s.page.getByRole('checkbox',{name:'Operating day Mon',exact:true});
+    assert.equal(await monday.getAttribute('aria-checked'),'false');await monday.click();assert.equal(await monday.getAttribute('aria-checked'),'true');
+    await s.page.getByText('Add a stop',{exact:true}).click();
+    await s.page.screenshot({path:path.join(output,'full-route-form.png'),fullPage:true});
+    assert.equal(s.posts(),0);results.push('legacy full form retains explicit operating-day selection and optional stop entry without submitting');await s.context.close();
+  }
+  assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

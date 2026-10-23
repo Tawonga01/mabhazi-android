@@ -307,9 +307,6 @@ function LegalLinks({ colors }: { colors: Colors }) {
       <Text style={[styles.legalTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
         Mabhazi information
       </Text>
-      <Text style={[styles.legalIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        Learn how community data works, review the terms, or get help.
-      </Text>
       <View style={styles.legalLinks}>
         {links.map((link) => (
           <TouchableOpacity
@@ -533,6 +530,7 @@ export default function ProfileScreen() {
               {editing ? (
                 <View style={styles.editBlock}>
                   <TextInput
+                    accessibilityLabel="Display name"
                     style={[
                       styles.nameInput,
                       {
@@ -585,6 +583,8 @@ export default function ProfileScreen() {
                   </Text>
                   {canChange ? (
                     <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit display name"
                       style={[styles.editBtn, { backgroundColor: colors.secondary }]}
                       onPress={handleStartEdit}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -599,7 +599,7 @@ export default function ProfileScreen() {
               <Animated.View style={[styles.successBanner, { opacity: successOpacity, backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
                 <Feather name="check-circle" size={13} color="#16A34A" />
                 <Text style={[styles.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                  Username updated on all your routes!
+                  Name updated.
                 </Text>
               </Animated.View>
 
@@ -618,25 +618,14 @@ export default function ProfileScreen() {
                     {" "}· {formatDate(nextAvailable)}
                   </Text>
                 </View>
-              ) : !editing ? (
+              ) : editing ? (
                 <Text style={[styles.changeHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Tap ✏️ to change your username — once every 30 days
+                  You can change your name once every 30 days.
                 </Text>
               ) : null}
             </View>
 
-            {/* ── Community card ── */}
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.infoTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                Community Member
-              </Text>
-              <Text style={[styles.infoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                You are part of the Mabhazi community. Every route you contribute
-                helps travelers find better connections across cities.
-              </Text>
-            </View>
-
-            <TermsAcceptanceCard terms={terms} />
+            {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
 
             {/* ── Pending route association proposals ── */}
             <ProposalInbox colors={colors} />
@@ -672,7 +661,7 @@ export default function ProfileScreen() {
               Join Mabhazi
             </Text>
             <Text style={[styles.guestSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Log in to contribute bus routes and help the community travel smarter.
+              Sign in to contribute.
             </Text>
             <TouchableOpacity
               style={[styles.loginBtn, { backgroundColor: isLoggingIn ? colors.mutedForeground : colors.primary }]}
@@ -696,30 +685,11 @@ export default function ProfileScreen() {
               </View>
             ) : null}
 
-            <View style={[styles.featuresList, { borderColor: colors.border }]}>
-              {[
-                { icon: "plus-circle", text: "Add new bus routes" },
-                { icon: "users", text: "Credited by your username" },
-                { icon: "globe", text: "Help travelers in your region" },
-              ].map((item) => (
-                <View key={item.icon} style={styles.featureItem}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: colors.secondary }]}>
-                    <Feather name={item.icon as any} size={16} color={colors.accent} />
-                  </View>
-                  <Text style={[styles.featureText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    {item.text}
-                  </Text>
-                </View>
-              ))}
-            </View>
           </View>
         )}
         <View style={[styles.safetyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.infoTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
             Safety controls
-          </Text>
-          <Text style={[styles.infoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Blocked contributors are hidden from route searches, departures, route details, and comments on this device.
           </Text>
           <TouchableOpacity
             testID="manage-blocked-contributors"

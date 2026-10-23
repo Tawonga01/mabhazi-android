@@ -144,10 +144,7 @@ export function UgcSafetyActions({
             <View style={styles.dialogHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  Safety options
-                </Text>
-                <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Help keep Mabhazi welcoming by reporting objectionable {targetLabel} content.
+                  Report {targetLabel}
                 </Text>
               </View>
               <TouchableOpacity

@@ -257,9 +257,6 @@ export default function SearchScreen() {
         ]}
       >
         <Text style={[styles.appTitle, { color: "#FFFFFF" }]}>Mabhazi.com</Text>
-        <Text style={[styles.appSubtitle, { color: "rgba(255,255,255,0.7)" }]}>
-          Find intercity bus routes
-        </Text>
 
         {/* Compact bar shown after search */}
         <Animated.View
@@ -431,7 +428,7 @@ export default function SearchScreen() {
                   },
                 ]}
               >
-                Day of week — optional
+              Travel day (optional)
               </Text>
               <View style={styles.dayChips}>
                 {DAYS.map((day) => {
@@ -556,14 +553,6 @@ export default function SearchScreen() {
             ]}
           >
             Search for a route
-          </Text>
-          <Text
-            style={[
-              styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            Community-contributed bus routes across cities
           </Text>
         </View>
       ) : (
