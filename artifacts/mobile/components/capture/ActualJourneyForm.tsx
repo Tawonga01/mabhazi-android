@@ -6,8 +6,8 @@ import { actualDrafts } from '@/lib/lead-drafts';
 import { actualErrors, emptyActualDraft, toggleActualFact, knowledgeChoices, type ActualDraft, type ActualFact, type ClockDraft } from '@/lib/actual-journey-model';
 import { prepareActual } from '@/lib/actual-journey-model';
 import { useCapture, type CaptureOptions } from '@/lib/use-capture';
-import { CaptureButton, CaptureFrame, CaptureInput, CityField, CityPicker, Choices, Field, ReviewRow, captureStyles as s } from './CapturePrimitives';
-import { CaptureMessages, CaptureStatus, draftNotice, SavedMessage } from './CaptureStatus';
+import { CaptureButton, CaptureFrame, CaptureHelp, CaptureInput, CityField, CityPicker, Choices, Field, ReviewRow, captureStyles as s } from './CapturePrimitives';
+import { CaptureMessages, CaptureStatus, SavedMessage } from './CaptureStatus';
 import { FocusedFareForm } from './FocusedFareForm';
 const options: CaptureOptions<ActualDraft, V2ActualJourneyRequest> = {
   empty: emptyActualDraft, errors: actualErrors, prepare: prepareActual, store: actualDrafts,
@@ -40,7 +40,6 @@ function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): v
   return <>
     <CaptureFrame title={c.receipt ? 'Journey report saved' : reviewing ? 'Review journey' : 'Report a journey'} onClose={() => void c.close(onClose)} busy={c.busy} footer={footer} phase={c.receipt ? 'saved' : reviewing ? 'review' : c.resume ? 'resume' : 'edit'}>
       {c.receipt ? <SavedMessage reference={c.receipt.clientSubmissionId} /> : c.resume ? <><Text style={s.label}>You have a saved journey draft</Text><Text style={s.note}>{c.resume.pending ? 'Resume to check the receipt for your previous save.' : 'Resume your answers, then review before saving.'}</Text></> : !c.ready ? <ActivityIndicator accessibilityLabel="Loading saved draft" /> : <>
-        <Text style={s.note}>{reviewing ? 'Only the facts below will be sent. This independent report does not change a scheduled departure.' : 'Share what you observed. One useful fact is enough; leave the rest unknown.'}</Text>
         {reviewing ? <View style={s.group}>
           {(d.serviceDate || d.timezone || d.knowledgeBasis) ? <ReviewRow label="Journey context only" value={`${d.serviceDate || 'Date unknown'} · ${d.timezone || 'Timezone unknown'} · ${knowledgeChoices.find(([key]) => key === d.knowledgeBasis)?.[1] ?? 'Knowledge basis not provided'}`} /> : null}
           {(['departure','arrival'] as const).filter(f => d.facts.includes(f)).map(f => <ReviewRow key={f} label={`Actual ${f}`} value={`${d[f].time} · ${d[f].date || 'Date unknown'} · ${d[f].zone || 'Timezone unknown'}`} />)}
@@ -53,7 +52,7 @@ function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): v
             <Field label={`Actual ${f} time *`} error={c.errors[`${f}.time`]}><CaptureInput ref={v => { refs.current[`${f}.time`] = v; }} accessibilityLabel={`Actual ${f} time`} value={d[f].time} onChangeText={v => clock(f, 'time', v)} placeholder="HH:MM" maxLength={5} /></Field>
             <Field label={`${f === 'departure' ? 'Departure' : 'Arrival'} date (optional)`} error={c.errors[`${f}.date`]}><CaptureInput ref={v => { refs.current[`${f}.date`] = v; }} accessibilityLabel={`${f} date`} value={d[f].date} onChangeText={v => clock(f, 'date', v)} placeholder="YYYY-MM-DD" maxLength={10} /></Field>
             <Field label="Timezone or UTC offset (optional)" error={c.errors[`${f}.zone`]}><CaptureInput ref={v => { refs.current[`${f}.zone`] = v; }} accessibilityLabel={`${f} timezone or offset`} value={d[f].zone} onChangeText={v => clock(f, 'zone', v)} placeholder="Africa/Harare or +02:00" maxLength={100} autoCapitalize="none" /></Field>
-            <Text style={s.note}>Use the date and timezone of this actual {f}. Arrival may be on the following day. Unknown stays unknown.</Text>
+            <CaptureHelp label="Date and timezone help"><Text style={s.note}>Use the local date and timezone of this {f}. Arrival may be the following day. Leave unknown details blank.</Text></CaptureHelp>
             <CaptureButton title={`Remove actual ${f}`} secondary onPress={() => toggle(f)} />
           </View>)}
           {d.facts.includes('operator') ? <View style={s.group}><Field label="Observed operator *" error={c.errors.operator}><CaptureInput ref={v => { refs.current.operator = v; }} accessibilityLabel="Observed operator" value={d.operator} onChangeText={v => update('operator', v)} maxLength={120} placeholder="Bus company name" /></Field><Field label="Operator observation date (optional)" error={c.errors.operatorDate}><CaptureInput ref={v => { refs.current.operatorDate = v; }} accessibilityLabel="Operator observation date" value={d.operatorDate} onChangeText={v => update('operatorDate', v)} placeholder="YYYY-MM-DD" maxLength={10} /></Field><CaptureButton title="Remove operator" secondary onPress={() => toggle('operator')} /></View> : null}
@@ -69,10 +68,11 @@ function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): v
           {contextOpen ? <View style={s.group}>
             <Field label="Journey date (optional)" error={c.errors.serviceDate}><CaptureInput ref={v => { refs.current.serviceDate = v; }} accessibilityLabel="Journey date" value={d.serviceDate} onChangeText={v => update('serviceDate', v)} placeholder="YYYY-MM-DD" maxLength={10} /></Field>
             <Field label="Journey timezone (optional)" error={c.errors.timezone}><CaptureInput ref={v => { refs.current.timezone = v; }} accessibilityLabel="Journey timezone" value={d.timezone} onChangeText={v => update('timezone', v)} placeholder="Africa/Harare" autoCapitalize="none" maxLength={100} /></Field>
-            <Choices label="How you know (optional)" value={d.knowledgeBasis} options={knowledgeChoices} onChange={v => update('knowledgeBasis', v)} error={c.errors.knowledgeBasis} /><Text style={s.note}>Context is separate from each actual time and fare. It will not fill their missing dates or timezones.</Text>
+            <Choices label="How you know (optional)" value={d.knowledgeBasis} options={knowledgeChoices} onChange={v => update('knowledgeBasis', v)} error={c.errors.knowledgeBasis} />
+            <CaptureHelp label="Journey context help"><Text style={s.note}>These details describe the journey. Add a date to each time or fare separately when you know it.</Text></CaptureHelp>
           </View> : null}
         </>}
-        {reviewing ? <CaptureStatus capture={c} /> : null}<Text style={s.note}>{draftNotice}</Text>
+        {reviewing ? <CaptureStatus capture={c} /> : null}
       </>}
       <CaptureMessages message={c.message} storageError={c.storageError} />
     </CaptureFrame>

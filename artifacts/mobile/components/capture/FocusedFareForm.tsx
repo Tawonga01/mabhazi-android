@@ -21,7 +21,7 @@ export function FocusedFareForm({ value: f, change, done, close, skip }: { value
       <CaptureButton title={preview ? 'Use this fare' : 'Preview fare'} onPress={preview ? done : review} />
       {preview ? <CaptureButton title="Edit fare" secondary onPress={() => setPreview(false)} /> : <CaptureButton title="Skip fare" secondary onPress={skip} />}
     </>}>
-      <Text style={s.note}>{preview ? 'This fare will join your journey report. It saves only when you submit the whole report.' : 'Share the price you know. A free fare must be entered explicitly as 0.'}</Text>
+      {preview ? <Text style={s.note}>Added when you save your journey report.</Text> : null}
       {preview ? <View style={s.group}>
         <ReviewRow label={`${f.basis} fare`} value={`${f.currency} ${f.amount}`} />
         <ReviewRow label="Segment" value={`${f.origin?.name} → ${f.destination?.name}`} />
@@ -34,21 +34,19 @@ export function FocusedFareForm({ value: f, change, done, close, skip }: { value
           <CaptureInput ref={v => { refs.current.amount = v; }} accessibilityLabel="Fare amount" value={f.amount} onChangeText={v => update('amount', v)} placeholder="—" keyboardType="decimal-pad" maxLength={13} style={{ flex: 1, minWidth: 0, fontSize: 34, minHeight: 72, fontWeight: '700' }} />
         </View></Field>
         {errors['fare.currency'] ? <Text accessibilityRole="alert" style={s.error}>{errors['fare.currency']}</Text> : null}
-        <Choices label="Fare basis" value={f.basis} options={[[ 'paid', 'Paid' ], ['quoted', 'Quoted'], ['advertised', 'Advertised']]} onChange={v => { change({ ...f, basis: v, date: '' }); setErrors({}); }} error={errors['fare.basis']} />
+        <Choices label="Price type" value={f.basis} options={[[ 'paid', 'Paid' ], ['quoted', 'Quoted'], ['advertised', 'Advertised']]} onChange={v => { change({ ...f, basis: v, date: '' }); setErrors({}); }} error={errors['fare.basis']} />
         <View style={s.group}>
           <CityField label="Fare departure city" city={f.origin} onPress={() => setPicker('origin')} error={errors['fare.origin']} />
           <CityField label="Fare destination city" city={f.destination} onPress={() => setPicker('destination')} error={errors['fare.destination']} />
-          {f.basis ? <Field label={dateLabel} error={errors['fare.date']} hint={f.basis === 'paid' ? 'The day you travelled at this fare.' : 'Leave blank if you do not know the date.'}><CaptureInput ref={v => { refs.current.date = v; }} accessibilityLabel="Fare date" value={f.date} onChangeText={v => update('date', v)} placeholder="YYYY-MM-DD" maxLength={10} /></Field> : null}
+          {f.basis ? <Field label={dateLabel} error={errors['fare.date']}><CaptureInput ref={v => { refs.current.date = v; }} accessibilityLabel="Fare date" value={f.date} onChangeText={v => update('date', v)} placeholder="YYYY-MM-DD" maxLength={10} /></Field> : null}
         </View>
-        <CaptureButton title={conditions ? 'Hide fare conditions' : 'Fare conditions — choose passenger and ticket'} secondary onPress={() => setConditions(v => !v)} />
-        <Text style={s.note}>Choose Unknown when a condition is not known. No adult or one-way fare is assumed.</Text>
+        <CaptureButton title={conditions ? 'Hide fare conditions' : 'Fare conditions'} secondary onPress={() => setConditions(v => !v)} />
         {conditions ? <View style={s.group}>
           <Choices label="Passenger" value={f.passenger} options={[[ 'adult', 'Adult' ], ['child', 'Child'], ['concession', 'Concession'], ['other', 'Other'], ['unknown', 'Unknown']]} onChange={v => { change({ ...f, passenger: v, passengerLabel: '' }); setErrors({}); }} error={errors['fare.passenger']} />
           {f.passenger === 'other' ? <Field label="Passenger description" error={errors['fare.passengerLabel']}><CaptureInput ref={v => { refs.current.passengerLabel = v; }} accessibilityLabel="Passenger description" value={f.passengerLabel} onChangeText={v => update('passengerLabel', v)} maxLength={120} /></Field> : null}
           <Choices label="Ticket" value={f.ticket} options={[[ 'one_way', 'One way' ], ['return', 'Return'], ['other', 'Other'], ['unknown', 'Unknown']]} onChange={v => { change({ ...f, ticket: v, ticketLabel: '' }); setErrors({}); }} error={errors['fare.ticket']} />
           {f.ticket === 'other' ? <Field label="Ticket description" error={errors['fare.ticketLabel']}><CaptureInput ref={v => { refs.current.ticketLabel = v; }} accessibilityLabel="Ticket description" value={f.ticketLabel} onChangeText={v => update('ticketLabel', v)} maxLength={120} /></Field> : null}
         </View> : null}
-        {Object.keys(errors).length ? <Text accessibilityRole="alert" style={s.error}>Check the marked fare answers. Passenger and ticket choices are in Fare conditions.</Text> : null}
       </>}
     </CaptureFrame>
     {picker ? <CityPicker title={picker === 'origin' ? 'Fare departure city' : 'Fare destination city'} close={() => setPicker(null)} select={city => { update(picker, city); setPicker(null); }} /> : null}

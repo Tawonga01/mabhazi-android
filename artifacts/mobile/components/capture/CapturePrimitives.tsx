@@ -53,6 +53,10 @@ export function CaptureButton({ title, onPress, disabled = false, busy = false, 
     {busy ? <ActivityIndicator color="#102744" accessibilityLabel="Please wait" /> : <Text style={secondary ? s.secondaryText : s.primaryText}>{title}</Text>}
   </Pressable>;
 }
+export function CaptureHelp({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <View style={{ gap: 4 }}><Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ expanded: open }} aria-expanded={open} onPress={() => setOpen(value => !value)} style={[s.secondary, { alignItems: 'flex-start' }]}><Text style={s.secondaryText}>{label} {open ? '−' : '+'}</Text></Pressable>{open ? children : null}</View>;
+}
 export function Field({ label, error, children, hint }: { label: string; error?: string; hint?: string; children: React.ReactNode }) {
   return <View style={{ gap: 7 }}><Text style={s.label}>{label}</Text>{children}{hint ? <Text style={s.note}>{hint}</Text> : null}{error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}</View>;
 }

@@ -6,7 +6,7 @@ import { leadDrafts } from '@/lib/lead-drafts';
 import { emptyLeadDraft, draftErrors, prepareLead, type LeadDraft, type LeadField } from '@/lib/minimum-lead-model';
 import { useCapture, type CaptureOptions } from '@/lib/use-capture';
 import { CaptureFrame, CaptureButton, CaptureInput, CityField, CityPicker, Field, ReviewRow, captureStyles as s } from './capture/CapturePrimitives';
-import { CaptureStatus, CaptureMessages, SavedMessage, draftNotice } from './capture/CaptureStatus';
+import { CaptureStatus, CaptureMessages, SavedMessage } from './capture/CaptureStatus';
 const options: CaptureOptions<LeadDraft, V2MinimumLeadRequest> = {
   empty: emptyLeadDraft, errors: draftErrors, prepare: prepareLead, store: leadDrafts,
   hasAnswers: d => !!(d.origin || d.destination || d.time || d.operator), capability: 'minimumLeadEnabled', submit: submitV2Lead,
@@ -28,20 +28,18 @@ function AccountLeadForm({ owner, openFullForm, onClose }: { owner: string | nul
   return <>
     <CaptureFrame title={c.receipt ? 'Contribution saved' : reviewing ? 'Review route' : 'Add a bus route'} onClose={() => void c.close(onClose)} busy={c.busy} footer={footer} phase={c.receipt ? 'saved' : reviewing ? 'review' : c.resume ? 'resume' : 'edit'}>
       {c.receipt ? <SavedMessage reference={c.receipt.clientSubmissionId} /> : c.resume ? <><Text style={s.label}>You have a saved draft</Text><Text style={s.note}>{c.resume.pending ? 'A previous save was not confirmed. Resume to check its receipt.' : 'Resume your answers and review them before saving.'}</Text></> : !c.ready ? <ActivityIndicator accessibilityLabel="Loading saved draft" /> : <>
-        <Text style={s.note}>{reviewing ? 'Check the four answers before sending. Fare and operating days remain unknown.' : 'Four answers are enough. Price, arrival time and operating days can stay unknown.'}</Text>
         <View style={s.group}>
           {reviewing ? <><ReviewRow label="Departure city" value={c.draft.origin?.name ?? ''} /><ReviewRow label="Departure time" value={c.draft.time} /><ReviewRow label="Destination city" value={c.draft.destination?.name ?? ''} /><ReviewRow label="Bus operator" value={c.draft.operator.trim()} /></> : <>
             <CityField label="Departure city *" city={c.draft.origin} disabled={c.locked} error={c.errors.origin} onPress={() => setPicker('origin')} />
-            <Field label="Departure time *" error={c.errors.time} hint="24-hour time. Enter midnight explicitly as 00:00."><CaptureInput ref={timeRef} accessibilityLabel="Departure time in 24-hour format" editable={!c.locked} value={c.draft.time} onChangeText={value => update('time', value)} maxLength={5} placeholder="HH:MM" /></Field>
+            <Field label="Departure time (24-hour) *" error={c.errors.time}><CaptureInput ref={timeRef} accessibilityLabel="Departure time in 24-hour format" editable={!c.locked} value={c.draft.time} onChangeText={value => update('time', value)} maxLength={5} placeholder="HH:MM" /></Field>
             <CityField label="Destination city *" city={c.draft.destination} disabled={c.locked} error={c.errors.destination} onPress={() => setPicker('destination')} />
             <Field label="Bus operator *" error={c.errors.operator}><CaptureInput ref={operatorRef} accessibilityLabel="Bus operator name" editable={!c.locked} value={c.draft.operator} onChangeText={value => update('operator', value)} maxLength={120} placeholder="Bus company name" /></Field>
           </>}
         </View>
-        {reviewing ? <CaptureStatus capture={c} /> : <Text style={s.note}>Know more? You can use the full route form from the contribution menu.</Text>}
-        <Text style={s.note}>{draftNotice}</Text>
+        {reviewing ? <CaptureStatus capture={c} /> : null}
       </>}
       <CaptureMessages message={c.message} storageError={c.storageError} />
-      {!c.pending && !c.receipt && !c.resume && !c.busy ? <CaptureButton title="Open existing full route form" secondary onPress={() => void c.close(openFullForm)} /> : null}
+      {!reviewing && !c.pending && !c.receipt && !c.resume && !c.busy ? <CaptureButton title="More route details" secondary onPress={() => void c.close(openFullForm)} /> : null}
     </CaptureFrame>
     {picker ? <CityPicker title={picker === 'origin' ? 'Departure city' : 'Destination city'} close={() => setPicker(null)} select={(city: V2City) => { update(picker, city); setPicker(null); }} /> : null}
   </>;

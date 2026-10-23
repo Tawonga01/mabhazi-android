@@ -8,6 +8,8 @@ Journey reports support actual departure/arrival with their own optional dates/t
 
 Uses existing generated actual-journey and minimum APIs; no database, native package, authentication provider, signing, production configuration or navigation-bar change. Keyboard avoidance and scrolling body/fixed actions require Android device acceptance. Existing full route entry remains accessible.
 
+23 October phone feedback: remove repetitive small print from the capture flow. Forms lead with fields and actions; 24-hour time is stated in its label. Draft retention, receipt references and timezone/context guidance are available through explicit expandable help rather than repeated paragraphs. Successful save says thanks, with its processing state and reference in View receipt. Terms keep an explicit checkbox and readable full Terms link without duplicated instructions. Validation, unknown options, paid/quoted/advertised distinctions, required dates, auth/account/draft/retry behaviour and the original supplied design files remain unchanged. This revision is not in the previously delivered code-2 APK until a new build is signed and installed.
+
 ## Validation
 
 Local pure-model/storage checks:23 passing (12 existing minimum/recovery +11 journey/fare/storage/retry). Full native TypeScript/Expo exports, real Expo-web-to-restricted-Postgres browser flows and backend CI are required on the exact source commit. A passing browser export is not an APK or phone acceptance.

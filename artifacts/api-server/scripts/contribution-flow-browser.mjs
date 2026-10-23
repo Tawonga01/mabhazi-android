@@ -59,6 +59,14 @@ try {
     page.on('pageerror', error => consoleErrors.push(error.message));
     await page.goto('http://127.0.0.1:4173/contribute');
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
+    if (!results.length) {
+      await page.screenshot({path:path.join(output,'contribution-menu.png'),fullPage:true});
+      const help=page.getByRole('button',{name:'About drafts',exact:true});
+      assert.equal(await help.getAttribute('aria-expanded'),'false');
+      await help.click();await page.getByText('Drafts stay in this browser session only.',{exact:false}).waitFor();
+      assert.equal(await help.getAttribute('aria-expanded'),'true');await help.click();
+      assert.equal(await help.getAttribute('aria-expanded'),'false');assert.equal(postCount,0);
+    }
     await page.getByRole('button',{name:mode === 'route' ? 'Add a route' : 'Report a journey',exact:true}).click();
     await page.getByRole('heading',{name:mode === 'route' ? 'Add a bus route' : 'Report a journey',exact:true}).waitFor();
     async function fill() {
@@ -89,6 +97,10 @@ try {
     const row=(await admin.query('SELECT payload FROM v2_contributions WHERE user_id=$1',[users[0]])).rows[0];
     assert.equal(row.payload.target.newLead.originCityId,cities[0]);assert.equal(row.payload.target.newLead.destinationCityId,cities[1]);assert.equal('price' in row.payload.target.newLead,false);
     await s.page.screenshot({path:path.join(output,'saved-result.png'),fullPage:true});
+    const receiptHelp=s.page.getByRole('button',{name:'View receipt',exact:true});
+    assert.equal(await receiptHelp.getAttribute('aria-expanded'),'false');
+    await receiptHelp.click();await s.page.getByText('Received and awaiting processing.',{exact:true}).waitFor();
+    assert.equal(await receiptHelp.getAttribute('aria-expanded'),'true');await receiptHelp.click();assert.equal(s.posts(),1);
     results.push('four answers render and save through real API/PostgreSQL; no price/calendar/default clock');
     await s.context.close();
   }
@@ -155,7 +167,7 @@ try {
     assert.equal(await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).getAttribute('aria-checked'),'false');
     await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();
     await s.page.getByLabel('Fare amount',{exact:true}).fill('0');
-    await s.page.getByRole('radio',{name:'Fare basis: Paid',exact:true}).click();
+    await s.page.getByRole('radio',{name:'Price type: Paid',exact:true}).click();
     async function fareCity(label, name) {
       await s.page.getByRole('button',{name:label,exact:true}).click();
       await s.page.getByLabel('Search cities',{exact:true}).fill(name);
@@ -163,7 +175,7 @@ try {
     }
     await fareCity('Choose fare departure city','Flow Origin fixture');
     await fareCity('Choose fare destination city','Flow Destination fixture');
-    await s.page.getByRole('button',{name:'Fare conditions — choose passenger and ticket',exact:true}).click();
+    await s.page.getByRole('button',{name:'Fare conditions',exact:true}).click();
     await s.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();
     await s.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();
     await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();
@@ -201,7 +213,7 @@ try {
   assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

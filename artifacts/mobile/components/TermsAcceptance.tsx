@@ -106,7 +106,7 @@ export function useTermsAcceptance() {
 
 export function TermsAcceptanceCard({
   terms,
-  title = "Community contributions",
+  title = "Terms of Use",
 }: {
   terms: ReturnType<typeof useTermsAcceptance>;
   title?: string;
@@ -161,51 +161,21 @@ export function TermsAcceptanceCard({
               fontSize: 14,
             }}
           >
-            {terms.isAccepted ? "Terms accepted" : `Accept ${title}`}
-          </Text>
-          <Text
-            style={{
-              color: colors.mutedForeground,
-              fontFamily: "Inter_400Regular",
-              fontSize: 12,
-              marginTop: 2,
-            }}
-          >
-            {terms.isAccepted
-              ? `Version ${terms.status?.currentVersion ?? ""}`
-              : "Required before submitting community content"}
+            {terms.isAccepted ? "Terms accepted" : `I agree to the ${title}`}
           </Text>
         </View>
       </TouchableOpacity>
-      <Text
-        style={{
-          color: colors.mutedForeground,
-          fontFamily: "Inter_400Regular",
-          fontSize: 12,
-          lineHeight: 17,
-        }}
-      >
-        Routes, ratings, confirmations, corrections, reports, and comments
-        should be accurate and must not contain unnecessary personal
-        information.{" "}
+      <TouchableOpacity accessibilityRole="link" accessibilityLabel="Read the Terms" onPress={() => router.push("/terms")} style={{ minHeight: 44, justifyContent: "center" }}>
         <Text
-          onPress={() => router.push("/terms")}
-          style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}
+          style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}
         >
           Read the Terms
         </Text>
-      </Text>
+      </TouchableOpacity>
       {terms.error ? (
-        <Text style={{ color: colors.destructive, fontFamily: "Inter_400Regular", fontSize: 12 }}>
+        <Text accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: "Inter_400Regular", fontSize: 14 }}>
           {terms.error}
         </Text>
-      ) : null}
-      {!terms.isAccepted && !terms.isAccepting ? (
-        <TouchableOpacity style={{ minHeight: 44, justifyContent: "center" }} onPress={() => void terms.acceptCurrentTerms()}>
-          <Text style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 12 }}>
-            {terms.isAuthenticated ? "Tap the checkbox to accept" : "Sign in to accept"}
-          </Text>
-        </TouchableOpacity>
       ) : null}
     </View>
   );
