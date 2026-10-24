@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import type pg from 'pg';
-import { GetV2SubjectResponse, SearchV2RoutesResponse } from '@workspace/api-zod';
+import { GetV2SubjectResponse, SearchV2RoutesResponse, SubmitV2ActualJourneyResponse, ListV2RouteBlocksResponse } from '@workspace/api-zod';
 
 type Context={admin:pg.Client;accounts:string[];tokens:string[];base:string};
 export function registerPublicRouteTests(context:()=>Context){
@@ -138,11 +138,11 @@ export function registerPublicRouteTests(context:()=>Context){
  function actual(subjectId:string,revision:number,key=randomUUID()){return{schemaVersion:'1.0',clientSubmissionId:key,entrySurface:'route_detail',target:{newActualJourney:{intendedSubject:{kind:'lead',id:subjectId,expectedRevision:revision}}},observations:[{fieldKey:'operator.reported',value:{name:'Observed contextual bus'},scope:{}}]};}
  test('public context: another public account saves scoped evidence against the selected current lead and replays once',async()=>{
   const saved=await create('Public context bus'),subject=GetV2SubjectResponse.parse((await get('/subjects/'+saved.subjectId)).value).subject,input=actual(saved.subjectId,subject.revision);
-  const result=await action('/v2/actual-journeys',input);assert.equal(result.status,200);assert.equal((await action('/v2/actual-journeys',input)).value.contributionId,result.value.contributionId);
-  const stored=(await context().admin.query('SELECT payload FROM v2_contributions WHERE id=$1',[result.value.contributionId])).rows[0].payload;
+  const result=await action('/v2/actual-journeys',input);assert.equal(result.status,200);assert.equal(SubmitV2ActualJourneyResponse.parse((await action('/v2/actual-journeys',input)).value).contributionId,SubmitV2ActualJourneyResponse.parse(result.value).contributionId);
+  const stored=(await context().admin.query('SELECT payload FROM v2_contributions WHERE id=$1',[SubmitV2ActualJourneyResponse.parse(result.value).contributionId])).rows[0].payload;
   assert.equal(stored.target.newActualJourney.intendedSubject.id,saved.subjectId);assert.equal(stored.entrySurface,'route_detail');assert.equal(stored.observations.length,1);assert.equal(stored.actualContext?.knowledgeBasis,'unprovided');assert.ok(!stored.target.newActualJourney.reportedServiceDate);
   await context().admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.subjectId]);
-  assert.equal((await action('/v2/actual-journeys',input)).value.contributionId,result.value.contributionId);
+  assert.equal(SubmitV2ActualJourneyResponse.parse((await action('/v2/actual-journeys',input)).value).contributionId,SubmitV2ActualJourneyResponse.parse(result.value).contributionId);
   assert.equal((await action('/v2/actual-journeys',actual(saved.subjectId,subject.revision))).status,404);
  });
  test('public context: late revision, withdrawn target and device blocks reject fresh intake without changing own-only surfaces',async()=>{
@@ -156,13 +156,13 @@ export function registerPublicRouteTests(context:()=>Context){
   const saved=await create('Blocked account route'),sibling=await create('Blocked sibling route');
   assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',{action:'block'})).status,200);assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',{action:'block'})).status,200);
   for(const id of [saved.subjectId,sibling.subjectId]){assert.equal((await get('/subjects/'+id,[],1)).status,404);assert.equal((await get('/subjects/'+id,[],0)).status,200);}
-  const list=await get('/blocked-route-reporters',undefined,1);assert.equal(list.status,200);assert.equal(list.value.blocks.length,1);const row=list.value.blocks[0];assert.deepEqual(Object.keys(row).sort(),['blockedAt','id']);assert.ok(!JSON.stringify(list.value).includes(context().accounts[0]));
-  assert.equal((await get('/blocked-route-reporters',undefined,0)).value.blocks.length,0);
+  const list=await get('/blocked-route-reporters',undefined,1);assert.equal(list.status,200);assert.equal(ListV2RouteBlocksResponse.parse(list.value).blocks.length,1);const row=ListV2RouteBlocksResponse.parse(list.value).blocks[0];assert.deepEqual(Object.keys(row).sort(),['blockedAt','id']);assert.ok(!JSON.stringify(list.value).includes(context().accounts[0]));
+  assert.equal(ListV2RouteBlocksResponse.parse((await get('/blocked-route-reporters',undefined,0)).value).blocks.length,0);
   await action('/v2/blocked-route-reporters/'+row.id,undefined,0,'DELETE');assert.equal((await get('/subjects/'+saved.subjectId,[],1)).status,404);
   await action('/v2/blocked-route-reporters/'+row.id,undefined,1,'DELETE');assert.equal((await get('/subjects/'+saved.subjectId,[],1)).status,200);
   const actor=randomUUID(),token=randomBytes(32).toString('hex'),account=context().accounts.length;context().accounts.push(actor);context().tokens.push(token);
   await context().admin.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[actor]);await context().admin.query("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);
-  const erased=await create('Erase blocked author','08:00',false,account);assert.equal((await action('/v2/subjects/'+erased.subjectId+'/safety',{action:'block'})).status,200);assert.equal((await get('/blocked-route-reporters',undefined,1)).value.blocks.length,1);await context().admin.query('DELETE FROM users WHERE id=$1',[actor]);assert.equal((await get('/blocked-route-reporters',undefined,1)).value.blocks.length,0);
+  const erased=await create('Erase blocked author','08:00',false,account);assert.equal((await action('/v2/subjects/'+erased.subjectId+'/safety',{action:'block'})).status,200);assert.equal(ListV2RouteBlocksResponse.parse((await get('/blocked-route-reporters',undefined,1)).value).blocks.length,1);await context().admin.query('DELETE FROM users WHERE id=$1',[actor]);assert.equal(ListV2RouteBlocksResponse.parse((await get('/blocked-route-reporters',undefined,1)).value).blocks.length,0);
 
  });
  test('public context: report and block remain available without Terms; admin-only hide is audited and blocks new target use',async()=>{
