@@ -278,6 +278,22 @@ before(async () => {
     await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(canonical).digest('hex')]);
     await db.query('COMMIT');previousStageLog+=`Applied ${name}\n`;
   }
+  // Exercise the exact guarded hosted-editor upgrade from populated0029, then its no-op replay.
+  for(const name of ['0028_actual_journey_api.sql','0029_empty_search_minimum.sql']){
+    const sql=await readFile(new URL('../migrations/'+name,import.meta.url),'utf8');await db.query('BEGIN');await db.query(sql);
+    await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');previousStageLog+='Applied '+name+'\n';
+  }
+  const contextApply=await readFile(new URL('../scripts/preview-apply-0030.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_route_report_blocks(id uuid)');
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_partial_or_unrecorded'));await db.query('ROLLBACK');
+  assert.equal((await db.query("SELECT to_regclass('public.v2_route_report_blocks') t")).rows[0].t,null);
+  await db.query(contextApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0030_public_route_context.sql\n';
+  const contextFingerprint=(await db.query("SELECT pg_get_functiondef('public.v2_api_submit_public_actual_journey(varchar,text,jsonb,varchar[])'::regprocedure) d")).rows[0].d;
+  await db.query(contextApply);assert.equal((await db.query("SELECT pg_get_functiondef('public.v2_api_submit_public_actual_journey(varchar,text,jsonb,varchar[])'::regprocedure) d")).rows[0].d,contextFingerprint);
+  await db.query('BEGIN');await db.query("UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0030_public_route_context.sql'");
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_preview_hash_changed'));await db.query('ROLLBACK');
+  await db.query('BEGIN');await db.query(contextFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_function_fence_changed'));await db.query('ROLLBACK');
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);

@@ -41,6 +41,8 @@ try {
   browser = await chromium.launch();
   async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    // Drain intercepted background discovery before closing the test context.
+    const closeContext=context.close.bind(context);context.close=async options=>{await context.unrouteAll({behavior:'wait'});await closeContext(options);};
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
     let postCount = 0; const sent=[];
     await context.route('**/*', async route => {
