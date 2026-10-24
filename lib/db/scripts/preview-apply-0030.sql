@@ -270,7 +270,7 @@ $expected_context_view$;
    IF NOT p.relrowsecurity OR p.relkind<>'r' OR (SELECT count(*) FROM pg_policy WHERE polrelid=p.oid)<>1
     OR NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=p.oid AND polname='backend_read' AND polcmd='r' AND polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='mabhazi_api')] AND pg_get_expr(polqual,polrelid)='true') THEN RAISE EXCEPTION 'public_context_rls_changed: %',t;END IF;
    SELECT array_agg(column_name||':'||data_type||':'||(is_nullable='YES')::text ORDER BY ordinal_position) INTO columns FROM information_schema.columns WHERE table_schema='public' AND table_name=t;
-   IF columns IS DISTINCT FROM CASE t WHEN 'v2_route_report_blocks' THEN ARRAY['id:uuid:false','blocker_id:character varying:false','blocked_user_id:character varying:false','created_at:timestamp with time zone:false'] WHEN 'v2_public_lead_hides' THEN ARRAY['subject_id:uuid:false','report_id:integer:false','hidden_at:timestamp with time zone:false'] END THEN RAISE EXCEPTION 'public_context_columns_changed: %',t;END IF;
+   IF columns IS DISTINCT FROM (CASE t WHEN 'v2_route_report_blocks' THEN ARRAY['id:uuid:false','blocker_id:character varying:false','blocked_user_id:character varying:false','created_at:timestamp with time zone:false'] WHEN 'v2_public_lead_hides' THEN ARRAY['subject_id:uuid:false','report_id:integer:false','hidden_at:timestamp with time zone:false'] END) THEN RAISE EXCEPTION 'public_context_columns_changed: %',t;END IF;
   END IF;
  END LOOP;
  IF has_function_privilege('mabhazi_api','public.v2_submit_actual_journey(varchar,text,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'public_context_constructor_exposed';END IF;
