@@ -6,6 +6,7 @@ import pg from 'pg';
 import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse, ListV2OwnRoutesResponse, GetV2OwnRouteResponse } from '@workspace/api-zod';
 import type { infer as Infer } from 'zod';
 import { registerActualApiTests } from './actualJourney.cases';
+import { registerPublicRouteTests } from './publicRoutesV2.cases';
 type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse> & Infer<typeof ListV2OwnRoutesResponse> & Infer<typeof GetV2OwnRouteResponse>;
 
 let admin: pg.Client, server: Server, base: string;
@@ -229,3 +230,5 @@ test('own route history: deleting a contribution removes list/detail and invalid
 
 registerActualApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
 
+
+registerPublicRouteTests(()=>({admin,cities,accounts,tokens,base}));

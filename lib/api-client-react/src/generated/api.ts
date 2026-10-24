@@ -46,6 +46,7 @@ import type {
   RateJourneyBody,
   RateJourneyResult,
   SearchJourneysParams,
+  SearchV2RoutesParams,
   SubmitJourneyReportBody,
   SuccessEnvelope,
   SupportSummary,
@@ -62,15 +63,13 @@ import type {
   V2MinimumLeadRequest,
   V2OwnRouteEnvelope,
   V2OwnRoutes,
+  V2PublicSearch,
+  V2PublicSubjectEnvelope,
   V2ReceiptLookup,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType, BodyType } from "../custom-fetch";
-
-type AwaitedInput<T> = PromiseLike<T> | T;
-
-type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
@@ -161,6 +160,189 @@ export const useSubmitV2ActualJourney = <
 > => {
   return useMutation(getSubmitV2ActualJourneyMutationOptions(options));
 };
+
+/**
+ * Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * @summary Discover initial community route reports
+ */
+export const getSearchV2RoutesUrl = (params: SearchV2RoutesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/search?${stringifiedParams}`
+    : `/api/v2/search`;
+};
+
+export const searchV2Routes = async (
+  params: SearchV2RoutesParams,
+  options?: RequestInit,
+): Promise<V2PublicSearch> => {
+  return customFetch<V2PublicSearch>(getSearchV2RoutesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchV2RoutesQueryKey = (params?: SearchV2RoutesParams) => {
+  return [`/api/v2/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchV2RoutesQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchV2Routes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params: SearchV2RoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchV2Routes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchV2RoutesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchV2Routes>>> = ({
+    signal,
+  }) => searchV2Routes(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchV2Routes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchV2RoutesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchV2Routes>>
+>;
+export type SearchV2RoutesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Discover initial community route reports
+ */
+
+export function useSearchV2Routes<
+  TData = Awaited<ReturnType<typeof searchV2Routes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params: SearchV2RoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchV2Routes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchV2RoutesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+ * @summary Recheck one currently visible public lead
+ */
+export const getGetV2SubjectUrl = (subjectId: string) => {
+  return `/api/v2/subjects/${subjectId}`;
+};
+
+export const getV2Subject = async (
+  subjectId: string,
+  options?: RequestInit,
+): Promise<V2PublicSubjectEnvelope> => {
+  return customFetch<V2PublicSubjectEnvelope>(getGetV2SubjectUrl(subjectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2SubjectQueryKey = (subjectId: string) => {
+  return [`/api/v2/subjects/${subjectId}`] as const;
+};
+
+export const getGetV2SubjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2Subject>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2Subject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetV2SubjectQueryKey(subjectId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getV2Subject>>> = ({
+    signal,
+  }) => getV2Subject(subjectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2Subject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2SubjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2Subject>>
+>;
+export type GetV2SubjectQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Recheck one currently visible public lead
+ */
+
+export function useGetV2Subject<
+  TData = Awaited<ReturnType<typeof getV2Subject>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2Subject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2SubjectQueryOptions(subjectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.

@@ -47,6 +47,53 @@ paths:
         '422': {$ref: '#/components/responses/V2Error'}
         '428': {$ref: '#/components/responses/V2Error'}
         '503': {$ref: '#/components/responses/V2Error'}
+  /v2/search:
+    get:
+      operationId: searchV2Routes
+      summary: Discover initial community route reports
+      description: Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+      parameters:
+        - name: originCityId
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 999999999}
+        - name: destinationCityId
+          in: query
+          required: true
+          schema: {type: integer, minimum: 1, maximum: 999999999}
+        - name: cursor
+          in: query
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/BlockedContributorsHeader'
+      responses:
+        '200':
+          description: Public reports without private evidence or attribution
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2PublicSearch'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/subjects/{subjectId}:
+    get:
+      operationId: getV2Subject
+      summary: Recheck one currently visible public lead
+      description: Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/BlockedContributorsHeader'
+      responses:
+        '200':
+          description: Current safe public subject projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2PublicSubjectEnvelope'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
   /v2/my-routes:
     get:
       operationId: listV2OwnRoutes
@@ -948,6 +995,11 @@ paths:
 
 components:
   parameters:
+    BlockedContributorsHeader:
+      name: X-Mabhazi-Blocked-Contributors
+      in: header
+      description: JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
+      schema: {type: string, maxLength: 10000}
     ExpectedAccountHeader:
       name: X-Mabhazi-Account
       in: header
@@ -1655,6 +1707,11 @@ components:
     V2ActualFareObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["fare.paid","fare.quoted","fare.advertised"]},"value":{"type":"object","additionalProperties":false,"required":["amount","currency"],"properties":{"amount":{"type":"string","pattern":"^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$","maxLength":13},"currency":{"type":"string","pattern":"^[A-Z]{3}$"}}},"scope":{"$ref":"#/components/schemas/V2ActualFareScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
     V2ActualObservation: {"oneOf":[{"$ref":"#/components/schemas/V2ActualClockObservation"},{"$ref":"#/components/schemas/V2ActualOperatorObservation"},{"$ref":"#/components/schemas/V2ActualPlaceObservation"},{"$ref":"#/components/schemas/V2ActualFareObservation"}]}
     V2ActualJourneyRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_empty","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2ActualTarget"},"observations":{"type":"array","minItems":1,"maxItems":20,"items":{"$ref":"#/components/schemas/V2ActualObservation"}},"actualContext":{"$ref":"#/components/schemas/V2ActualContext"}}}
+    V2PublicOperatorReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate"],"properties":{"value":{"type":"string","minLength":1,"maxLength":120},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}
+    V2PublicClockReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate","basis"],"properties":{"value":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"basis":{"type":"string","enum":["unspecified","scheduled","actual"]}}}
+    V2PublicLead: {"type":"object","additionalProperties":false,"required":["kind","subjectId","revision","origin","destination","operatorReport","reportedTime","publicationStatus","timedDepartureEligible","contributionTargetEligible","missingDetails"],"properties":{"kind":{"type":"string","enum":["lead"]},"subjectId":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operatorReport":{"$ref":"#/components/schemas/V2PublicOperatorReport"},"reportedTime":{"$ref":"#/components/schemas/V2PublicClockReport"},"publicationStatus":{"type":"string","enum":["details_needed"]},"timedDepartureEligible":{"type":"boolean","enum":[false]},"contributionTargetEligible":{"type":"boolean","enum":[false]},"missingDetails":{"type":"array","uniqueItems":true,"items":{"type":"string","enum":["selected_fare","operating_days","boarding_location"]}}}}
+    V2PublicSearch: {"type":"object","additionalProperties":false,"required":["items","hasHiddenResults"],"properties":{"items":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2PublicLead"}},"hasHiddenResults":{"type":"boolean"},"nextCursor":{"type":"string","format":"uuid"}}}
+    V2PublicSubjectEnvelope: {"type":"object","additionalProperties":false,"required":["subject"],"properties":{"subject":{"$ref":"#/components/schemas/V2PublicLead"}}}
     V2OwnRoute: {"type":"object","additionalProperties":false,"required":["clientSubmissionId","subjectId","submittedAt","origin","destination","operator","departureTime","availability"],"properties":{"clientSubmissionId":{"type":"string","format":"uuid"},"subjectId":{"type":"string","format":"uuid"},"submittedAt":{"type":"string","format":"date-time"},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operator":{"type":"string","minLength":1,"maxLength":120},"departureTime":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"availability":{"type":"string","enum":["active","unavailable"]},"currentLeadRevision":{"type":"integer","minimum":1}}}
     V2OwnRoutes: {"type":"object","additionalProperties":false,"required":["routes"],"properties":{"routes":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2OwnRoute"}},"nextCursor":{"type":"string","maxLength":73,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}}}
     V2OwnRouteEnvelope: {"type":"object","additionalProperties":false,"required":["route"],"properties":{"route":{"$ref":"#/components/schemas/V2OwnRoute"}}}

@@ -995,6 +995,125 @@ export interface V2ActualJourneyRequest {
   actualContext?: V2ActualContext;
 }
 
+export type V2PublicOperatorReportSupport =
+  (typeof V2PublicOperatorReportSupport)[keyof typeof V2PublicOperatorReportSupport];
+
+export const V2PublicOperatorReportSupport = {
+  reported: "reported",
+} as const;
+
+export type V2PublicOperatorReportFreshness =
+  (typeof V2PublicOperatorReportFreshness)[keyof typeof V2PublicOperatorReportFreshness];
+
+export const V2PublicOperatorReportFreshness = {
+  unknown: "unknown",
+} as const;
+
+export interface V2PublicOperatorReport {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  value: string;
+  support: V2PublicOperatorReportSupport;
+  freshness: V2PublicOperatorReportFreshness;
+  submittedAt: string;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  observedDate: string | null;
+}
+
+export type V2PublicClockReportSupport =
+  (typeof V2PublicClockReportSupport)[keyof typeof V2PublicClockReportSupport];
+
+export const V2PublicClockReportSupport = {
+  reported: "reported",
+} as const;
+
+export type V2PublicClockReportFreshness =
+  (typeof V2PublicClockReportFreshness)[keyof typeof V2PublicClockReportFreshness];
+
+export const V2PublicClockReportFreshness = {
+  unknown: "unknown",
+} as const;
+
+export type V2PublicClockReportBasis =
+  (typeof V2PublicClockReportBasis)[keyof typeof V2PublicClockReportBasis];
+
+export const V2PublicClockReportBasis = {
+  unspecified: "unspecified",
+  scheduled: "scheduled",
+  actual: "actual",
+} as const;
+
+export interface V2PublicClockReport {
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  value: string;
+  support: V2PublicClockReportSupport;
+  freshness: V2PublicClockReportFreshness;
+  submittedAt: string;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  observedDate: string | null;
+  basis: V2PublicClockReportBasis;
+}
+
+export type V2PublicLeadKind =
+  (typeof V2PublicLeadKind)[keyof typeof V2PublicLeadKind];
+
+export const V2PublicLeadKind = {
+  lead: "lead",
+} as const;
+
+export type V2PublicLeadPublicationStatus =
+  (typeof V2PublicLeadPublicationStatus)[keyof typeof V2PublicLeadPublicationStatus];
+
+export const V2PublicLeadPublicationStatus = {
+  details_needed: "details_needed",
+} as const;
+
+export type V2PublicLeadMissingDetailsItem =
+  (typeof V2PublicLeadMissingDetailsItem)[keyof typeof V2PublicLeadMissingDetailsItem];
+
+export const V2PublicLeadMissingDetailsItem = {
+  selected_fare: "selected_fare",
+  operating_days: "operating_days",
+  boarding_location: "boarding_location",
+} as const;
+
+export interface V2PublicLead {
+  kind: V2PublicLeadKind;
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  origin: V2City;
+  destination: V2City;
+  operatorReport: V2PublicOperatorReport;
+  reportedTime: V2PublicClockReport;
+  publicationStatus: V2PublicLeadPublicationStatus;
+  timedDepartureEligible: boolean;
+  contributionTargetEligible: boolean;
+  missingDetails: V2PublicLeadMissingDetailsItem[];
+}
+
+export interface V2PublicSearch {
+  /** @maxItems 20 */
+  items: V2PublicLead[];
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
+export interface V2PublicSubjectEnvelope {
+  subject: V2PublicLead;
+}
+
 export type V2OwnRouteAvailability =
   (typeof V2OwnRouteAvailability)[keyof typeof V2OwnRouteAvailability];
 
@@ -1041,6 +1160,11 @@ export interface V2OwnRouteEnvelope {
 export type V2ErrorResponse = V2Error;
 
 /**
+ * JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
+ */
+export type BlockedContributorsHeaderParameter = string;
+
+/**
  * Expected signed-in account ID to reject a token/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.
  */
 export type ExpectedAccountHeaderParameter = string;
@@ -1049,6 +1173,20 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type SearchV2RoutesParams = {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  originCityId: number;
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  destinationCityId: number;
+  cursor?: string;
+};
 
 export type ListV2OwnRoutesParams = {
   /**

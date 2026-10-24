@@ -510,6 +510,209 @@ export const SubmitV2ActualJourneyResponse = zod.object({
 });
 
 /**
+ * Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * @summary Discover initial community route reports
+ */
+export const searchV2RoutesQueryOriginCityIdMax = 999999999;
+
+export const searchV2RoutesQueryDestinationCityIdMax = 999999999;
+
+export const SearchV2RoutesQueryParams = zod.object({
+  originCityId: zod.coerce
+    .number()
+    .min(1)
+    .max(searchV2RoutesQueryOriginCityIdMax),
+  destinationCityId: zod.coerce
+    .number()
+    .min(1)
+    .max(searchV2RoutesQueryDestinationCityIdMax),
+  cursor: zod.coerce.string().uuid().optional(),
+});
+
+export const searchV2RoutesHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const SearchV2RoutesHeader = zod.object({
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(searchV2RoutesHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+});
+
+export const searchV2RoutesResponseItemsItemRevisionMax = 9007199254740991;
+
+export const searchV2RoutesResponseItemsItemOriginIdMax = 999999999;
+
+export const searchV2RoutesResponseItemsItemDestinationIdMax = 999999999;
+
+export const searchV2RoutesResponseItemsItemOperatorReportValueMax = 120;
+
+export const searchV2RoutesResponseItemsItemOperatorReportObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsItemReportedTimeValueRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+export const searchV2RoutesResponseItemsItemReportedTimeObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsMax = 20;
+
+export const SearchV2RoutesResponse = zod.object({
+  items: zod
+    .array(
+      zod.object({
+        kind: zod.enum(["lead"]),
+        subjectId: zod.string().uuid(),
+        revision: zod
+          .number()
+          .min(1)
+          .max(searchV2RoutesResponseItemsItemRevisionMax),
+        origin: zod.object({
+          id: zod
+            .number()
+            .min(1)
+            .max(searchV2RoutesResponseItemsItemOriginIdMax),
+          name: zod.string(),
+          placeType: zod.string(),
+        }),
+        destination: zod.object({
+          id: zod
+            .number()
+            .min(1)
+            .max(searchV2RoutesResponseItemsItemDestinationIdMax),
+          name: zod.string(),
+          placeType: zod.string(),
+        }),
+        operatorReport: zod.object({
+          value: zod
+            .string()
+            .min(1)
+            .max(searchV2RoutesResponseItemsItemOperatorReportValueMax),
+          support: zod.enum(["reported"]),
+          freshness: zod.enum(["unknown"]),
+          submittedAt: zod.coerce.date(),
+          observedDate: zod
+            .string()
+            .regex(
+              searchV2RoutesResponseItemsItemOperatorReportObservedDateRegExp,
+            )
+            .nullable(),
+        }),
+        reportedTime: zod.object({
+          value: zod
+            .string()
+            .regex(searchV2RoutesResponseItemsItemReportedTimeValueRegExp),
+          support: zod.enum(["reported"]),
+          freshness: zod.enum(["unknown"]),
+          submittedAt: zod.coerce.date(),
+          observedDate: zod
+            .string()
+            .regex(
+              searchV2RoutesResponseItemsItemReportedTimeObservedDateRegExp,
+            )
+            .nullable(),
+          basis: zod.enum(["unspecified", "scheduled", "actual"]),
+        }),
+        publicationStatus: zod.enum(["details_needed"]),
+        timedDepartureEligible: zod.literal(false),
+        contributionTargetEligible: zod.literal(false),
+        missingDetails: zod.array(
+          zod.enum(["selected_fare", "operating_days", "boarding_location"]),
+        ),
+      }),
+    )
+    .max(searchV2RoutesResponseItemsMax),
+  hasHiddenResults: zod.boolean(),
+  nextCursor: zod.string().uuid().optional(),
+});
+
+/**
+ * Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+ * @summary Recheck one currently visible public lead
+ */
+export const GetV2SubjectParams = zod.object({
+  subjectId: zod.coerce.string().uuid(),
+});
+
+export const getV2SubjectHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const GetV2SubjectHeader = zod.object({
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(getV2SubjectHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+});
+
+export const getV2SubjectResponseSubjectRevisionMax = 9007199254740991;
+
+export const getV2SubjectResponseSubjectOriginIdMax = 999999999;
+
+export const getV2SubjectResponseSubjectDestinationIdMax = 999999999;
+
+export const getV2SubjectResponseSubjectOperatorReportValueMax = 120;
+
+export const getV2SubjectResponseSubjectOperatorReportObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2SubjectResponseSubjectReportedTimeValueRegExp = new RegExp(
+  "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+);
+export const getV2SubjectResponseSubjectReportedTimeObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+
+export const GetV2SubjectResponse = zod.object({
+  subject: zod.object({
+    kind: zod.enum(["lead"]),
+    subjectId: zod.string().uuid(),
+    revision: zod.number().min(1).max(getV2SubjectResponseSubjectRevisionMax),
+    origin: zod.object({
+      id: zod.number().min(1).max(getV2SubjectResponseSubjectOriginIdMax),
+      name: zod.string(),
+      placeType: zod.string(),
+    }),
+    destination: zod.object({
+      id: zod.number().min(1).max(getV2SubjectResponseSubjectDestinationIdMax),
+      name: zod.string(),
+      placeType: zod.string(),
+    }),
+    operatorReport: zod.object({
+      value: zod
+        .string()
+        .min(1)
+        .max(getV2SubjectResponseSubjectOperatorReportValueMax),
+      support: zod.enum(["reported"]),
+      freshness: zod.enum(["unknown"]),
+      submittedAt: zod.coerce.date(),
+      observedDate: zod
+        .string()
+        .regex(getV2SubjectResponseSubjectOperatorReportObservedDateRegExp)
+        .nullable(),
+    }),
+    reportedTime: zod.object({
+      value: zod
+        .string()
+        .regex(getV2SubjectResponseSubjectReportedTimeValueRegExp),
+      support: zod.enum(["reported"]),
+      freshness: zod.enum(["unknown"]),
+      submittedAt: zod.coerce.date(),
+      observedDate: zod
+        .string()
+        .regex(getV2SubjectResponseSubjectReportedTimeObservedDateRegExp)
+        .nullable(),
+      basis: zod.enum(["unspecified", "scheduled", "actual"]),
+    }),
+    publicationStatus: zod.enum(["details_needed"]),
+    timedDepartureEligible: zod.literal(false),
+    contributionTargetEligible: zod.literal(false),
+    missingDetails: zod.array(
+      zod.enum(["selected_fare", "operating_days", "boarding_location"]),
+    ),
+  }),
+});
+
+/**
  * Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.
  * @summary List this account's submitted community routes
  */
