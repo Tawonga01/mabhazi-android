@@ -30,6 +30,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
   const [ready, setReady] = useState(false), [resume, setResume] = useState<SecureDraftRecord<D, R> | null>(null);
   const [pending, setPending] = useState<PendingLead<R> | undefined>(), [receipt, setReceipt] = useState<V2LeadReceipt | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({}), [message, setMessage] = useState(''), [storageError, setStorageError] = useState('');
+  const [targetProblem, setTargetProblem] = useState(false);
   const [busy, setBusy] = useState(false), busyRef = useRef(false), [reviewing, setReviewing] = useState(false), [authExpired, setAuthExpired] = useState(false);
   const [enabled, setEnabled] = useState(false), [capabilityBusy, setCapabilityBusy] = useState(true);
   async function checkCapability() {
@@ -114,6 +115,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
       else if (problem.status === 401) { setAuthExpired(true); setMessage('Sign in again with this account to check its saved receipt. Your answers are kept.'); }
       else if (problem.status === 422) { setPending(undefined); setReviewing(false); setMessage(problem.data?.error ?? 'The server rejected these answers. Review and correct them.'); }
       else if (problem.data?.code === 'ACCOUNT_CHANGED' || problem.message === 'ACCOUNT_CHANGED') setMessage('The active account changed. Reopen your own draft before continuing.');
+      else if (problem.data?.code === 'TARGET_NOT_FOUND' || problem.data?.code === 'TARGET_IDENTITY_CHANGED') { setTargetProblem(true); setMessage('The selected route changed or is unavailable. Your report is kept.'); }
       else if (problem.status === 409) setMessage('This reference has different saved answers. Keep this reference and check its receipt before starting another entry.');
       else setMessage('Save not confirmed. Keep this draft and use Check and retry; it checks for a saved receipt before sending the same answers.');
     } finally { busyRef.current = false; if (active()) setBusy(false); }
@@ -140,7 +142,32 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
     catch { if (active()) setStorageError('The saved draft could not be removed. Try again.'); }
     finally { busyRef.current = false; if (active()) setBusy(false); }
   }
-  function another() { updatedAt.current = Date.now(); setReceipt(null); setDraft(options.empty()); setErrors({}); setMessage(''); setStorageError(''); setReviewing(false); }
+  // Explicit recovery only after a definitive target rejection. Never edit a
+  // possibly committed request: privately look up its receipt first.
+  async function changeRejectedTarget(nextDraft: D) {
+    if (!targetProblem || !pending || busyRef.current || !owner) return;
+    busyRef.current = true; setBusy(true);
+    try {
+      const lookup = await boundedRequest(signal => getV2LeadReceipt(pending.request.clientSubmissionId, { signal, headers: { 'X-Mabhazi-Account': owner } }));
+      if (!active()) return;
+      if (lookup.found) {
+        const saved = await recoverOrSubmit(pending, { lookup: async () => lookup, submit: async () => { throw new Error('RECEIPT_EXPECTED'); } }, () => mounted.current ? actor.current : null);
+        if (!active()) return;
+        setReceipt(saved); setPending(undefined); setTargetProblem(false); setMessage('');
+        try { await options.store.remove(owner); await options.store.remove(null); }
+        catch { if (active()) setStorageError('Saved online. Local draft cleanup will be retried when you sign out.'); }
+        return;
+      }
+      if (lookup.found !== false) throw new Error('RECEIPT_UNCONFIRMED');
+      const time = Date.now();
+      await options.store.write({ version: 1, owner, updatedAt: time, draft: nextDraft });
+      if (!active()) return;
+      updatedAt.current = time; setDraft(nextDraft); setPending(undefined); setReviewing(false); setTargetProblem(false);
+      setMessage('Kept as an independent report. Review your answers before saving.'); setStorageError('');
+    } catch { if (active()) setMessage('Could not check the previous save. Your original report and reference are kept. Try again.'); }
+    finally { busyRef.current = false; if (active()) setBusy(false); }
+  }
+  function another() { setTargetProblem(false); updatedAt.current = Date.now(); setReceipt(null); setDraft(options.empty()); setErrors({}); setMessage(''); setStorageError(''); setReviewing(false); }
   return { draft, change, errors, review, reviewing, edit: () => { if (!pending && !busy) setReviewing(false); }, submit, close, ready, resume, resumeDraft, discard,
-    receipt, another, pending, busy, locked: !!pending || busy, enabled, capabilityBusy, checkCapability, terms, owner, authExpired, message, storageError };
+    receipt, another, pending, targetProblem, changeRejectedTarget, busy, locked: !!pending || busy, enabled, capabilityBusy, checkCapability, terms, owner, authExpired, message, storageError };
 }

@@ -42,7 +42,7 @@ try {
   async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
-    let postCount = 0;
+    let postCount = 0; const sent=[];
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin === 'http://127.0.0.1:4173') { await route.continue(); return; }
@@ -50,7 +50,7 @@ try {
       if (url.origin !== 'https://preview.mabhazi.invalid') { await route.abort(); return; }
       const response = await route.fetch({url:'http://127.0.0.1:5000'+url.pathname+url.search});
       if (['/api/v2/contributions','/api/v2/actual-journeys'].includes(url.pathname) && request.method() === 'POST') {
-        postCount++;
+        postCount++; sent.push(request.postDataJSON());
         if (loseResponse) { loseResponse = false; await route.abort('failed'); return; }
       }
       await route.fulfill({response});
@@ -59,7 +59,7 @@ try {
     page.on('pageerror', error => consoleErrors.push(error.message));
     const surfaces={search:'/',profile:'/profile',departures:'/departures'};
     await page.goto('http://127.0.0.1:4173'+(surfaces[mode] ?? '/contribute'));
-    if (surfaces[mode]) return {context,page,posts:()=>postCount};
+    if (surfaces[mode]) return {context,page,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
     if (!results.length) {
       await page.screenshot({path:path.join(output,'contribution-menu.png'),fullPage:true});
@@ -104,6 +104,37 @@ try {
     await receiptHelp.click();await s.page.getByText('Received and awaiting processing.',{exact:true}).waitFor();
     assert.equal(await receiptHelp.getAttribute('aria-expanded'),'true');await receiptHelp.click();assert.equal(s.posts(),1);
     results.push('four answers render and save through real API/PostgreSQL; no price/calendar/default clock');
+
+    assert.equal(await s.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);
+    await s.page.getByRole('button',{name:'Add details',exact:true}).click();
+    await s.page.getByText('Your submitted route',{exact:true}).waitFor();
+    assert.equal(await s.page.getByRole('checkbox',{name:'Actual departure',exact:true}).getAttribute('aria-checked'),'false');
+    await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
+    await s.page.getByRole('button',{name:'Choose fare departure city',exact:true}).getByText('Flow Origin fixture',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Choose fare destination city',exact:true}).getByText('Flow Destination fixture',{exact:true}).waitFor();
+    assert.equal(await s.page.getByLabel('Fare amount').inputValue(),'');
+    assert.equal(await s.page.getByRole('radio',{name:'Price type: Paid',exact:true}).getAttribute('aria-checked'),'false');
+    await s.page.getByRole('button',{name:'Choose fare currency',exact:true}).click();await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();
+    await s.page.getByLabel('Fare amount').fill('17.50');await s.page.getByRole('radio',{name:'Price type: Quoted',exact:true}).click();
+    await s.page.getByRole('button',{name:'Fare conditions',exact:true}).click();
+    await s.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();await s.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();
+    await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();
+    await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
+    await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
+    await s.page.screenshot({path:path.join(output,'own-route-followup.png'),fullPage:true});
+    s.loseNext();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
+    await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
+    await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
+    await s.page.getByRole('button',{name:'Continue journey draft',exact:true}).click();await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    await s.page.getByText('Your submitted route',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
+    assert.equal(s.posts(),2);
+    const follow=s.requests()[1];assert.equal(follow.entrySurface,'own_contribution');assert.equal(follow.target.newActualJourney.intendedSubject.id,(await admin.query('SELECT initial_response FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],s.requests()[0].clientSubmissionId])).rows[0].initial_response.subjectId);
+    const actual=(await admin.query("SELECT intended_subject_id,matched_run_subject_id FROM v2_actual_journeys WHERE initial_contribution_id=(SELECT id FROM v2_contributions WHERE user_id=$1 AND payload->>'clientSubmissionId'=$2)",[users[0],follow.clientSubmissionId])).rows[0];
+    assert.equal(actual.intended_subject_id,follow.target.newActualJourney.intendedSubject.id);assert.equal(actual.matched_run_subject_id,null);
+    assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,'0');
+    results.push('Saved offers optional owned-lead Fare follow-up before approval; city context only, secure close/resume and lost-response recovery preserve one intended report');
+
     await s.context.close();
   }
   {
@@ -284,6 +315,36 @@ try {
     await s.context.close();
   }
 
+
+  {
+    const s=await session();await s.fill();await s.page.getByRole('button',{name:'Review route',exact:true}).click();await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();await s.page.getByRole('button',{name:'Add details',exact:true}).click();await s.page.getByText('Your submitted route',{exact:true}).waitFor();
+    const lead=(await admin.query('SELECT initial_response FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],s.requests()[0].clientSubmissionId])).rows[0].initial_response;
+    await admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[lead.subjectId]);
+    await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();await s.page.getByLabel('Observed operator').fill('Preserved changed-target bus');await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
+    await s.page.getByRole('button',{name:'Keep as independent report',exact:true}).waitFor();const frozen=s.requests()[1].clientSubmissionId;
+    let unavailable=true;await s.context.route(/\/api\/v2\/receipts\//,async route=>{if(unavailable)await route.fulfill({status:503,contentType:'application/json',body:'{}'});else await route.fallback();});
+    await s.page.getByRole('button',{name:'Keep as independent report',exact:true}).click();await s.page.getByText('Could not check the previous save.',{exact:false}).waitFor();assert.equal(s.posts(),2);
+    unavailable=false;await s.page.getByRole('button',{name:'Keep as independent report',exact:true}).click();
+    await s.page.getByText('Independent report',{exact:true}).waitFor();assert.equal(await s.page.getByLabel('Observed operator').inputValue(),'Preserved changed-target bus');assert.equal(s.posts(),2);
+    await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
+    const independent=s.requests()[2];assert.notEqual(independent.clientSubmissionId,frozen);assert.equal('intendedSubject' in independent.target.newActualJourney,false);assert.equal(independent.entrySurface,'own_contribution');
+    assert.equal((await admin.query('SELECT count(*) FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],frozen])).rows[0].count,'0');
+    results.push('stale target keeps frozen answers; independent fallback requires explicit choice and successful receipt lookup before a new key/review/save');
+    await s.context.close();
+  }
+  {
+    const s=await session(0,false,'journey');await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();await s.page.getByLabel('Observed operator').fill('Earlier independent bus');
+    await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
+    await s.fill();await s.page.getByRole('button',{name:'Review route',exact:true}).click();await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Add details',exact:true}).click();await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    await s.page.getByText('Independent report',{exact:true}).waitFor();assert.equal(await s.page.getByLabel('Observed operator').inputValue(),'Earlier independent bus');
+    await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
+    assert.equal(s.requests()[1].entrySurface,'contribute_tab');assert.equal('intendedSubject' in s.requests()[1].target.newActualJourney,false);
+    results.push('existing independent draft wins over new Saved-route context and is never silently retargeted');
+    await s.context.close();
+  }
+
   // Same real exported app and API, now exercise the remaining principal
   // screens. This synthetic legacy fixture exists only in disposable CI.
   const legacy=(await admin.query("INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price,contributed_by,contributor_name) VALUES('Harare','Bulawayo','08:30','14:00','Mon, Tue, Wed, Thu, Fri, Sat, Sun','UI fixture bus','Fixture pickup','Fixture drop-off',12.50,$1,'UI fixture contributor') RETURNING id",[users[0]])).rows[0].id;
@@ -358,7 +419,7 @@ try {
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

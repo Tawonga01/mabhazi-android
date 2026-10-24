@@ -7,7 +7,12 @@ export interface FareDraft {
   passenger: '' | V2ActualFareScope['passengerCategory']; passengerLabel: string;
   ticket: '' | V2ActualFareScope['ticketBasis']; ticketLabel: string;
 }
+export interface OwnRouteContext {
+  ownerId: string; subjectId: string; clientSubmissionId: string; expectedRevision: number;
+  origin: V2City; destination: V2City; operator: string; departureTime: string;
+}
 export interface ActualDraft {
+  route?: OwnRouteContext; entrySurface?: 'contribute_tab' | 'own_contribution';
   facts: ActualFact[]; departure: ClockDraft; arrival: ClockDraft; operator: string; operatorDate: string;
   place: { kind: '' | 'pickup' | 'dropoff'; city: V2City | null; name: string; instructions: string; date: string };
   fare: FareDraft; serviceDate: string; timezone: string; knowledgeBasis: '' | NonNullable<V2ActualContext['knowledgeBasis']>;
@@ -67,7 +72,7 @@ export function actualErrors(d: ActualDraft): Record<string, string> {
 }
 /** Removing a fact erases its hidden answers; reopening never revives them. */
 export function toggleActualFact(d: ActualDraft, fact: ActualFact): ActualDraft {
-  if (!d.facts.includes(fact)) return { ...d, facts: [...d.facts, fact] };
+  if (!d.facts.includes(fact)) return { ...d, facts: [...d.facts, fact], ...(fact === 'fare' && d.route ? { fare: { ...emptyFare(), origin: d.route.origin, destination: d.route.destination } } : {}) };
   const empty = emptyActualDraft();
   return { ...d, facts: d.facts.filter(f => f !== fact), [fact]: empty[fact], ...(fact === 'operator' ? { operatorDate: '' } : {}) };
 }
@@ -91,7 +96,8 @@ export function prepareActual(d: ActualDraft, key: string): V2ActualJourneyReque
     } });
   }
   // Header context is never copied into individual clock or fare scopes.
-  return { schemaVersion: '1.0', clientSubmissionId: key, entrySurface: 'contribute_tab', target: { newActualJourney: {
+  return { schemaVersion: '1.0', clientSubmissionId: key, entrySurface: d.entrySurface ?? 'contribute_tab', target: { newActualJourney: {
+    ...(d.route ? { intendedSubject: { kind: 'lead' as const, id: d.route.subjectId, expectedRevision: d.route.expectedRevision } } : {}),
     ...(d.serviceDate ? { reportedServiceDate: d.serviceDate } : {}), ...(d.timezone.trim() ? { timezone: d.timezone.trim() } : {}),
   } }, observations, ...(d.knowledgeBasis ? { actualContext: { knowledgeBasis: d.knowledgeBasis } } : {}) };
 }
@@ -104,6 +110,15 @@ export function validActualDraft(value: unknown): value is ActualDraft {
     if (typeof template === 'string') return typeof v === 'string' && v.length <= 1000;
     return !!v && typeof v === 'object' && Object.keys(template as object).every(k => shape((v as Record<string, unknown>)[k], (template as Record<string, unknown>)[k]));
   }
+  const uuid = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  const r = d.route;
+  if (d.entrySurface !== undefined && !['contribute_tab','own_contribution'].includes(d.entrySurface)) return false;
+  if (r !== undefined && (!r || typeof r !== 'object' || d.entrySurface !== 'own_contribution' ||
+    typeof r.ownerId !== 'string' || !r.ownerId.trim() || r.ownerId.length > 200 ||
+    !uuid(r.subjectId) || !uuid(r.clientSubmissionId) || !Number.isSafeInteger(r.expectedRevision) || r.expectedRevision < 1 ||
+    !r.origin || !r.destination || !shape(r.origin,null) || !shape(r.destination,null) || r.origin.id === r.destination.id ||
+    typeof r.operator !== 'string' || !named(r.operator,120) ||
+    typeof r.departureTime !== 'string' || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(r.departureTime))) return false;
   return Array.isArray(d.facts) && d.facts.length <= 5 && new Set(d.facts).size === d.facts.length && d.facts.every(f => ['departure','arrival','fare','operator','place'].includes(f)) &&
     Object.keys(empty).filter(k => k !== 'facts').every(k => shape(d[k as keyof ActualDraft], empty[k as keyof ActualDraft]));
 }

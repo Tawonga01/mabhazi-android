@@ -662,6 +662,7 @@ export const GetV2LeadReceiptResponse = zod.object({
       replayed: zod.boolean(),
     })
     .optional(),
+  currentLeadRevision: zod.number().min(1).optional(),
 });
 
 /**

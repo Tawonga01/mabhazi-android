@@ -70,7 +70,17 @@ router.get('/receipts/:clientSubmissionId', async (req, res) => {
       WHERE user_id=$1 AND client_submission_id=$2`, [req.user.id, parsed.data.clientSubmissionId]);
     if (!rows[0]) { res.json({ found: false }); return; }
     const receipt = SubmitV2LeadResponse.parse({ ...(rows[0].initial_response as Record<string, unknown>), replayed: true });
-    res.json({ found: true, initialReceipt: receipt });
+    // A live selection revision is separate from the immutable initial receipt.
+    // Only the account's active, attributable initial community lead is eligible.
+    const selected = await pool.query(`SELECT s.revision FROM public.v2_leads l
+      JOIN public.v2_subjects s ON s.id=l.subject_id
+      JOIN public.v2_contributions c ON c.id=l.initial_contribution_id
+      WHERE l.subject_id=$1 AND c.id=$2 AND c.user_id=$3
+        AND l.intake_kind='community' AND NOT l.attribution_erased AND s.lifecycle='active'`,
+      [receipt.subjectId, receipt.contributionId, req.user.id]);
+    const revision = Number(selected.rows[0]?.revision);
+    res.json({ found: true, initialReceipt: receipt,
+      ...(Number.isSafeInteger(revision) && revision > 0 ? { currentLeadRevision: revision } : {}) });
   } catch { failure(res, 503, 'TEMPORARILY_UNAVAILABLE', 'The saved receipt could not be checked. Keep this draft and try again.'); }
 });
 router.post('/actual-journeys', (req,res,next) => {

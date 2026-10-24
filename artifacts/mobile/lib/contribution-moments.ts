@@ -1,3 +1,4 @@
+import type { OwnRouteContext } from './actual-journey-model';
 import type { V2City } from '@workspace/api-client-react';
 
 export interface RoutePrefill {
@@ -8,7 +9,8 @@ export interface RoutePrefill {
 }
 export type CaptureRequest =
   | { kind: 'route'; entrySurface: 'contribute_tab' | 'search_empty'; prefill?: RoutePrefill }
-  | { kind: 'journey'; entrySurface: 'contribute_tab' };
+  | { kind: 'journey'; entrySurface: 'contribute_tab'; route?: never }
+  | { kind: 'journey'; entrySurface: 'own_contribution'; route: OwnRouteContext };
 export type SearchViewState = 'idle' | 'loading' | 'error' | 'safety_error' | 'safety_loading' | 'hidden' | 'empty' | 'results';
 
 /** Invitation eligibility uses successful public results, never a failed/blocked [] fallback. */

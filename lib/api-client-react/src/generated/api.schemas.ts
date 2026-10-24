@@ -598,6 +598,8 @@ export interface V2LeadReceipt {
 export interface V2ReceiptLookup {
   found: boolean;
   initialReceipt?: V2LeadReceipt;
+  /** @minimum 1 */
+  currentLeadRevision?: number;
 }
 
 export type V2ErrorFieldErrorsItem = {

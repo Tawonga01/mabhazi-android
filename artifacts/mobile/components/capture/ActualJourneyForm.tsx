@@ -1,9 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { submitV2ActualJourney, type V2ActualJourneyRequest } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { actualDrafts } from '@/lib/lead-drafts';
-import { actualErrors, emptyActualDraft, toggleActualFact, knowledgeChoices, type ActualDraft, type ActualFact, type ClockDraft } from '@/lib/actual-journey-model';
+import { actualErrors, emptyActualDraft, toggleActualFact, knowledgeChoices, type ActualDraft, type ActualFact, type ClockDraft, type OwnRouteContext } from '@/lib/actual-journey-model';
 import { prepareActual } from '@/lib/actual-journey-model';
 import { useCapture, type CaptureOptions } from '@/lib/use-capture';
 import { CaptureButton, CaptureFrame, CaptureHelp, CaptureInput, CityField, CityPicker, Choices, Field, ReviewRow, captureStyles as s } from './CapturePrimitives';
@@ -11,15 +11,18 @@ import { CaptureMessages, CaptureStatus, SavedMessage } from './CaptureStatus';
 import { FocusedFareForm } from './FocusedFareForm';
 const options: CaptureOptions<ActualDraft, V2ActualJourneyRequest> = {
   empty: emptyActualDraft, errors: actualErrors, prepare: prepareActual, store: actualDrafts,
-  hasAnswers: d => d.facts.length > 0 || !!(d.serviceDate || d.timezone || d.knowledgeBasis), capability: 'actualJourneyEnabled', submit: submitV2ActualJourney,
+  hasAnswers: d => d.facts.length > 0 || !!(d.route || d.serviceDate || d.timezone || d.knowledgeBasis), capability: 'actualJourneyEnabled', submit: submitV2ActualJourney,
 };
 const facts: [ActualFact, string][] = [['departure', 'Actual departure'], ['arrival', 'Actual arrival'], ['fare', 'Fare'], ['operator', 'Operator'], ['place', 'Pickup / drop-off']];
-export function ActualJourneyForm({ onClose }: { onClose(): void }) {
+export function ActualJourneyForm({ onClose, route }: { onClose(): void; route?: OwnRouteContext }) {
   const { user, isLoading } = useAuth();
-  return isLoading ? <ActivityIndicator style={{ marginTop: 80 }} /> : <AccountJourney key={user?.id ?? 'guest'} owner={user?.id ?? null} onClose={onClose} />;
+  return isLoading ? <ActivityIndicator style={{ marginTop: 80 }} /> : <AccountJourney key={user?.id ?? 'guest'} owner={user?.id ?? null} route={route} onClose={onClose} />;
 }
-function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): void }) {
-  const c = useCapture(owner, options), d = c.draft;
+function AccountJourney({ owner, onClose, route }: { owner: string | null; onClose(): void; route?: OwnRouteContext }) {
+  const seeded = useMemo(() => ({ ...options, empty: () => ({ ...emptyActualDraft(),
+    ...(route && owner === route.ownerId ? { route, entrySurface: 'own_contribution' as const } : {}),
+  }) }), [owner, route]);
+  const c = useCapture(owner, seeded), d = c.draft;
   const [fareOpen, setFareOpen] = useState(false), [contextOpen, setContextOpen] = useState(false), [cityOpen, setCityOpen] = useState(false);
   const refs = useRef<Record<string, TextInput | null>>({});
   function toggle(f: ActualFact) { if (!c.locked) { c.change(toggleActualFact(d, f)); if (f === 'fare' && !d.facts.includes('fare')) setFareOpen(true); } }
@@ -40,6 +43,7 @@ function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): v
   return <>
     <CaptureFrame title={c.receipt ? 'Journey report saved' : reviewing ? 'Review journey' : 'Report a journey'} onClose={() => void c.close(onClose)} busy={c.busy} footer={footer} phase={c.receipt ? 'saved' : reviewing ? 'review' : c.resume ? 'resume' : 'edit'}>
       {c.receipt ? <SavedMessage reference={c.receipt.clientSubmissionId} /> : c.resume ? <><Text style={s.label}>You have a saved journey draft</Text><Text style={s.note}>{c.resume.pending ? 'Resume to check the receipt for your previous save.' : 'Resume your answers, then review before saving.'}</Text></> : !c.ready ? <ActivityIndicator accessibilityLabel="Loading saved draft" /> : <>
+        {d.route ? <View style={s.group}><Text style={s.label}>Your submitted route</Text><Text style={s.reviewValue}>{d.route.origin.name} → {d.route.destination.name}</Text><Text style={s.note}>{d.route.operator} · {d.route.departureTime}</Text></View> : route && owner === route.ownerId ? <Text style={s.label}>Independent report</Text> : null}
         {reviewing ? <View style={s.group}>
           {(d.serviceDate || d.timezone || d.knowledgeBasis) ? <ReviewRow label="Journey context only" value={`${d.serviceDate || 'Date unknown'} · ${d.timezone || 'Timezone unknown'} · ${knowledgeChoices.find(([key]) => key === d.knowledgeBasis)?.[1] ?? 'Knowledge basis not provided'}`} /> : null}
           {(['departure','arrival'] as const).filter(f => d.facts.includes(f)).map(f => <ReviewRow key={f} label={`Actual ${f}`} value={`${d[f].time} · ${d[f].date || 'Date unknown'} · ${d[f].zone || 'Timezone unknown'}`} />)}
@@ -74,6 +78,7 @@ function AccountJourney({ owner, onClose }: { owner: string | null; onClose(): v
         </>}
         {reviewing ? <CaptureStatus capture={c} /> : null}
       </>}
+      {c.targetProblem && d.route ? <CaptureButton title="Keep as independent report" secondary disabled={c.busy} onPress={() => { const { route: omitted, ...independent } = d; void c.changeRejectedTarget(independent); }} /> : null}
       <CaptureMessages message={c.message} storageError={c.storageError} />
     </CaptureFrame>
     {cityOpen ? <CityPicker title="Place city" close={() => setCityOpen(false)} select={city => { update('place', { ...d.place, city }); setCityOpen(false); }} /> : null}

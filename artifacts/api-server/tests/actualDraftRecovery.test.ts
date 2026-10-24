@@ -106,3 +106,34 @@ test('actual retry: failed lookup, switched actor and malformed receipts cannot 
   actor = 'account-a'; await assert.rejects(recoverOrSubmit(pending, { lookup: async () => ({ found: true, initialReceipt: saved(randomUUID()) }), submit }, () => actor), /SAVE_UNCONFIRMED/);
   assert.equal(writes, 0);
 });
+
+const routeContext = () => ({ ownerId:'account-a', subjectId:randomUUID(), clientSubmissionId:randomUUID(), expectedRevision:7, origin:city(1), destination:city(2), operator:'Submitted bus', departureTime:'08:30' });
+test('own-route draft: target survives secure close/resume and frozen request while old independent drafts remain compatible', async () => {
+  const f=fixture(), draft={...operatorDraft(),entrySurface:'own_contribution' as const,route:routeContext()};
+  const request=prepareActual(draft,randomUUID());
+  assert.deepEqual(request.target.newActualJourney.intendedSubject,{kind:'lead',id:draft.route.subjectId,expectedRevision:7});
+  assert.equal(request.entrySurface,'own_contribution');assert.equal(request.observations.length,1);
+  const record={...f.record(draft),pending:{actor:'account-a',request}};await f.store.write(record);
+  assert.deepEqual(await f.store.read('account-a'),record);assert.equal(await f.store.read('account-b'),null);
+  assert.equal(prepareActual(operatorDraft(),randomUUID()).entrySurface,'contribute_tab');
+  assert.equal('intendedSubject' in prepareActual(operatorDraft(),randomUUID()).target.newActualJourney,false);
+});
+test('own-route draft: no inferred trip facts and Fare carries only city identity, never price/basis/date', () => {
+  const draft={...emptyActualDraft(),entrySurface:'own_contribution' as const,route:routeContext()};
+  assert.ok(actualErrors(draft).facts);assert.deepEqual(draft.facts,[]);
+  const fare=toggleActualFact(draft,'fare');
+  assert.deepEqual(fare.fare.origin,draft.route.origin);assert.deepEqual(fare.fare.destination,draft.route.destination);
+  assert.equal(fare.fare.amount,'');assert.equal(fare.fare.basis,'');assert.equal(fare.fare.date,'');assert.equal(fare.fare.currency,'');
+  const removed=toggleActualFact({...fare,fare:{...fare.fare,amount:'25'}},'fare');assert.equal(removed.fare.amount,'');
+});
+test('own-route draft: malformed selection, changed frozen target and foreign owner are never resumed', async () => {
+  const draft={...operatorDraft(),entrySurface:'own_contribution' as const,route:routeContext()};
+  assert.equal(validActualDraft({...draft,route:{...draft.route,expectedRevision:0}}),false);
+  assert.equal(validActualDraft({...draft,route:{...draft.route,subjectId:'legacy-42'}}),false);
+  const f=fixture();await f.store.write(f.record({...draft,route:{...draft.route,ownerId:'account-b'}}));assert.equal(await f.store.read('account-a'),null);
+  const g=fixture(), record=g.record(draft);record.pending={actor:'account-a',request:prepareActual({...draft,route:{...draft.route,subjectId:randomUUID()}},randomUUID())};
+  await g.store.write(record);assert.equal(await g.store.read('account-a'),null);
+  const {route:omitted,...independent}=draft;
+  assert.equal(prepareActual(independent,randomUUID()).entrySurface,'own_contribution');
+  assert.equal('intendedSubject' in prepareActual(independent,randomUUID()).target.newActualJourney,false);
+});

@@ -78,7 +78,7 @@ test('minimum API: four answers commit a lead, two facts, receipt and durable jo
   assert.equal((await admin.query('SELECT count(*) FROM v2_observations WHERE contribution_id=$1',[contribution.id])).rows[0].count,'2');
   assert.equal((await admin.query("SELECT count(*) FROM v2_jobs WHERE contribution_id=$1 AND kind='normalise' AND state='pending'",[contribution.id])).rows[0].count,'1');
   assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,count);
-  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true},currentLeadRevision:Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[saved.value.subjectId])).rows[0].revision)});
 });
 
 test('minimum API: empty-search intake needs no approved route and preserves its surface on recovery', async () => {
@@ -104,6 +104,20 @@ test('minimum API: other surfaces and null still fail in both HTTP and restricte
   }
 });
 
+
+test('own lead context: receipt stays immutable while live revision is private and unavailable targets are omitted', async () => {
+  const input=body(), saved=await request('/v2/contributions',input);assert.equal(saved.status,200);
+  const first=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.ok(Number.isSafeInteger(first.value.currentLeadRevision));assert.ok(first.value.currentLeadRevision!>0);
+  await admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.value.subjectId]);
+  const changed=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.equal(changed.value.currentLeadRevision,first.value.currentLeadRevision!+1);assert.deepEqual(changed.value.initialReceipt,first.value.initialReceipt);
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value,{found:false});
+  await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.value.subjectId]);
+  const retired=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.equal(retired.value.found,true);assert.equal(retired.value.currentLeadRevision,undefined);assert.deepEqual(retired.value.initialReceipt,first.value.initialReceipt);
+});
+
 test('minimum API: strict fields and an explicit valid clock, never hidden defaults', async () => {
   for(const patch of [{departureTime:''},{departureTime:'8:30'},{departureTime:'24:00'},{departureTime:'Leaves when full'},
     {operator:{name:'unknown'}},{operator:{name:' bus '}},{operator:{name:'Bus\nline'}},{originCityId:1.5},{destinationCityId:cities[0]}, {price:0}]) {
@@ -119,7 +133,7 @@ test('minimum API: paused new intake still permits private committed receipt rec
   const input=body(), saved=await request('/v2/contributions',input);assert.equal(saved.status,200);
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
   try {
-    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
+    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true},currentLeadRevision:Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[saved.value.subjectId])).rows[0].revision)});
     assert.equal((await request('/v2/contributions',body())).status,503);
     assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value,{found:false});
   } finally { process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true'; }

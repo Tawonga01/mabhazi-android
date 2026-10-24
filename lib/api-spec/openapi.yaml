@@ -1580,6 +1580,7 @@ components:
       properties:
         found: {type: boolean}
         initialReceipt: {$ref: '#/components/schemas/V2LeadReceipt'}
+        currentLeadRevision: {type: integer, minimum: 1}
     V2Error:
       type: object
       additionalProperties: false

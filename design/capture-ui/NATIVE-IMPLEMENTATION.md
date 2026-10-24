@@ -75,3 +75,11 @@ Meaningful checks: no approved/legacy routes at all; successful empty search; no
 Then connect typed route-detail and own-pending-submission actions, followed by the remaining forms and durable task-based invitations. Completing the first fix does not complete the map, WP08/WP09/WP10 or R01–R14.
 
 First code slice adds a single root capture host shared by Contribute and successful empty Search, guarded city-ID prefill and additive minimum-intake surface search_empty. Existing account drafts and frozen pending requests take precedence over context. API/database rollout precedes the next signed preview build. Other mapped connections remain unfinished.
+
+## Saved-route follow-up (24 October 2026)
+
+Saved minimum intake offers an optional Add details action, before approval/publication. It privately looks up the same account-scoped receipt and current eligible lead revision, keeping live selection metadata separate from the immutable initial receipt. The root host replaces the minimum form with the existing actual/focused-Fare flow only on tap. Submitted route IDs, revision, original receipt/account and display context persist in the encrypted draft; old/unrelated drafts and frozen request bodies win. Choosing Fare carries only explicit city identity, with no inferred price, basis, date, operator observation or actual departure.
+
+A definitive missing/changed target keeps the frozen report. An explicit independent-report choice first checks its private receipt; failures preserve the original request, a found receipt resolves Saved, and only a confirmed absence permits a new unbound draft followed by review and Save. Server ownership/revision checks remain authoritative. No new database migration or permissions are required. Existing clients and independent drafts keep their old shapes.
+
+This connects the immediate Saved moment only. A browsable account history, safely bound public route details, full typed forms, durable relevant-user tasks/suppression and the rest of R01–R14 remain. Phone acceptance/build/deployment are separate gates; documentation is not a claim of delivery.
