@@ -81,7 +81,7 @@ try {
       await page.getByLabel('Departure time in 24-hour format',{exact:true}).fill('08:30');
       await page.getByLabel('Bus operator name',{exact:true}).fill('Browser fixture bus');
     }
-    return {context,page,fill,posts:()=>postCount};
+    return {context,page,fill,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
   }
   // Actual rendered screen -> generated client -> authenticated HTTP -> restricted
   // facade -> committed Postgres receipt, with no fare or recurrence invention.
