@@ -348,6 +348,16 @@ try {
     await s.context.close();
   }
 
+
+  {
+    const s=await session();await s.fill();await s.page.getByRole('button',{name:'Review route',exact:true}).click();await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
+    await s.context.route(/\/api\/v2\/receipts\//,route=>route.fulfill({status:503,contentType:'application/json',body:'{}'}));
+    await s.page.getByRole('button',{name:'Add details',exact:true}).click();await s.page.getByText('Could not load this route.',{exact:false}).waitFor();
+    assert.equal(await s.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);
+    await s.page.getByRole('button',{name:'Add another route',exact:true}).click();await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();
+    assert.equal(await s.page.getByText('Could not load this route.',{exact:false}).count(),0);assert.equal(s.posts(),1);
+    results.push('failed Saved follow-up leaves the receipt intact and its error does not leak into another route entry');await s.context.close();
+  }
   // Same real exported app and API, now exercise the remaining principal
   // screens. This synthetic legacy fixture exists only in disposable CI.
   const legacy=(await admin.query("INSERT INTO journeys(from_city,to_city,departure_time,arrival_time,travel_date,bus_company,pickup_point,dropoff_point,price,contributed_by,contributor_name) VALUES('Harare','Bulawayo','08:30','14:00','Mon, Tue, Wed, Thu, Fri, Sat, Sun','UI fixture bus','Fixture pickup','Fixture drop-off',12.50,$1,'UI fixture contributor') RETURNING id",[users[0]])).rows[0].id;

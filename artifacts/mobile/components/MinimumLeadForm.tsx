@@ -48,7 +48,7 @@ function AccountLeadForm({ owner, openFullForm, onClose, prefill, entrySurface, 
   function update<K extends LeadField>(field: K, value: LeadDraft[K]) { c.change({ ...c.draft, [field]: value }); }
   const button = c.authExpired ? 'Sign in to check saved receipt' : c.pending ? 'Check and retry' : c.owner ? 'Save contribution' : 'Sign in to save';
   const reviewing = c.reviewing || !!c.pending;
-  const footer = c.receipt ? <>{onFollowUp && owner ? <CaptureButton title="Add details" busy={following} onPress={() => void followUp()} /> : null}<CaptureButton title="Add another route" secondary={!!onFollowUp} disabled={following} onPress={c.another} /><CaptureButton title="Done" secondary disabled={following} onPress={() => void c.close(onClose)} /></> :
+  const footer = c.receipt ? <>{onFollowUp && owner ? <CaptureButton title="Add details" busy={following} onPress={() => void followUp()} /> : null}<CaptureButton title="Add another route" secondary={!!onFollowUp} disabled={following} onPress={() => { setFollowError(''); c.another(); }} /><CaptureButton title="Done" secondary disabled={following} onPress={() => void c.close(onClose)} /></> :
     c.resume ? <><CaptureButton title="Resume draft" disabled={c.busy} onPress={c.resumeDraft} />{!c.resume.pending ? <CaptureButton title="Discard unsent draft" secondary disabled={c.busy} onPress={() => void c.discard()} /> : null}</> :
     c.ready ? <><CaptureButton title={reviewing ? button : 'Review route'} busy={c.busy} disabled={reviewing && !c.enabled && !c.pending} onPress={reviewing ? () => void c.submit() : review} />{reviewing && !c.pending ? <CaptureButton title="Edit answers" secondary disabled={c.busy} onPress={c.edit} /> : null}</> : null;
   return <>
