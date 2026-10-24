@@ -1114,6 +1114,53 @@ export interface V2PublicSubjectEnvelope {
   subject: V2PublicLead;
 }
 
+export type V2RouteSafetyActionAction =
+  (typeof V2RouteSafetyActionAction)[keyof typeof V2RouteSafetyActionAction];
+
+export const V2RouteSafetyActionAction = {
+  report: "report",
+  block: "block",
+} as const;
+
+export type V2RouteSafetyActionReason =
+  (typeof V2RouteSafetyActionReason)[keyof typeof V2RouteSafetyActionReason];
+
+export const V2RouteSafetyActionReason = {
+  spam: "spam",
+  inaccurate: "inaccurate",
+  offensive: "offensive",
+  unsafe: "unsafe",
+  other: "other",
+} as const;
+
+export interface V2RouteSafetyAction {
+  action: V2RouteSafetyActionAction;
+  reason?: V2RouteSafetyActionReason;
+}
+
+export type V2RouteSafetyResultStatus =
+  (typeof V2RouteSafetyResultStatus)[keyof typeof V2RouteSafetyResultStatus];
+
+export const V2RouteSafetyResultStatus = {
+  reported: "reported",
+  blocked: "blocked",
+  unblocked: "unblocked",
+} as const;
+
+export interface V2RouteSafetyResult {
+  status: V2RouteSafetyResultStatus;
+}
+
+export interface V2RouteBlock {
+  id: string;
+  blockedAt: string;
+}
+
+export interface V2RouteBlocks {
+  /** @maxItems 200 */
+  blocks: V2RouteBlock[];
+}
+
 export type V2OwnRouteAvailability =
   (typeof V2OwnRouteAvailability)[keyof typeof V2OwnRouteAvailability];
 
@@ -1160,6 +1207,11 @@ export interface V2OwnRouteEnvelope {
 export type V2ErrorResponse = V2Error;
 
 /**
+ * Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.
+ */
+export type OptionalExpectedAccountHeaderParameter = string;
+
+/**
  * JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
  */
 export type BlockedContributorsHeaderParameter = string;
@@ -1179,12 +1231,22 @@ export type SearchV2RoutesParams = {
    * @minimum 1
    * @maximum 999999999
    */
-  originCityId: number;
+  originCityId?: number;
   /**
    * @minimum 1
    * @maximum 999999999
    */
-  destinationCityId: number;
+  destinationCityId?: number;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  fromCity?: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  toCity?: string;
   cursor?: string;
 };
 

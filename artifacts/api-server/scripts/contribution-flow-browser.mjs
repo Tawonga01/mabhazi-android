@@ -244,10 +244,11 @@ try {
     assert.equal(s.posts(),0);results.push('compact390x450 fare keeps close/primary/skip visible and removing a fact clears hidden answers');await s.context.close();
   }
 
+  const emptyCities=(await admin.query("INSERT INTO cities(name,place_type) VALUES('Empty Origin fixture','city'),('Empty Destination fixture','city') RETURNING id")).rows.map(r=>r.id);
   async function emptySearch(page, custom = false) {
     await page.getByText('Search for a route',{exact:true}).waitFor();
     assert.equal(await page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
-    for(const [label,name] of [['From city','Flow Origin fixture'],['To city','Flow Destination fixture']]) {
+    for(const [label,name] of [['From city','Empty Origin fixture'],['To city','Empty Destination fixture']]) {
       await page.getByText(label,{exact:true}).click();
       await page.getByPlaceholder('Type a city name…',{exact:true}).fill(custom ? 'Unlisted city fixture' : name);
       await page.getByText(custom ? 'Use "Unlisted city fixture"' : name,{exact:true}).click();
@@ -263,8 +264,8 @@ try {
     await s.page.screenshot({path:path.join(output,'empty-search.png'),fullPage:true});
     await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
     await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();
-    await s.page.getByRole('button',{name:'Choose departure city',exact:true}).getByText('Flow Origin fixture',{exact:true}).waitFor();
-    await s.page.getByRole('button',{name:'Choose destination city',exact:true}).getByText('Flow Destination fixture',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Choose departure city',exact:true}).getByText('Empty Origin fixture',{exact:true}).waitFor();
+    await s.page.getByRole('button',{name:'Choose destination city',exact:true}).getByText('Empty Destination fixture',{exact:true}).waitFor();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'');
     // Wait for finite dialog transitions so the proof is the settled UI, not a fade frame.
@@ -283,7 +284,7 @@ try {
     await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();
     await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
     const rows=(await admin.query("SELECT entry_surface,payload FROM v2_contributions WHERE user_id=$1 AND entry_surface='search_empty'",[users[0]])).rows;
-    assert.equal(rows.length,1);assert.equal(rows[0].payload.target.newLead.originCityId,cities[0]);assert.equal(rows[0].payload.target.newLead.destinationCityId,cities[1]);
+    assert.equal(rows.length,1);assert.equal(rows[0].payload.target.newLead.originCityId,emptyCities[0]);assert.equal(rows[0].payload.target.newLead.destinationCityId,emptyCities[1]);
     assert.equal(rows[0].payload.target.newLead.departureTime,'09:45');assert.equal('price' in rows[0].payload.target.newLead,false);
     assert.equal(s.posts(),1);assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,'0');
     results.push('true empty search opens only on tap, retains selected city IDs and draft, and saves one search_empty receipt after lost response without approved routes');
@@ -309,9 +310,9 @@ try {
     assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
     await s.page.screenshot({path:path.join(output,'search-error.png'),fullPage:true});
     fail=false;await s.page.getByRole('button',{name:'Try search again',exact:true}).click();
-    await s.page.getByText('No routes found',{exact:true}).waitFor();
-    await s.page.getByRole('button',{name:'Add a route',exact:true}).waitFor();
-    results.push('failed search never invites duplicate intake and an explicit retry recovers to the real empty state');
+    await s.page.getByText('Route report',{exact:true}).first().waitFor();
+    assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
+    results.push('failed search never invites duplicate intake and retry recovers to current public reports instead of a false empty state');
     await s.context.close();
   }
 
@@ -474,10 +475,44 @@ try {
     const empty=await session(2,false,'home');await empty.page.getByRole('button',{name:'My routes',exact:true}).click();await empty.page.getByText('No submitted routes yet.',{exact:true}).waitFor();assert.equal(await empty.page.getByText('History browser bus · 08:30',{exact:true}).count(),0);assert.equal(empty.posts(),0);await empty.context.close();
     results.push('guest history asks for sign-in and another authenticated account has an honest empty list without private route leakage');
   }
+
+  // Public UI: actual selected IDs, another account, existing fact forms and safety.
+  const publicCities=(await admin.query("INSERT INTO cities(name,place_type) VALUES('Popup Origin fixture','city'),('Popup Destination fixture','city') RETURNING id")).rows.map(r=>r.id);
+  await admin.query("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[users[1]]);
+  async function seedPublic(name,time){const response=await fetch('http://127.0.0.1:5000/api/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':users[0]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:publicCities[0],destinationCityId:publicCities[1],departureTime:time,operator:{name}}},observations:[]})});assert.equal(response.status,200);return await response.json();}
+  const publicA=await seedPublic('Public popup A','08:30'),publicB=await seedPublic('Public popup B','14:00'),publicC=await seedPublic('Public popup C','15:00');
+  async function publicSearch(s){await s.page.getByText('Search for a route',{exact:true}).waitFor();for(const[label,name]of[['From city','Popup Origin fixture'],['To city','Popup Destination fixture']]){await s.page.getByText(label,{exact:true}).click();await s.page.getByPlaceholder('Type a city name…',{exact:true}).fill(name);await s.page.getByText(name,{exact:true}).click();}await s.page.getByText('Search Routes',{exact:true}).click();}
+  async function openPublic(s,name='Public popup A',time='08:30'){await s.page.getByRole('button',{name:'Open route report '+name+' '+time,exact:true}).click();await s.page.getByRole('heading',{name:'Route report',exact:true}).waitFor();await s.page.getByText(name,{exact:true}).waitFor();}
+  {
+   const s=await session(1,true,'search');await publicSearch(s);await s.page.getByRole('button',{name:'Open route report Public popup B 14:00',exact:true}).waitFor();await s.page.screenshot({path:path.join(output,'public-search.png'),fullPage:true});await openPublic(s);await s.page.getByText('Days not confirmed',{exact:true}).waitFor();assert.equal(s.posts(),0);await s.page.screenshot({path:path.join(output,'public-route-detail.png'),fullPage:true});
+   await s.page.getByRole('button',{name:'Add fare',exact:true}).click();await s.page.getByRole('button',{name:'Choose fare departure city',exact:true}).getByText('Popup Origin fixture',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Choose fare destination city',exact:true}).getByText('Popup Destination fixture',{exact:true}).waitFor();assert.equal(await s.page.getByLabel('Fare amount').inputValue(),'');
+   await s.page.getByRole('button',{name:'Choose fare currency',exact:true}).click();await s.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();await s.page.getByLabel('Fare amount').fill('12.50');await s.page.getByRole('radio',{name:'Price type: Quoted',exact:true}).click();await s.page.getByRole('button',{name:'Fare conditions',exact:true}).click();await s.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();await s.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();await s.page.getByText('Selected route report',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.screenshot({path:path.join(output,'public-fare-review.png'),fullPage:true});await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();assert.equal(s.posts(),1);
+   const input=s.requests()[0];assert.equal(input.entrySurface,'route_detail');assert.equal(input.target.newActualJourney.intendedSubject.id,publicA.subjectId);assert.equal(input.observations.length,1);assert.equal(input.observations[0].fieldKey,'fare.quoted');assert.deepEqual(input.observations[0].scope.segment,{kind:'city_pair',originCityId:publicCities[0],destinationCityId:publicCities[1]});assert.equal(input.actualContext,undefined);assert.equal((await admin.query('SELECT count(*) FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[1],input.clientSubmissionId])).rows[0].count,'1');
+   results.push('public Search keeps company/clock identities separate; another account opens Focused Fare with only explicit segment IDs and lost acknowledgement recovers one contextual receipt');await s.context.close();
+  }
+  {
+   const s=await session(1,false,'search');await publicSearch(s);await openPublic(s,'Public popup B','14:00');await s.page.getByRole('button',{name:'Report a journey',exact:true}).click();await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();await s.page.getByLabel('Observed operator').fill('Preserved public evidence');await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[publicB.subjectId]);await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('button',{name:'Keep as independent report',exact:true}).waitFor();await s.page.screenshot({path:path.join(output,'public-stale-target.png'),fullPage:true});const oldKey=s.requests()[0].clientSubmissionId;
+   await s.page.getByRole('button',{name:'Keep as independent report',exact:true}).click();await s.page.getByText('Independent report',{exact:true}).waitFor();assert.equal(await s.page.getByLabel('Observed operator').inputValue(),'Preserved public evidence');await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();assert.equal(s.posts(),2);assert.notEqual(s.requests()[1].clientSubmissionId,oldKey);assert.equal(s.requests()[1].entrySurface,'contribute_tab');assert.equal(s.requests()[1].target.newActualJourney.intendedSubject,undefined);
+   results.push('public target retirement preserves the frozen report; receipt-checked independent recovery keeps facts and uses a new key without restoring a rejected target');await s.context.close();
+  }
+  {
+   const guest=await session(null,false,'search');await publicSearch(guest);await openPublic(guest);await guest.page.getByRole('button',{name:'Sign in to contribute',exact:true}).waitFor();assert.equal(await guest.page.getByRole('button',{name:'Add fare',exact:true}).count(),0);assert.equal(guest.posts(),0);await guest.context.close();
+   const s=await session(2,false,'search');await publicSearch(s);await openPublic(s);await s.page.getByRole('button',{name:'Report or hide',exact:true}).click();await s.page.getByRole('button',{name:'Report this route',exact:true}).click();await s.page.getByRole('radio',{name:'Report reason: Incorrect details',exact:true}).click();await s.page.getByRole('button',{name:'Send route report',exact:true}).click();await s.page.getByText('Report received.',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Hide this contributor’s route reports',exact:true}).click();await s.page.getByText('Results hidden by your block settings',{exact:true}).waitFor();assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);assert.equal(s.posts(),0);await s.context.close();
+   const profile=await session(2,false,'profile');await profile.page.getByText('Manage blocked contributors',{exact:true}).click();await profile.page.getByRole('button',{name:'Account route-report blocks',exact:true}).click();await profile.page.getByRole('heading',{name:'Hidden route reports',exact:true}).waitFor();await profile.page.getByRole('button',{name:'Unblock contributor 1',exact:true}).click();await profile.page.getByText('No route-report contributors hidden.',{exact:true}).waitFor();await profile.page.screenshot({path:path.join(output,'public-blocks.png'),fullPage:true});await profile.context.close();
+   const restored=await session(2,false,'search');await publicSearch(restored);await restored.page.getByRole('button',{name:'Open route report Public popup A 08:30',exact:true}).waitFor();assert.equal(restored.posts(),0);await restored.context.close();
+   results.push('guests read without write authority; reporting/blocking works without contribution Terms, hidden results never become empty intake and account-owned unblock restores discoverability without author IDs');
+  }
+  {
+   const s=await session(1,false,'search');await publicSearch(s);await openPublic(s);await s.page.getByRole('button',{name:'Report a journey',exact:true}).click();await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();await s.page.getByLabel('Observed operator').fill('Earlier public draft');await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();await openPublic(s,'Public popup C','15:00');await s.page.getByRole('button',{name:'Add fare',exact:true}).click();await s.page.getByRole('button',{name:'Resume draft',exact:true}).click();await s.page.getByText('Public popup A · 08:30',{exact:true}).waitFor();assert.equal(await s.page.getByLabel('Observed operator').inputValue(),'Earlier public draft');assert.equal(await s.page.getByLabel('Fare amount').count(),0);await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();assert.equal(s.requests()[0].target.newActualJourney.intendedSubject.id,publicA.subjectId);results.push('an earlier public draft wins over another result’s Add fare action and keeps its own original target and entered facts');await s.context.close();
+  }
+  {
+   const s=await session(1,false,'search');let fail=true;await s.context.route(/\/api\/v2\/search(?:\?|$)/,async route=>{if(fail)await route.fulfill({status:503,contentType:'application/json',body:'{}'});else await route.fallback();});await publicSearch(s);await s.page.getByText('Search could not load',{exact:true}).waitFor();assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);fail=false;await s.page.getByRole('button',{name:'Try search again',exact:true}).click();await s.page.getByRole('button',{name:'Open route report Public popup A 08:30',exact:true}).waitFor();assert.equal(s.posts(),0);results.push('public catalog failure stays distinct from an empty legacy feed and explicit retry restores reports without duplicate-intake invitation');await s.context.close();
+  }
+
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['my-routes.png','own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['public-search.png','public-route-detail.png','public-fare-review.png','public-stale-target.png','public-blocks.png','my-routes.png','own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

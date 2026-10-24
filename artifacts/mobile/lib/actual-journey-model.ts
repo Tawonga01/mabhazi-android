@@ -8,11 +8,14 @@ export interface FareDraft {
   ticket: '' | V2ActualFareScope['ticketBasis']; ticketLabel: string;
 }
 export interface OwnRouteContext {
+  source?: 'own';
   ownerId: string; subjectId: string; clientSubmissionId: string; expectedRevision: number;
   origin: V2City; destination: V2City; operator: string; departureTime: string;
 }
+export interface PublicRouteContext extends Omit<OwnRouteContext, 'clientSubmissionId' | 'source'> { source: 'public' }
+export type CaptureRouteContext = OwnRouteContext | PublicRouteContext;
 export interface ActualDraft {
-  route?: OwnRouteContext; entrySurface?: 'contribute_tab' | 'own_contribution';
+  route?: CaptureRouteContext; entrySurface?: 'contribute_tab' | 'own_contribution' | 'search_result' | 'route_detail';
   facts: ActualFact[]; departure: ClockDraft; arrival: ClockDraft; operator: string; operatorDate: string;
   place: { kind: '' | 'pickup' | 'dropoff'; city: V2City | null; name: string; instructions: string; date: string };
   fare: FareDraft; serviceDate: string; timezone: string; knowledgeBasis: '' | NonNullable<V2ActualContext['knowledgeBasis']>;
@@ -116,10 +119,10 @@ export function validActualDraft(value: unknown): value is ActualDraft {
   }
   const uuid = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
   const r = d.route;
-  if (d.entrySurface !== undefined && !['contribute_tab','own_contribution'].includes(d.entrySurface)) return false;
-  if (r !== undefined && (!r || typeof r !== 'object' || d.entrySurface !== 'own_contribution' ||
-    typeof r.ownerId !== 'string' || !r.ownerId.trim() || r.ownerId.length > 200 ||
-    !uuid(r.subjectId) || !uuid(r.clientSubmissionId) || !Number.isSafeInteger(r.expectedRevision) || r.expectedRevision < 1 ||
+  if (d.entrySurface !== undefined && !['contribute_tab','own_contribution','search_result','route_detail'].includes(d.entrySurface)) return false;
+  if (r !== undefined && (!r || typeof r !== 'object' || (r.source==='public' ? !['search_result','route_detail'].includes(d.entrySurface??'') : d.entrySurface !== 'own_contribution') ||
+    (r.source!==undefined&&!['own','public'].includes(r.source)) || typeof r.ownerId !== 'string' || !r.ownerId.trim() || r.ownerId.length > 200 ||
+    !uuid(r.subjectId) || (r.source!=='public' && !uuid(r.clientSubmissionId)) || !Number.isSafeInteger(r.expectedRevision) || r.expectedRevision < 1 ||
     !r.origin || !r.destination || !shape(r.origin,null) || !shape(r.destination,null) || r.origin.id === r.destination.id ||
     typeof r.operator !== 'string' || !named(r.operator,120) ||
     typeof r.departureTime !== 'string' || !/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(r.departureTime))) return false;

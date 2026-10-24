@@ -21,6 +21,8 @@ import { useAuth } from "@/lib/auth";
 import { JourneyCard, type Journey } from "@/components/JourneyCard";
 import { JourneyDetailSheet } from "@/components/JourneyDetailSheet";
 import { useSearchJourneys, useRateJourney, getSearchJourneysQueryKey, type V2City } from "@workspace/api-client-react";
+import { PublicRouteCard } from '@/components/PublicRouteCard';
+import { usePublicRoutes } from '@/lib/use-public-routes';
 import { useCaptureEntry } from '@/lib/capture-context';
 import { searchViewState, searchRoutePrefill, type RoutePrefill } from '@/lib/contribution-moments';
 import { CaptureButton } from '@/components/capture/CapturePrimitives';
@@ -42,7 +44,7 @@ export default function SearchScreen() {
   const [searchedRoute, setSearchedRoute] = useState<RoutePrefill>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const terms = useTermsAcceptance();
   const {
     blockedContributorIds,
@@ -121,8 +123,17 @@ export default function SearchScreen() {
       ? filterBlockedContributors(journeys, blockedContributorIds)
       : [];
 
-  const viewState = searchViewState({ searched: hasSearched, loading: isLoading || isFetching, succeeded: isSuccess, failed: isError,
-    safetyLoading: isBlockedContributorsLoading, safetyFailed: !!blockedContributorsError, total: journeys.length, visible: visibleJourneys.length });
+  const safetyReady=!isBlockedContributorsLoading&&!blockedContributorsError;
+  const publicRequired=searchParams!==null;
+  const publicParams={...(searchedRoute?.origin?{originCityId:searchedRoute.origin.id}:{fromCity:searchParams?.fromCity}),...(searchedRoute?.destination?{destinationCityId:searchedRoute.destination.id}:{toCity:searchParams?.toCity})};
+  const publicResults=usePublicRoutes(publicParams,publicRequired&&safetyReady&&!authLoading,user?.id??null,blockedContributorIds,capture.revision);
+  const publicItems=safetyReady&&!authLoading?(publicResults.data?.pages.flatMap(page=>page.items)??[]):[];
+  const publicHidden=safetyReady&&publicResults.data?.pages.some(page=>page.hasHiddenResults)?1:0;
+  const resultItems=[...visibleJourneys.map(journey=>({kind:'legacy' as const,journey})),...publicItems.map(route=>({kind:'lead' as const,route}))];
+  const viewState = searchViewState({ searched: hasSearched, loading: isLoading || isFetching || authLoading || publicRequired&&safetyReady&&publicResults.isLoading,
+    succeeded: isSuccess&&(!publicRequired||!safetyReady||publicResults.isSuccess),failed:isError||publicRequired&&safetyReady&&publicResults.isError,
+    safetyLoading: isBlockedContributorsLoading,safetyFailed:!!blockedContributorsError,total:journeys.length+publicItems.length+publicHidden,visible:resultItems.length });
+  const retrySearch=()=>{void refetch();if(publicRequired&&safetyReady)void publicResults.refetch();};
 
   const collapseSearch = useCallback(() => {
     Animated.timing(expandAnim, {
@@ -508,7 +519,7 @@ export default function SearchScreen() {
       ) : viewState === 'error' ? (
         <View style={styles.centered}>
           <Text accessibilityRole="alert" style={[styles.emptyTitle, { color: colors.foreground }]}>Search could not load</Text>
-          <CaptureButton title="Try search again" onPress={() => void refetch()} />
+          <CaptureButton title="Try search again" onPress={retrySearch} />
         </View>
       ) : viewState === 'safety_error' ? (
         <View style={styles.centered}>
@@ -580,23 +591,23 @@ export default function SearchScreen() {
         </View>
       ) : (
         <FlatList
-           data={visibleJourneys}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
+           data={resultItems}
+          keyExtractor={(item) => item.kind==='lead'?'lead:'+item.route.subjectId:'legacy:'+item.journey.id}
+          renderItem={({ item }) => item.kind==='lead'? <PublicRouteCard route={item.route} disabled={capture.isOpen} onPress={()=>capture.open({kind:'public_route',subjectId:item.route.subjectId})}/> : (
             <JourneyCard
               journey={{
-                ...item,
-                 userRating: getLocalUserRating(item.id) ?? item.userRating,
+                ...item.journey,
+                 userRating: getLocalUserRating(item.journey.id) ?? item.journey.userRating,
               }}
               onRate={
                 isAuthenticated
-                  ? (score) => handleRate(item.id, score)
+                  ? (score) => handleRate(item.journey.id, score)
                   : undefined
               }
               onPress={() =>
                 handleCardPress({
-                  ...item,
-                   userRating: getLocalUserRating(item.id) ?? item.userRating,
+                  ...item.journey,
+                   userRating: getLocalUserRating(item.journey.id) ?? item.journey.userRating,
                 })
               }
             />
@@ -608,6 +619,7 @@ export default function SearchScreen() {
             },
           ]}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={publicResults.hasNextPage?<View style={{margin:16}}><CaptureButton title="Load more route reports" busy={publicResults.isFetchingNextPage} onPress={()=>void publicResults.fetchNextPage()}/></View>:null}
           ListHeaderComponent={
              <View>
                {isAuthenticated && !terms.isAccepted ? (
@@ -624,7 +636,7 @@ export default function SearchScreen() {
                    },
                  ]}
                >
-                  {visibleJourneys.length} route{visibleJourneys.length !== 1 ? "s" : ""} found
+                  {resultItems.length} route{resultItems.length !== 1 ? "s" : ""} found
                </Text>
              </View>
           }

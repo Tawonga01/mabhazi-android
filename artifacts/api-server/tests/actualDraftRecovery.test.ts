@@ -144,3 +144,13 @@ test('another report: preserve the current target or explicit independent choice
   const {route:omitted,...independent}=original, fresh=resetActualDraft(independent);
   assert.equal(fresh.route,undefined);assert.equal(fresh.entrySurface,'own_contribution');assert.deepEqual(fresh.facts,[]);
 });
+
+
+test('public route draft: secure persistence retains a public selection without a private receipt identifier or inferred journey facts',async()=>{
+ const {clientSubmissionId:omitted,...base}=routeContext(),route={...base,source:'public' as const};
+ const draft={...operatorDraft(),entrySurface:'route_detail' as const,route};assert.equal(validActualDraft(draft),true);
+ const request=prepareActual(draft,randomUUID());assert.equal(request.entrySurface,'route_detail');assert.deepEqual(request.target.newActualJourney.intendedSubject,{kind:'lead',id:route.subjectId,expectedRevision:route.expectedRevision});assert.equal(request.observations.length,1);assert.equal(request.target.newActualJourney.reportedServiceDate,undefined);
+ const f=fixture(),record={...f.record(draft),pending:{actor:'account-a',request}};await f.store.write(record);assert.deepEqual(await f.store.read('account-a'),record);
+ assert.equal(validActualDraft({...draft,entrySurface:'own_contribution'}),false);assert.equal(validActualDraft({...draft,route:{...route,source:'forged'}}),false);
+ const fare=toggleActualFact({...emptyActualDraft(),entrySurface:'route_detail',route},'fare');assert.deepEqual(fare.fare.origin,route.origin);assert.equal(fare.fare.amount,'');assert.equal(fare.fare.basis,'');assert.equal(fare.fare.date,'');
+});

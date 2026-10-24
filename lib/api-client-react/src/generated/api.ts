@@ -66,6 +66,9 @@ import type {
   V2PublicSearch,
   V2PublicSubjectEnvelope,
   V2ReceiptLookup,
+  V2RouteBlocks,
+  V2RouteSafetyAction,
+  V2RouteSafetyResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -78,7 +81,7 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
  * @summary Save a typed actual-journey report without inferring a timetable
  */
 export const getSubmitV2ActualJourneyUrl = () => {
@@ -166,10 +169,10 @@ export const useSubmitV2ActualJourney = <
 };
 
 /**
- * Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
  * @summary Discover initial community route reports
  */
-export const getSearchV2RoutesUrl = (params: SearchV2RoutesParams) => {
+export const getSearchV2RoutesUrl = (params?: SearchV2RoutesParams) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -186,7 +189,7 @@ export const getSearchV2RoutesUrl = (params: SearchV2RoutesParams) => {
 };
 
 export const searchV2Routes = async (
-  params: SearchV2RoutesParams,
+  params?: SearchV2RoutesParams,
   options?: RequestInit,
 ): Promise<V2PublicSearch> => {
   return customFetch<V2PublicSearch>(getSearchV2RoutesUrl(params), {
@@ -203,7 +206,7 @@ export const getSearchV2RoutesQueryOptions = <
   TData = Awaited<ReturnType<typeof searchV2Routes>>,
   TError = ErrorType<V2ErrorResponse>,
 >(
-  params: SearchV2RoutesParams,
+  params?: SearchV2RoutesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof searchV2Routes>>,
@@ -241,7 +244,7 @@ export function useSearchV2Routes<
   TData = Awaited<ReturnType<typeof searchV2Routes>>,
   TError = ErrorType<V2ErrorResponse>,
 >(
-  params: SearchV2RoutesParams,
+  params?: SearchV2RoutesParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof searchV2Routes>>,
@@ -261,7 +264,7 @@ export function useSearchV2Routes<
 }
 
 /**
- * Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+ * Uses the same visibility and safety rules as Search. Public contextual contribution eligibility is enforced separately in the fenced writer. Canonical service projections remain a separate publication producer.
  * @summary Recheck one currently visible public lead
  */
 export const getGetV2SubjectUrl = (subjectId: string) => {
@@ -347,6 +350,256 @@ export function useGetV2Subject<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Authenticated safety exception without current contribution Terms. Resolves the contributor privately; never returns an author ID. Same pending report reason and repeated block are idempotent.
+ * @summary Report a public route or hide its anonymous contributor's route reports
+ */
+export const getRouteV2SafetyUrl = (subjectId: string) => {
+  return `/api/v2/subjects/${subjectId}/safety`;
+};
+
+export const routeV2Safety = async (
+  subjectId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(getRouteV2SafetyUrl(subjectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2RouteSafetyAction),
+  });
+};
+
+export const getRouteV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    TError,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof routeV2Safety>>,
+  TError,
+  { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["routeV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, data } = props ?? {};
+
+    return routeV2Safety(subjectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RouteV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof routeV2Safety>>
+>;
+export type RouteV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type RouteV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a public route or hide its anonymous contributor's route reports
+ */
+export const useRouteV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    TError,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof routeV2Safety>>,
+  TError,
+  { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getRouteV2SafetyMutationOptions(options));
+};
+
+/**
+ * @summary List this account's anonymous route-report contributor blocks
+ */
+export const getListV2RouteBlocksUrl = () => {
+  return `/api/v2/blocked-route-reporters`;
+};
+
+export const listV2RouteBlocks = async (
+  options?: RequestInit,
+): Promise<V2RouteBlocks> => {
+  return customFetch<V2RouteBlocks>(getListV2RouteBlocksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListV2RouteBlocksQueryKey = () => {
+  return [`/api/v2/blocked-route-reporters`] as const;
+};
+
+export const getListV2RouteBlocksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2RouteBlocks>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListV2RouteBlocksQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>
+  > = ({ signal }) => listV2RouteBlocks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2RouteBlocksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2RouteBlocks>>
+>;
+export type ListV2RouteBlocksQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary List this account's anonymous route-report contributor blocks
+ */
+
+export function useListV2RouteBlocks<
+  TData = Awaited<ReturnType<typeof listV2RouteBlocks>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2RouteBlocksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Unblock a route-report contributor using this account's private block reference
+ */
+export const getUnblockV2RouteReporterUrl = (blockId: string) => {
+  return `/api/v2/blocked-route-reporters/${blockId}`;
+};
+
+export const unblockV2RouteReporter = async (
+  blockId: string,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getUnblockV2RouteReporterUrl(blockId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getUnblockV2RouteReporterMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    TError,
+    { blockId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+  TError,
+  { blockId: string },
+  TContext
+> => {
+  const mutationKey = ["unblockV2RouteReporter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    { blockId: string }
+  > = (props) => {
+    const { blockId } = props ?? {};
+
+    return unblockV2RouteReporter(blockId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnblockV2RouteReporterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>
+>;
+
+export type UnblockV2RouteReporterMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Unblock a route-report contributor using this account's private block reference
+ */
+export const useUnblockV2RouteReporter = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    TError,
+    { blockId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+  TError,
+  { blockId: string },
+  TContext
+> => {
+  return useMutation(getUnblockV2RouteReporterMutationOptions(options));
+};
 
 /**
  * Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.

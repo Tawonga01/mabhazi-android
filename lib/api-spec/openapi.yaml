@@ -21,7 +21,7 @@ paths:
     post:
       operationId: submitV2ActualJourney
       summary: Save a typed actual-journey report without inferring a timetable
-      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -51,20 +51,25 @@ paths:
     get:
       operationId: searchV2Routes
       summary: Discover initial community route reports
-      description: Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+      description: Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
       parameters:
         - name: originCityId
           in: query
-          required: true
           schema: {type: integer, minimum: 1, maximum: 999999999}
         - name: destinationCityId
           in: query
-          required: true
           schema: {type: integer, minimum: 1, maximum: 999999999}
+        - name: fromCity
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 80}
+        - name: toCity
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 80}
         - name: cursor
           in: query
           schema: {type: string, format: uuid}
         - $ref: '#/components/parameters/BlockedContributorsHeader'
+        - $ref: '#/components/parameters/OptionalExpectedAccountHeader'
       responses:
         '200':
           description: Public reports without private evidence or attribution
@@ -72,19 +77,22 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/V2PublicSearch'}
         '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
         '422': {$ref: '#/components/responses/V2Error'}
         '503': {$ref: '#/components/responses/V2Error'}
   /v2/subjects/{subjectId}:
     get:
       operationId: getV2Subject
       summary: Recheck one currently visible public lead
-      description: Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+      description: Uses the same visibility and safety rules as Search. Public contextual contribution eligibility is enforced separately in the fenced writer. Canonical service projections remain a separate publication producer.
       parameters:
         - name: subjectId
           in: path
           required: true
           schema: {type: string, format: uuid}
         - $ref: '#/components/parameters/BlockedContributorsHeader'
+        - $ref: '#/components/parameters/OptionalExpectedAccountHeader'
       responses:
         '200':
           description: Current safe public subject projection
@@ -92,7 +100,76 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/V2PublicSubjectEnvelope'}
         '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
         '404': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/subjects/{subjectId}/safety:
+    post:
+      operationId: routeV2Safety
+      summary: Report a public route or hide its anonymous contributor's route reports
+      description: Authenticated safety exception without current contribution Terms. Resolves the contributor privately; never returns an author ID. Same pending report reason and repeated block are idempotent.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/V2RouteSafetyAction'}
+      responses:
+        '200':
+          description: Safety action saved
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteSafetyResult'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '415': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/blocked-route-reporters:
+    get:
+      operationId: listV2RouteBlocks
+      summary: List this account's anonymous route-report contributor blocks
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      responses:
+        '200':
+          description: Private opaque block references, not contributor identities
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteBlocks'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/blocked-route-reporters/{blockId}:
+    delete:
+      operationId: unblockV2RouteReporter
+      summary: Unblock a route-report contributor using this account's private block reference
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      responses:
+        '200':
+          description: Unblock is idempotent and scoped to the authenticated account
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteSafetyResult'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
         '503': {$ref: '#/components/responses/V2Error'}
   /v2/my-routes:
     get:
@@ -995,6 +1072,11 @@ paths:
 
 components:
   parameters:
+    OptionalExpectedAccountHeader:
+      name: X-Mabhazi-Account
+      in: header
+      description: Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.
+      schema: {type: string, minLength: 1, maxLength: 200}
     BlockedContributorsHeader:
       name: X-Mabhazi-Blocked-Contributors
       in: header
@@ -1709,9 +1791,13 @@ components:
     V2ActualJourneyRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_empty","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2ActualTarget"},"observations":{"type":"array","minItems":1,"maxItems":20,"items":{"$ref":"#/components/schemas/V2ActualObservation"}},"actualContext":{"$ref":"#/components/schemas/V2ActualContext"}}}
     V2PublicOperatorReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate"],"properties":{"value":{"type":"string","minLength":1,"maxLength":120},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}
     V2PublicClockReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate","basis"],"properties":{"value":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"basis":{"type":"string","enum":["unspecified","scheduled","actual"]}}}
-    V2PublicLead: {"type":"object","additionalProperties":false,"required":["kind","subjectId","revision","origin","destination","operatorReport","reportedTime","publicationStatus","timedDepartureEligible","contributionTargetEligible","missingDetails"],"properties":{"kind":{"type":"string","enum":["lead"]},"subjectId":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operatorReport":{"$ref":"#/components/schemas/V2PublicOperatorReport"},"reportedTime":{"$ref":"#/components/schemas/V2PublicClockReport"},"publicationStatus":{"type":"string","enum":["details_needed"]},"timedDepartureEligible":{"type":"boolean","enum":[false]},"contributionTargetEligible":{"type":"boolean","enum":[false]},"missingDetails":{"type":"array","uniqueItems":true,"items":{"type":"string","enum":["selected_fare","operating_days","boarding_location"]}}}}
+    V2PublicLead: {"type":"object","additionalProperties":false,"required":["kind","subjectId","revision","origin","destination","operatorReport","reportedTime","publicationStatus","timedDepartureEligible","contributionTargetEligible","missingDetails"],"properties":{"kind":{"type":"string","enum":["lead"]},"subjectId":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operatorReport":{"$ref":"#/components/schemas/V2PublicOperatorReport"},"reportedTime":{"$ref":"#/components/schemas/V2PublicClockReport"},"publicationStatus":{"type":"string","enum":["details_needed"]},"timedDepartureEligible":{"type":"boolean","enum":[false]},"contributionTargetEligible":{"type":"boolean","enum":[true]},"missingDetails":{"type":"array","uniqueItems":true,"items":{"type":"string","enum":["selected_fare","operating_days","boarding_location"]}}}}
     V2PublicSearch: {"type":"object","additionalProperties":false,"required":["items","hasHiddenResults"],"properties":{"items":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2PublicLead"}},"hasHiddenResults":{"type":"boolean"},"nextCursor":{"type":"string","format":"uuid"}}}
     V2PublicSubjectEnvelope: {"type":"object","additionalProperties":false,"required":["subject"],"properties":{"subject":{"$ref":"#/components/schemas/V2PublicLead"}}}
+    V2RouteSafetyAction: {"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string","enum":["report","block"]},"reason":{"type":"string","enum":["spam","inaccurate","offensive","unsafe","other"]}}}
+    V2RouteSafetyResult: {"type":"object","additionalProperties":false,"required":["status"],"properties":{"status":{"type":"string","enum":["reported","blocked","unblocked"]}}}
+    V2RouteBlock: {"type":"object","additionalProperties":false,"required":["id","blockedAt"],"properties":{"id":{"type":"string","format":"uuid"},"blockedAt":{"type":"string","format":"date-time"}}}
+    V2RouteBlocks: {"type":"object","additionalProperties":false,"required":["blocks"],"properties":{"blocks":{"type":"array","maxItems":200,"items":{"$ref":"#/components/schemas/V2RouteBlock"}}}}
     V2OwnRoute: {"type":"object","additionalProperties":false,"required":["clientSubmissionId","subjectId","submittedAt","origin","destination","operator","departureTime","availability"],"properties":{"clientSubmissionId":{"type":"string","format":"uuid"},"subjectId":{"type":"string","format":"uuid"},"submittedAt":{"type":"string","format":"date-time"},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operator":{"type":"string","minLength":1,"maxLength":120},"departureTime":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"availability":{"type":"string","enum":["active","unavailable"]},"currentLeadRevision":{"type":"integer","minimum":1}}}
     V2OwnRoutes: {"type":"object","additionalProperties":false,"required":["routes"],"properties":{"routes":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2OwnRoute"}},"nextCursor":{"type":"string","maxLength":73,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}}}
     V2OwnRouteEnvelope: {"type":"object","additionalProperties":false,"required":["route"],"properties":{"route":{"$ref":"#/components/schemas/V2OwnRoute"}}}

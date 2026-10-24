@@ -1,3 +1,5 @@
+**Superseded implementation boundary:** PUBLIC-CONTEXT.md extends this first read-only checkpoint with the separately fenced writer and account safety controls. The historical6c318 record below is retained for the earlier deployed behavior.
+
 # Public lead reads — first boundary (24 October 2026)
 
 Baseline: PR4 / 5a5cb8da69f519b898c15a8af629599d8cadea4f. Implements the user-approved D01/D08 basic validated lead discovery, not canonical service publication.

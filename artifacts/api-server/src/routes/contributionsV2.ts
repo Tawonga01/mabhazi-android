@@ -8,6 +8,7 @@ import { saveMinimumLead } from '../lib/minimumLead';
 import { parseActualJourney, saveActualJourney } from '../lib/actualJourney';
 import ownRoutes from './ownRoutesV2';
 import publicRoutes from './publicRoutesV2';
+import routeSafety, { parseBlockedIds } from './routeSafetyV2';
 
 const router: IRouter = Router();
 // Orval validates values but currently emits stripping objects and number() for
@@ -45,6 +46,7 @@ router.get('/capabilities', async (_req, res) => {
 // History and receipt recovery remain readable when new intake is paused.
 router.use('/my-routes', ownRoutes);
 router.use(publicRoutes);
+router.use(routeSafety);
 router.use(async (req, res, next) => {
   // Pausing new intake must not prevent an account checking a committed receipt.
   if (req.method === 'GET' && req.path.startsWith('/receipts/')) { next(); return; }
@@ -102,7 +104,9 @@ router.post('/actual-journeys', (req,res,next) => {
   catch { failure(res,503,'TEMPORARILY_UNAVAILABLE','Journey reports are temporarily unavailable.');return; }
   const parsed=parseActualJourney(req.body);
   if (!parsed.success) { res.status(422).json({error:'Check the journey details.',code:'INVALID_CONTRIBUTION',fieldErrors:parsed.fieldErrors});return; }
-  try { res.json(await saveActualJourney(req.user.id,parsed.data)); }
+  const blocked=parseBlockedIds(req.get('X-Mabhazi-Blocked-Contributors'));
+  if(!blocked){failure(res,400,'INVALID_SAFETY_CONTEXT','Your hidden contributor settings could not be checked.');return;}
+  try { res.json(await saveActualJourney(req.user.id,parsed.data,undefined,blocked)); }
   catch (error) {
     const {code,message}=error as {code?:string;message?:string};
     if (message==='v2_intake_idempotency_conflict') { failure(res,409,'IDEMPOTENCY_CONFLICT','This reference was already used for different answers. Check its receipt.');return; }

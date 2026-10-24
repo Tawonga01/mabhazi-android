@@ -44,7 +44,7 @@ app.use(
       callback(null, isAllowedOrigin(requestOrigin) ? requestOrigin : false);
     },
     methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Authorization", "Content-Type", "X-Mabhazi-Account"],
+    allowedHeaders: ["Authorization", "Content-Type", "X-Mabhazi-Account", "X-Mabhazi-Blocked-Contributors"],
     maxAge: 600,
   }),
 );

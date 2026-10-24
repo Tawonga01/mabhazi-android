@@ -533,7 +533,9 @@ router.get("/admin/abuse-reports", requireAdmin, async (req: Request, res: Respo
   const enrichedReports = await Promise.all(
     reports.map(async (report) => {
       let targetPreview: string | null = null;
-      if (report.targetType === "journey") {
+      if (report.targetType === "transport_subject") {
+        targetPreview = "Community route report · " + report.targetId;
+      } else if (report.targetType === "journey") {
         const targetId = Number(report.targetId);
         if (!Number.isSafeInteger(targetId) || targetId <= 0) {
           targetPreview = "Invalid route target";
@@ -613,17 +615,20 @@ router.patch(
       if (report.status !== "pending") return { kind: "already-reviewed" as const };
 
       const targetType = report.targetType;
-      if (!["comment", "journey", "user"].includes(targetType)) {
+      if (!["comment", "journey", "user", "transport_subject"].includes(targetType)) {
         return { kind: "invalid-target" as const };
       }
       const actionMatchesTarget =
         action === "dismiss" ||
         (targetType === "comment" && action === "remove_content") ||
-        (targetType === "journey" && action === "remove_route") ||
+        (["journey","transport_subject"].includes(targetType) && action === "remove_route") ||
         (targetType === "user" && action === "hide_user");
       if (!actionMatchesTarget) return { kind: "incompatible-action" as const };
 
-      if (action !== "dismiss" && targetType !== "user") {
+      if(targetType==='transport_subject' && action==='remove_route') {
+        const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_lead(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
+        if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
+      } else if (action !== "dismiss" && targetType !== "user") {
         const targetId = Number(report.targetId);
         if (!Number.isSafeInteger(targetId) || targetId <= 0) {
           return { kind: "invalid-target" as const };
@@ -1231,10 +1236,10 @@ async function loadReports() {
           'Route #' + report.targetId;
         const primaryAction = report.targetType === 'user'
           ? 'hide_user'
-          : report.targetType === 'journey' ? 'remove_route' : 'remove_content';
+          : ['journey','transport_subject'].includes(report.targetType) ? 'remove_route' : 'remove_content';
         const primaryLabel = report.targetType === 'user'
           ? 'Hide user content'
-          : report.targetType === 'journey' ? 'Remove route' : 'Remove content';
+          : ['journey','transport_subject'].includes(report.targetType) ? 'Remove route' : 'Remove content';
         return '<tr id="report-' + report.id + '">' +
           '<td class="ts">' + esc(fmt(report.createdAt)) + '</td>' +
           '<td><strong>' + esc(target) + '</strong><br><span class="ts">' + esc(report.targetType) + '</span><br><span style="display:block;max-width:260px;white-space:normal;margin-top:4px">' + esc(report.targetPreview || '—') + '</span></td>' +

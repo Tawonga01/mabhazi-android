@@ -13,7 +13,7 @@ export function registerPublicRouteTests(context:()=>Context){
   const response=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId,entrySurface:'contribute_tab',target:{newLead:{originCityId:pair[reverse?1:0],destinationCityId:pair[reverse?0:1],operator:{name},departureTime:time}},observations:[]})});
   assert.equal(response.status,200);return {...await response.json() as {subjectId:string;contributionId:string},clientSubmissionId};
  }
- async function get(path:string,blocked?:unknown){const response=await fetch(context().base+'/v2'+path,{headers:blocked===undefined?{}:{'X-Mabhazi-Blocked-Contributors':typeof blocked==='string'?blocked:JSON.stringify(blocked)}});return{status:response.status,value:await response.json(),headers:response.headers};}
+ async function get(path:string,blocked?:unknown,account:number|null=null){const response=await fetch(context().base+'/v2'+path,{headers:{...(blocked===undefined?{}:{'X-Mabhazi-Blocked-Contributors':typeof blocked==='string'?blocked:JSON.stringify(blocked)}),...(account===null?{}:{Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]})}});return{status:response.status,value:await response.json(),headers:response.headers};}
  async function search(query=''){const pair=await cities();return get('/search?originCityId='+pair[0]+'&destinationCityId='+pair[1]+query);}
  async function observation(id:string,field='departure.reported'){return(await context().admin.query('SELECT id,scope_key,value,scope FROM v2_observations WHERE original_subject_id=$1 AND field_key=$2',[id,field])).rows[0];}
  async function hiddenReview(subjectId:string,observationId:string){
@@ -28,7 +28,7 @@ export function registerPublicRouteTests(context:()=>Context){
   const saved=await create(),result=await get('/subjects/'+saved.subjectId);assert.equal(result.status,200);
   const subject=GetV2SubjectResponse.parse(result.value).subject;
   assert.deepEqual(Object.keys((result.value as {subject:object}).subject).sort(),['kind','subjectId','revision','origin','destination','operatorReport','reportedTime','publicationStatus','timedDepartureEligible','contributionTargetEligible','missingDetails'].sort());
-  assert.equal(subject.kind,'lead');assert.equal(subject.publicationStatus,'details_needed');assert.equal(subject.timedDepartureEligible,false);assert.equal(subject.contributionTargetEligible,false);
+  assert.equal(subject.kind,'lead');assert.equal(subject.publicationStatus,'details_needed');assert.equal(subject.timedDepartureEligible,false);assert.equal(subject.contributionTargetEligible,true);
   assert.equal(subject.reportedTime.value,'08:00');assert.equal(subject.reportedTime.basis,'unspecified');assert.equal(subject.reportedTime.observedDate,null);assert.equal(subject.reportedTime.freshness,'unknown');
   assert.equal(subject.operatorReport.value,'Public reported bus');assert.equal(subject.operatorReport.observedDate,null);
   const raw=JSON.stringify(result.value);for(const privateValue of [...context().accounts,saved.contributionId,saved.clientSubmissionId])assert.ok(!raw.includes(privateValue));
@@ -132,4 +132,66 @@ export function registerPublicRouteTests(context:()=>Context){
    for(const path of ['/my-routes','/receipts/'+saved.clientSubmissionId])assert.equal((await fetch(context().base+'/v2'+path,{headers})).status,200);
   }finally{process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';}
  });
+ async function action(path:string,body:unknown,account=1,method='POST',extra:Record<string,string>={}){
+  const response=await fetch(context().base+path,{method,headers:{'Content-Type':'application/json',Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account],...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});return{status:response.status,value:await response.json()};
+ }
+ function actual(subjectId:string,revision:number,key=randomUUID()){return{schemaVersion:'1.0',clientSubmissionId:key,entrySurface:'route_detail',target:{newActualJourney:{intendedSubject:{kind:'lead',id:subjectId,expectedRevision:revision}}},observations:[{fieldKey:'operator.reported',value:{name:'Observed contextual bus'},scope:{}}]};}
+ test('public context: another public account saves scoped evidence against the selected current lead and replays once',async()=>{
+  const saved=await create('Public context bus'),subject=GetV2SubjectResponse.parse((await get('/subjects/'+saved.subjectId)).value).subject,input=actual(saved.subjectId,subject.revision);
+  const result=await action('/v2/actual-journeys',input);assert.equal(result.status,200);assert.equal((await action('/v2/actual-journeys',input)).value.contributionId,result.value.contributionId);
+  const stored=(await context().admin.query('SELECT payload FROM v2_contributions WHERE id=$1',[result.value.contributionId])).rows[0].payload;
+  assert.equal(stored.target.newActualJourney.intendedSubject.id,saved.subjectId);assert.equal(stored.entrySurface,'route_detail');assert.equal(stored.observations.length,1);assert.equal(stored.actualContext?.knowledgeBasis,'unprovided');assert.ok(!stored.target.newActualJourney.reportedServiceDate);
+  await context().admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.subjectId]);
+  assert.equal((await action('/v2/actual-journeys',input)).value.contributionId,result.value.contributionId);
+  assert.equal((await action('/v2/actual-journeys',actual(saved.subjectId,subject.revision))).status,404);
+ });
+ test('public context: late revision, withdrawn target and device blocks reject fresh intake without changing own-only surfaces',async()=>{
+  const saved=await create('Changing public bus'),subject=GetV2SubjectResponse.parse((await get('/subjects/'+saved.subjectId)).value).subject;
+  await context().admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.subjectId]);assert.equal((await action('/v2/actual-journeys',actual(saved.subjectId,subject.revision))).status,409);
+  const input=actual(saved.subjectId,subject.revision+1);assert.equal((await action('/v2/actual-journeys',input,1,'POST',{'X-Mabhazi-Blocked-Contributors':JSON.stringify([context().accounts[0]])})).status,404);
+  assert.equal((await action('/v2/actual-journeys',{...input,entrySurface:'contribute_tab'})).status,404);
+  const o=await observation(saved.subjectId);await context().admin.query('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().accounts[0],o.id,randomUUID()]);assert.equal((await action('/v2/actual-journeys',input)).status,404);
+ });
+ test('public context: account blocks hide all this author’s route reports, remain private, unblock by own reference and erase with the author',async()=>{
+  const saved=await create('Blocked account route'),sibling=await create('Blocked sibling route');
+  assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',{action:'block'})).status,200);assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',{action:'block'})).status,200);
+  for(const id of [saved.subjectId,sibling.subjectId]){assert.equal((await get('/subjects/'+id,[],1)).status,404);assert.equal((await get('/subjects/'+id,[],0)).status,200);}
+  const list=await get('/blocked-route-reporters',undefined,1);assert.equal(list.status,200);assert.equal(list.value.blocks.length,1);const row=list.value.blocks[0];assert.deepEqual(Object.keys(row).sort(),['blockedAt','id']);assert.ok(!JSON.stringify(list.value).includes(context().accounts[0]));
+  assert.equal((await get('/blocked-route-reporters',undefined,0)).value.blocks.length,0);
+  await action('/v2/blocked-route-reporters/'+row.id,undefined,0,'DELETE');assert.equal((await get('/subjects/'+saved.subjectId,[],1)).status,404);
+  await action('/v2/blocked-route-reporters/'+row.id,undefined,1,'DELETE');assert.equal((await get('/subjects/'+saved.subjectId,[],1)).status,200);
+  const actor=randomUUID(),token=randomBytes(32).toString('hex'),account=context().accounts.length;context().accounts.push(actor);context().tokens.push(token);
+  await context().admin.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[actor]);await context().admin.query("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);
+  const erased=await create('Erase blocked author','08:00',false,account);assert.equal((await action('/v2/subjects/'+erased.subjectId+'/safety',{action:'block'})).status,200);assert.equal((await get('/blocked-route-reporters',undefined,1)).value.blocks.length,1);await context().admin.query('DELETE FROM users WHERE id=$1',[actor]);assert.equal((await get('/blocked-route-reporters',undefined,1)).value.blocks.length,0);
+
+ });
+ test('public context: report and block remain available without Terms; admin-only hide is audited and blocks new target use',async()=>{
+  const saved=await create('Moderated public context'),subject=GetV2SubjectResponse.parse((await get('/subjects/'+saved.subjectId)).value).subject;
+  await context().admin.query('UPDATE users SET terms_accepted_at=NULL WHERE id=$1',[context().accounts[1]]);
+  try{
+   const body={action:'report',reason:'inaccurate'};assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',body)).status,200);assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',body)).status,200);
+   const rows=(await context().admin.query("SELECT id FROM abuse_reports WHERE target_type='transport_subject' AND target_id=$1 AND reporter_id=$2",[saved.subjectId,context().accounts[1]])).rows;assert.equal(rows.length,1);
+   assert.equal((await action('/v2/actual-journeys',actual(saved.subjectId,subject.revision))).status,428);
+   assert.equal((await action('/admin/abuse-reports/'+rows[0].id,{action:'remove_route'},1,'PATCH')).status,401);
+   const moderated=await action('/admin/abuse-reports/'+rows[0].id,{action:'remove_route',notes:'Synthetic public moderation'},1,'PATCH',{'X-Admin-Secret':process.env.ADMIN_SECRET!});assert.equal(moderated.status,200);
+   assert.equal((await get('/subjects/'+saved.subjectId)).status,404);assert.equal((await context().admin.query('SELECT count(*) FROM v2_public_lead_hides WHERE subject_id=$1',[saved.subjectId])).rows[0].count,'1');
+  }finally{await context().admin.query('UPDATE users SET terms_accepted_at=now() WHERE id=$1',[context().accounts[1]]);}
+  assert.equal((await action('/v2/actual-journeys',actual(saved.subjectId,subject.revision))).status,404);
+ });
+ test('public context: account/safety assertions fail closed and raw hosted clients cannot call restricted functions',async()=>{
+  const saved=await create('Permission public route');
+  assert.equal((await action('/v2/subjects/'+saved.subjectId+'/safety',{action:'block'},1,'POST',{'X-Mabhazi-Account':context().accounts[0]})).status,409);
+  const mismatch=await fetch(context().base+'/v2/subjects/'+saved.subjectId,{headers:{'X-Mabhazi-Account':context().accounts[1]}});assert.equal(mismatch.status,401);
+  const db=context().admin;await db.query('SET ROLE mabhazi_api');try{await assert.rejects(db.query('INSERT INTO v2_route_report_blocks(blocker_id,blocked_user_id) VALUES($1,$2)',[context().accounts[1],context().accounts[0]]),e=>(e as {code:string}).code==='42501');}finally{await db.query('RESET ROLE');}
+  for(const role of ['anon','authenticated']){if(!(await db.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[role])).rows.length)await db.query('CREATE ROLE '+role);await db.query('SET ROLE '+role);try{await assert.rejects(db.query('SELECT * FROM v2_public_lead_reports'),e=>(e as {code:string}).code==='42501');await assert.rejects(db.query('SELECT v2_api_route_report_action($1,$2,$3,NULL)',[context().accounts[1],saved.subjectId,'block']),e=>(e as {code:string}).code==='42501');}finally{await db.query('RESET ROLE');}}
+ });
+ test('public context: text discovery is literal and returns real city/subject identities, never generated matches',async()=>{
+  const saved=await create('Literal lookup bus');const result=await get('/search?fromCity=Public%20origin&toCity=Public%20destination');assert.equal(result.status,200);const items=SearchV2RoutesResponse.parse(result.value).items;assert.ok(items.length>0);assert.ok(items.every(row=>row.origin.id===cityIds![0]&&row.destination.id===cityIds![1]));assert.equal(SearchV2RoutesResponse.parse((await get('/search?fromCity=%25')).value).items.length,0);assert.equal((await get('/search')).status,200);
+ });
+
+ test('public context: browser preflight permits only the existing trusted origin and declared safety header',async()=>{
+  const response=await fetch(context().base+'/v2/actual-journeys',{method:'OPTIONS',headers:{Origin:'https://mabhazi.com','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'Content-Type,Authorization,X-Mabhazi-Account,X-Mabhazi-Blocked-Contributors'}});assert.equal(response.status,204);assert.equal(response.headers.get('access-control-allow-origin'),'https://mabhazi.com');assert.ok(response.headers.get('access-control-allow-headers')?.toLowerCase().includes('x-mabhazi-blocked-contributors'));
+  const denied=await fetch(context().base+'/v2/actual-journeys',{method:'OPTIONS',headers:{Origin:'https://untrusted.invalid','Access-Control-Request-Method':'POST'}});assert.equal(denied.headers.get('access-control-allow-origin'),null);
+ });
+
 }

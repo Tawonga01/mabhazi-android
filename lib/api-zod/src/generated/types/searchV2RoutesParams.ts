@@ -11,11 +11,21 @@ export type SearchV2RoutesParams = {
    * @minimum 1
    * @maximum 999999999
    */
-  originCityId: number;
+  originCityId?: number;
   /**
    * @minimum 1
    * @maximum 999999999
    */
-  destinationCityId: number;
+  destinationCityId?: number;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  fromCity?: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  toCity?: string;
   cursor?: string;
 };

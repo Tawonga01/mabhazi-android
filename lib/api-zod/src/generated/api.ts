@@ -8,7 +8,7 @@
 import * as zod from "zod";
 
 /**
- * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
  * @summary Save a typed actual-journey report without inferring a timetable
  */
 export const submitV2ActualJourneyHeaderXMabhaziAccountMax = 256;
@@ -510,26 +510,44 @@ export const SubmitV2ActualJourneyResponse = zod.object({
 });
 
 /**
- * Basic validated lead reports only. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
  * @summary Discover initial community route reports
  */
 export const searchV2RoutesQueryOriginCityIdMax = 999999999;
 
 export const searchV2RoutesQueryDestinationCityIdMax = 999999999;
 
+export const searchV2RoutesQueryFromCityMax = 80;
+
+export const searchV2RoutesQueryToCityMax = 80;
+
 export const SearchV2RoutesQueryParams = zod.object({
   originCityId: zod.coerce
     .number()
     .min(1)
-    .max(searchV2RoutesQueryOriginCityIdMax),
+    .max(searchV2RoutesQueryOriginCityIdMax)
+    .optional(),
   destinationCityId: zod.coerce
     .number()
     .min(1)
-    .max(searchV2RoutesQueryDestinationCityIdMax),
+    .max(searchV2RoutesQueryDestinationCityIdMax)
+    .optional(),
+  fromCity: zod.coerce
+    .string()
+    .min(1)
+    .max(searchV2RoutesQueryFromCityMax)
+    .optional(),
+  toCity: zod.coerce
+    .string()
+    .min(1)
+    .max(searchV2RoutesQueryToCityMax)
+    .optional(),
   cursor: zod.coerce.string().uuid().optional(),
 });
 
 export const searchV2RoutesHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const searchV2RoutesHeaderXMabhaziAccountMax = 200;
 
 export const SearchV2RoutesHeader = zod.object({
   "X-Mabhazi-Blocked-Contributors": zod
@@ -538,6 +556,14 @@ export const SearchV2RoutesHeader = zod.object({
     .optional()
     .describe(
       "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(searchV2RoutesHeaderXMabhaziAccountMax)
+    .optional()
+    .describe(
+      "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
 });
 
@@ -615,7 +641,7 @@ export const SearchV2RoutesResponse = zod.object({
         }),
         publicationStatus: zod.enum(["details_needed"]),
         timedDepartureEligible: zod.literal(false),
-        contributionTargetEligible: zod.literal(false),
+        contributionTargetEligible: zod.literal(true),
         missingDetails: zod.array(
           zod.enum(["selected_fare", "operating_days", "boarding_location"]),
         ),
@@ -627,7 +653,7 @@ export const SearchV2RoutesResponse = zod.object({
 });
 
 /**
- * Uses the same visibility and safety rules as Search. Currently read-only; the existing actual-report facade still permits only owned leads. Canonical service projections remain a separate publication producer.
+ * Uses the same visibility and safety rules as Search. Public contextual contribution eligibility is enforced separately in the fenced writer. Canonical service projections remain a separate publication producer.
  * @summary Recheck one currently visible public lead
  */
 export const GetV2SubjectParams = zod.object({
@@ -636,6 +662,8 @@ export const GetV2SubjectParams = zod.object({
 
 export const getV2SubjectHeaderXMabhaziBlockedContributorsMax = 10000;
 
+export const getV2SubjectHeaderXMabhaziAccountMax = 200;
+
 export const GetV2SubjectHeader = zod.object({
   "X-Mabhazi-Blocked-Contributors": zod
     .string()
@@ -643,6 +671,14 @@ export const GetV2SubjectHeader = zod.object({
     .optional()
     .describe(
       "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2SubjectHeaderXMabhaziAccountMax)
+    .optional()
+    .describe(
+      "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
 });
 
@@ -705,11 +741,93 @@ export const GetV2SubjectResponse = zod.object({
     }),
     publicationStatus: zod.enum(["details_needed"]),
     timedDepartureEligible: zod.literal(false),
-    contributionTargetEligible: zod.literal(false),
+    contributionTargetEligible: zod.literal(true),
     missingDetails: zod.array(
       zod.enum(["selected_fare", "operating_days", "boarding_location"]),
     ),
   }),
+});
+
+/**
+ * Authenticated safety exception without current contribution Terms. Resolves the contributor privately; never returns an author ID. Same pending report reason and repeated block are idempotent.
+ * @summary Report a public route or hide its anonymous contributor's route reports
+ */
+export const RouteV2SafetyParams = zod.object({
+  subjectId: zod.coerce.string().uuid(),
+});
+
+export const routeV2SafetyHeaderXMabhaziAccountMax = 256;
+
+export const RouteV2SafetyHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(routeV2SafetyHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+});
+
+export const RouteV2SafetyBody = zod.object({
+  action: zod.enum(["report", "block"]),
+  reason: zod
+    .enum(["spam", "inaccurate", "offensive", "unsafe", "other"])
+    .optional(),
+});
+
+export const RouteV2SafetyResponse = zod.object({
+  status: zod.enum(["reported", "blocked", "unblocked"]),
+});
+
+/**
+ * @summary List this account's anonymous route-report contributor blocks
+ */
+export const listV2RouteBlocksHeaderXMabhaziAccountMax = 256;
+
+export const ListV2RouteBlocksHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(listV2RouteBlocksHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+});
+
+export const listV2RouteBlocksResponseBlocksMax = 200;
+
+export const ListV2RouteBlocksResponse = zod.object({
+  blocks: zod
+    .array(
+      zod.object({
+        id: zod.string().uuid(),
+        blockedAt: zod.coerce.date(),
+      }),
+    )
+    .max(listV2RouteBlocksResponseBlocksMax),
+});
+
+/**
+ * @summary Unblock a route-report contributor using this account's private block reference
+ */
+export const UnblockV2RouteReporterParams = zod.object({
+  blockId: zod.coerce.string().uuid(),
+});
+
+export const unblockV2RouteReporterHeaderXMabhaziAccountMax = 256;
+
+export const UnblockV2RouteReporterHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(unblockV2RouteReporterHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+});
+
+export const UnblockV2RouteReporterResponse = zod.object({
+  status: zod.enum(["reported", "blocked", "unblocked"]),
 });
 
 /**

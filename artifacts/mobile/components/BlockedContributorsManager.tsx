@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@/components/VectorIcon";
+import { useCaptureEntry } from '@/lib/capture-context';
 import { useColors } from "@/hooks/useColors";
 import { useBlockedContributors } from "@/hooks/useBlockedContributors";
 
@@ -26,6 +27,7 @@ export function BlockedContributorsManager({
   onClose,
 }: BlockedContributorsManagerProps) {
   const colors = useColors();
+  const capture=useCaptureEntry();
   const {
     blockedContributors,
     unblockContributor,
@@ -129,6 +131,7 @@ export function BlockedContributorsManager({
             </ScrollView>
           )}
 
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Account route-report blocks" style={[styles.unblock,{borderColor:colors.border}]} onPress={()=>{onClose();requestAnimationFrame(()=>capture.open({kind:'public_blocks'}));}}><Text style={[styles.unblockText,{color:colors.primary}]}>Route-report blocks on your account</Text></TouchableOpacity>
           <TouchableOpacity
             style={[styles.done, { backgroundColor: colors.primary }]}
             onPress={onClose}
