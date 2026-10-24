@@ -9,6 +9,7 @@ import { CaptureEntryContext, CaptureFrameContext } from '@/lib/capture-context'
 import type { CaptureRequest } from '@/lib/contribution-moments';
 import { MinimumLeadForm } from '@/components/MinimumLeadForm';
 import { ActualJourneyForm } from './ActualJourneyForm';
+import { OwnRoutes } from './OwnRoutes';
 
 /** One manual capture at a time; tabs cannot run competing writers for the same draft. */
 export function CaptureHost({ children }: { children: React.ReactNode }) {
@@ -32,7 +33,7 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
   const presentation = useMemo(() => ({ overlay: true, register }), [register]);
   const entry = useMemo(() => ({ open, isOpen: !!active, revision }), [open, active, revision]);
   function followUp(route: OwnRouteContext) {
-    if (active?.kind !== 'route' || auth.user?.id !== route.ownerId) return;
+    if (!active || !['route','history'].includes(active.kind) || auth.user?.id !== route.ownerId) return;
     frame.current = null;
     setActive({ kind: 'journey', entrySurface: 'own_contribution', route, id: Crypto.randomUUID() });
   }
@@ -52,7 +53,9 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
         <CaptureFrameContext.Provider value={presentation}>
           {active.kind === 'route'
             ? <MinimumLeadForm key={active.id} entrySurface={active.entrySurface} prefill={active.prefill} onFollowUp={followUp} onClose={dismiss} openFullForm={openFullForm} />
-            : <ActualJourneyForm key={active.id} route={active.route} onClose={dismiss} />}
+            : active.kind === 'history'
+              ? <OwnRoutes key={active.id + (auth.user?.id ?? 'guest')} onClose={dismiss} onFollowUp={followUp} onAddRoute={() => { frame.current = null; setActive({ kind: 'route', entrySurface: 'contribute_tab', id: Crypto.randomUUID() }); }} />
+              : <ActualJourneyForm key={active.id} route={active.route} onClose={dismiss} />}
         </CaptureFrameContext.Provider>
       </SafeAreaProvider>
     </Modal> : null}

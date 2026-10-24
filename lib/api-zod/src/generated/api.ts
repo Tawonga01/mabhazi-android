@@ -510,6 +510,157 @@ export const SubmitV2ActualJourneyResponse = zod.object({
 });
 
 /**
+ * Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.
+ * @summary List this account's submitted community routes
+ */
+export const listV2OwnRoutesQueryCursorMax = 73;
+
+export const listV2OwnRoutesQueryCursorRegExp = new RegExp(
+  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+);
+
+export const ListV2OwnRoutesQueryParams = zod.object({
+  cursor: zod.coerce
+    .string()
+    .max(listV2OwnRoutesQueryCursorMax)
+    .regex(listV2OwnRoutesQueryCursorRegExp)
+    .optional(),
+});
+
+export const listV2OwnRoutesHeaderXMabhaziAccountMax = 256;
+
+export const ListV2OwnRoutesHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(listV2OwnRoutesHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const listV2OwnRoutesResponseRoutesItemOriginIdMax = 999999999;
+
+export const listV2OwnRoutesResponseRoutesItemDestinationIdMax = 999999999;
+
+export const listV2OwnRoutesResponseRoutesItemOperatorMax = 120;
+
+export const listV2OwnRoutesResponseRoutesItemDepartureTimeRegExp = new RegExp(
+  "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+);
+
+export const listV2OwnRoutesResponseRoutesMax = 20;
+
+export const listV2OwnRoutesResponseNextCursorMax = 73;
+
+export const listV2OwnRoutesResponseNextCursorRegExp = new RegExp(
+  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+);
+
+export const ListV2OwnRoutesResponse = zod.object({
+  routes: zod
+    .array(
+      zod.object({
+        clientSubmissionId: zod.string().uuid(),
+        subjectId: zod.string().uuid(),
+        submittedAt: zod.coerce.date(),
+        origin: zod.object({
+          id: zod
+            .number()
+            .min(1)
+            .max(listV2OwnRoutesResponseRoutesItemOriginIdMax),
+          name: zod.string(),
+          placeType: zod.string(),
+        }),
+        destination: zod.object({
+          id: zod
+            .number()
+            .min(1)
+            .max(listV2OwnRoutesResponseRoutesItemDestinationIdMax),
+          name: zod.string(),
+          placeType: zod.string(),
+        }),
+        operator: zod
+          .string()
+          .min(1)
+          .max(listV2OwnRoutesResponseRoutesItemOperatorMax),
+        departureTime: zod
+          .string()
+          .regex(listV2OwnRoutesResponseRoutesItemDepartureTimeRegExp),
+        availability: zod.enum(["active", "unavailable"]),
+        currentLeadRevision: zod.number().min(1).optional(),
+      }),
+    )
+    .max(listV2OwnRoutesResponseRoutesMax),
+  nextCursor: zod
+    .string()
+    .max(listV2OwnRoutesResponseNextCursorMax)
+    .regex(listV2OwnRoutesResponseNextCursorRegExp)
+    .optional(),
+});
+
+/**
+ * @summary Recheck an owned submitted route before adding details
+ */
+export const GetV2OwnRouteParams = zod.object({
+  clientSubmissionId: zod.coerce.string().uuid(),
+});
+
+export const getV2OwnRouteHeaderXMabhaziAccountMax = 256;
+
+export const GetV2OwnRouteHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2OwnRouteHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const getV2OwnRouteResponseRouteOriginIdMax = 999999999;
+
+export const getV2OwnRouteResponseRouteDestinationIdMax = 999999999;
+
+export const getV2OwnRouteResponseRouteOperatorMax = 120;
+
+export const getV2OwnRouteResponseRouteDepartureTimeRegExp = new RegExp(
+  "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+);
+
+export const GetV2OwnRouteResponse = zod.object({
+  route: zod.object({
+    clientSubmissionId: zod.string().uuid(),
+    subjectId: zod.string().uuid(),
+    submittedAt: zod.coerce.date(),
+    origin: zod.object({
+      id: zod.number().min(1).max(getV2OwnRouteResponseRouteOriginIdMax),
+      name: zod.string(),
+      placeType: zod.string(),
+    }),
+    destination: zod.object({
+      id: zod.number().min(1).max(getV2OwnRouteResponseRouteDestinationIdMax),
+      name: zod.string(),
+      placeType: zod.string(),
+    }),
+    operator: zod.string().min(1).max(getV2OwnRouteResponseRouteOperatorMax),
+    departureTime: zod
+      .string()
+      .regex(getV2OwnRouteResponseRouteDepartureTimeRegExp),
+    availability: zod.enum(["active", "unavailable"]),
+    currentLeadRevision: zod.number().min(1).optional(),
+  }),
+});
+
+/**
  * @summary Discover the enabled minimum-lead intake contract
  */
 export const GetV2CapabilitiesResponse = zod.object({

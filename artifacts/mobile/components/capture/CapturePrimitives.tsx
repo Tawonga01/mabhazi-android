@@ -27,7 +27,7 @@ export const captureStyles = StyleSheet.create({
   disabled: { opacity: 0.5 }, reviewValue: { color: '#102744', fontSize: 17, lineHeight: 24 },
 });
 const s = captureStyles;
-export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '' }: { title: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
+export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '', closeLabel = 'Close form and keep draft' }: { title: string; closeLabel?: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
   const insets = useSafeAreaInsets(), body = useRef<ScrollView>(null), presentation = useContext(CaptureFrameContext);
   useEffect(() => presentation?.register(onClose, busy), [presentation, onClose, busy]);
   useEffect(() => { body.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
@@ -41,7 +41,7 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
     <KeyboardAvoidingView style={s.avoid} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
       <View style={s.panel}>
         <View style={s.header}><Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text>
-          {onClose ? <Pressable accessibilityRole="button" accessibilityLabel="Close form and keep draft" disabled={busy} onPress={onClose} style={[s.close, busy && s.disabled]}><Feather name="x" size={22} color="#24476A" /></Pressable> : null}
+          {onClose ? <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} disabled={busy} onPress={onClose} style={[s.close, busy && s.disabled]}><Feather name="x" size={22} color="#24476A" /></Pressable> : null}
         </View>
         <ScrollView ref={body} style={{ flexShrink: 1 }} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{children}</ScrollView>
         {footer ? <View style={s.footer}>{footer}</View> : null}

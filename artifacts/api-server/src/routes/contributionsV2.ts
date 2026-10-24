@@ -6,6 +6,7 @@ import { CURRENT_TERMS_VERSION } from '../lib/terms';
 import { requireCurrentTerms } from '../middlewares/termsMiddleware';
 import { saveMinimumLead } from '../lib/minimumLead';
 import { parseActualJourney, saveActualJourney } from '../lib/actualJourney';
+import ownRoutes from './ownRoutesV2';
 
 const router: IRouter = Router();
 // Orval validates values but currently emits stripping objects and number() for
@@ -40,6 +41,8 @@ router.get('/capabilities', async (_req, res) => {
   try { ready = await enabled(); actualReady=ready && await actualEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
   res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady });
 });
+// History and receipt recovery remain readable when new intake is paused.
+router.use('/my-routes', ownRoutes);
 router.use(async (req, res, next) => {
   // Pausing new intake must not prevent an account checking a committed receipt.
   if (req.method === 'GET' && req.path.startsWith('/receipts/')) { next(); return; }

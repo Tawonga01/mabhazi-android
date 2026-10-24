@@ -995,6 +995,46 @@ export interface V2ActualJourneyRequest {
   actualContext?: V2ActualContext;
 }
 
+export type V2OwnRouteAvailability =
+  (typeof V2OwnRouteAvailability)[keyof typeof V2OwnRouteAvailability];
+
+export const V2OwnRouteAvailability = {
+  active: "active",
+  unavailable: "unavailable",
+} as const;
+
+export interface V2OwnRoute {
+  clientSubmissionId: string;
+  subjectId: string;
+  submittedAt: string;
+  origin: V2City;
+  destination: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  operator: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  departureTime: string;
+  availability: V2OwnRouteAvailability;
+  /** @minimum 1 */
+  currentLeadRevision?: number;
+}
+
+export interface V2OwnRoutes {
+  /** @maxItems 20 */
+  routes: V2OwnRoute[];
+  /**
+   * @maxLength 73
+   * @pattern ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+   */
+  nextCursor?: string;
+}
+
+export interface V2OwnRouteEnvelope {
+  route: V2OwnRoute;
+}
+
 /**
  * Safe error with no raw payload, database message, token or private evidence
  */
@@ -1009,6 +1049,14 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListV2OwnRoutesParams = {
+  /**
+   * @maxLength 73
+   * @pattern ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+   */
+  cursor?: string;
+};
 
 export type ListV2CitiesParams = {
   /**

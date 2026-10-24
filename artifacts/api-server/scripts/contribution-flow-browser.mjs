@@ -17,7 +17,7 @@ let apiServer, webServer, browser;
 const root = path.resolve('../mobile/dist-flow-web'), output = path.resolve('../../flow-browser-evidence');
 fs.mkdirSync(output, { recursive: true });
 const results = [], consoleErrors = [];
-const users = [randomUUID(), randomUUID()], tokens = users.map(() => randomBytes(32).toString('hex'));
+const users = [randomUUID(), randomUUID(), randomUUID()], tokens = users.map(() => randomBytes(32).toString('hex'));
 let cities;
 try {
   await admin.connect();
@@ -57,7 +57,7 @@ try {
     });
     const page = await context.newPage();
     page.on('pageerror', error => consoleErrors.push(error.message));
-    const surfaces={search:'/',profile:'/profile',departures:'/departures'};
+    const surfaces={search:'/',profile:'/profile',departures:'/departures',home:'/contribute'};
     await page.goto('http://127.0.0.1:4173'+(surfaces[mode] ?? '/contribute'));
     if (surfaces[mode]) return {context,page,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
@@ -429,10 +429,55 @@ try {
     await s.page.screenshot({path:path.join(output,'full-route-form.png'),fullPage:true});
     assert.equal(s.posts(),0);results.push('legacy full form retains explicit operating-day selection and optional stop entry without submitting');await s.context.close();
   }
+  // Server-backed own history survives leaving Saved and a fresh browser session.
+  let historyKey, historySubject;
+  {
+    const s=await session();await s.fill();await s.page.getByLabel('Bus operator name').fill('History browser bus');
+    await s.page.getByRole('button',{name:'Review route',exact:true}).click();await s.page.getByRole('button',{name:'Save contribution',exact:true}).click();await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
+    historyKey=s.requests()[0].clientSubmissionId;historySubject=(await admin.query('SELECT initial_response FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],historyKey])).rows[0].initial_response.subjectId;
+    await s.page.getByRole('button',{name:'Done',exact:true}).click();await s.context.close();
+    const h=await session(0,false,'home');await h.page.getByRole('button',{name:'My routes',exact:true}).click();await h.page.getByRole('heading',{name:'My routes',exact:true}).waitFor();
+    const card=h.page.getByText('History browser bus · 08:30',{exact:true}).locator('..');await card.getByRole('button',{name:'Add details',exact:true}).waitFor();
+    assert.equal(await h.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);
+    await h.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
+    await h.page.screenshot({path:path.join(output,'my-routes.png'),fullPage:true});
+    await card.getByRole('button',{name:'Add details',exact:true}).click();await h.page.getByText('Your submitted route',{exact:true}).waitFor();
+    await h.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
+    await h.page.getByRole('button',{name:'Choose fare departure city',exact:true}).getByText('Flow Origin fixture',{exact:true}).waitFor();
+    await h.page.getByRole('button',{name:'Choose fare destination city',exact:true}).getByText('Flow Destination fixture',{exact:true}).waitFor();assert.equal(await h.page.getByLabel('Fare amount').inputValue(),'');
+    await h.page.getByRole('button',{name:'Choose fare currency',exact:true}).click();await h.page.getByRole('radio',{name:'Currency: USD',exact:true}).click();await h.page.getByLabel('Fare amount').fill('12');await h.page.getByRole('radio',{name:'Price type: Quoted',exact:true}).click();
+    await h.page.getByRole('button',{name:'Fare conditions',exact:true}).click();await h.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();await h.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();
+    await h.page.getByRole('button',{name:'Preview fare',exact:true}).click();await h.page.getByRole('button',{name:'Use this fare',exact:true}).click();
+    await h.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();await h.page.getByRole('button',{name:'Continue journey draft',exact:true}).click();await h.page.getByRole('button',{name:'Resume draft',exact:true}).click();await h.page.getByText('Your submitted route',{exact:true}).waitFor();
+    await h.page.getByRole('button',{name:'Review journey',exact:true}).click();await h.page.getByRole('button',{name:'Save journey report',exact:true}).click();await h.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
+    assert.equal(h.posts(),1);const request=h.requests()[0];assert.equal(request.entrySurface,'own_contribution');assert.equal(request.target.newActualJourney.intendedSubject.id,historySubject);assert.equal(request.observations.length,1);assert.equal(request.observations[0].fieldKey,'fare.quoted');
+    results.push('owned route history reopens after leaving Saved in a fresh session; scoped fare and route context survive close/resume and commit once');await h.context.close();
+  }
+  {
+    const h=await session(0,false,'home');await h.context.route('**/api/v2/my-routes',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'TEMPORARILY_UNAVAILABLE',error:'CI injected history outage'})}));
+    await h.page.getByRole('button',{name:'My routes',exact:true}).click();await h.page.getByText('Your routes could not be loaded. Try again.',{exact:true}).waitFor();assert.equal(await h.page.getByText('No submitted routes yet.',{exact:true}).count(),0);
+    await h.context.unroute('**/api/v2/my-routes');await h.page.getByRole('button',{name:'Refresh routes',exact:true}).click();
+    const card=h.page.getByText('History browser bus · 08:30',{exact:true}).locator('..');await card.getByRole('button',{name:'Add details',exact:true}).waitFor();
+    await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[historySubject]);await card.getByRole('button',{name:'Add details',exact:true}).click();await h.page.getByText('Details are unavailable for this submitted route.',{exact:true}).waitFor();
+    assert.equal(await card.getByRole('button',{name:'Add details',exact:true}).count(),0);assert.equal(await h.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);assert.equal(h.posts(),0);
+    results.push('history errors stay distinct from empty results; refreshed selection detects a newly retired route without opening or posting a report');await h.context.close();
+  }
+  {
+    const h=await session(0,false,'journey');await h.page.getByRole('checkbox',{name:'Operator',exact:true}).click();await h.page.getByLabel('Observed operator').fill('History independent bus');await h.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
+    await h.page.getByRole('button',{name:'My routes',exact:true}).click();await h.page.getByRole('button',{name:'Add details',exact:true}).first().click();await h.page.getByRole('button',{name:'Resume draft',exact:true}).click();
+    await h.page.getByText('Independent report',{exact:true}).waitFor();assert.equal(await h.page.getByText('Your submitted route',{exact:true}).count(),0);assert.equal(await h.page.getByLabel('Observed operator').inputValue(),'History independent bus');
+    await h.page.getByRole('button',{name:'Review journey',exact:true}).click();await h.page.getByRole('button',{name:'Save journey report',exact:true}).click();await h.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();assert.equal(h.posts(),1);assert.equal(h.requests()[0].entrySurface,'contribute_tab');assert.equal('intendedSubject' in h.requests()[0].target.newActualJourney,false);
+    results.push('existing independent draft wins over a history selection and saves without a silently added route target');await h.context.close();
+  }
+  {
+    const guest=await session(null,false,'home');await guest.page.getByRole('button',{name:'My routes',exact:true}).click();await guest.page.getByText('Sign in to see your submitted routes.',{exact:true}).waitFor();assert.equal(await guest.page.getByText('History browser bus · 08:30',{exact:true}).count(),0);assert.equal(guest.posts(),0);await guest.context.close();
+    const empty=await session(2,false,'home');await empty.page.getByRole('button',{name:'My routes',exact:true}).click();await empty.page.getByText('No submitted routes yet.',{exact:true}).waitFor();assert.equal(await empty.page.getByText('History browser bus · 08:30',{exact:true}).count(),0);assert.equal(empty.posts(),0);await empty.context.close();
+    results.push('guest history asks for sign-in and another authenticated account has an honest empty list without private route leakage');
+  }
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
+  for(const name of ['my-routes.png','own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));

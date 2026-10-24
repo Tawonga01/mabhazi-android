@@ -8,6 +8,7 @@ export interface RoutePrefill {
   destinationQuery: string;
 }
 export type CaptureRequest =
+  | { kind: 'history' }
   | { kind: 'route'; entrySurface: 'contribute_tab' | 'search_empty'; prefill?: RoutePrefill }
   | { kind: 'journey'; entrySurface: 'contribute_tab'; route?: never }
   | { kind: 'journey'; entrySurface: 'own_contribution'; route: OwnRouteContext };

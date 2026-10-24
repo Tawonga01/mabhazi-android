@@ -24,6 +24,7 @@ export function CaptureHome({ openFullForm }: { openFullForm(): void }) {
   return <CaptureFrame title="Contribute">
     <View style={s.group}><CaptureButton title={drafts.route ? 'Continue route draft' : 'Add a route'} disabled={entry.isOpen} onPress={() => entry.open({ kind: 'route', entrySurface: 'contribute_tab' })} /><Text style={s.note}>No price needed.</Text></View>
     <View style={s.group}><CaptureButton title={drafts.journey ? 'Continue journey draft' : 'Report a journey'} disabled={entry.isOpen} onPress={() => entry.open({ kind: 'journey', entrySurface: 'contribute_tab' })} /><Text style={s.note}>Share a time, fare, operator or stop.</Text></View>
+    <CaptureButton title="My routes" secondary disabled={entry.isOpen} onPress={() => entry.open({ kind: 'history' })} />
     <CaptureButton title="Full route form" secondary onPress={openFullForm} />
     <CaptureHelp label="About drafts"><Text style={s.note}>{draftNotice}</Text></CaptureHelp>
     {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}

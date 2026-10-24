@@ -3,13 +3,13 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { before, after, test } from 'node:test';
 import pg from 'pg';
-import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse } from '@workspace/api-zod';
+import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse, ListV2OwnRoutesResponse, GetV2OwnRouteResponse } from '@workspace/api-zod';
 import type { infer as Infer } from 'zod';
 import { registerActualApiTests } from './actualJourney.cases';
-type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse>;
+type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse> & Infer<typeof ListV2OwnRoutesResponse> & Infer<typeof GetV2OwnRouteResponse>;
 
 let admin: pg.Client, server: Server, base: string;
-const accounts = [randomUUID(), randomUUID(), randomUUID()], tokens = accounts.map(() => randomBytes(32).toString('hex'));
+const accounts = [randomUUID(), randomUUID(), randomUUID(), randomUUID()], tokens = accounts.map(() => randomBytes(32).toString('hex'));
 let cities: number[];
 before(async () => {
   process.env.PUBLIC_ORIGIN = 'https://api.mabhazi.com';
@@ -182,6 +182,49 @@ test('minimum API: restricted facade cannot expose optional facts or privileged 
     const invalid=body();(invalid.observations as unknown[]).push({fieldKey:'fare.quoted'});
     await assert.rejects(admin.query('SELECT v2_api_submit_minimum_lead($1,$2,$3)',[accounts[0],'2026-09-12',invalid]),e => (e as Error).message==='v2_minimum_capability_only');
   } finally { await admin.query('RESET ROLE'); }
+});
+
+test('own route history: authentication, account namespace and strict queries precede reads', async () => {
+  assert.equal((await request('/v2/my-routes',undefined,null)).status,401);
+  assert.equal((await request('/v2/my-routes',undefined,0,{'X-Mabhazi-Account':accounts[1]})).status,409);
+  assert.equal((await request('/v2/my-routes?owner='+accounts[1])).status,400);
+  for(const query of ['cursor=x','cursor[]=x','cursor=','cursor='+randomUUID()+'.'+randomUUID()]) assert.equal((await request('/v2/my-routes?'+query)).status,400);
+  assert.equal((await request('/v2/my-routes/not-a-uuid')).status,400);
+});
+test('own route history: private precision-safe keyset pages exclude concurrent newer submissions', async () => {
+  const keys:string[]=[];
+  for(let i=0;i<22;i++) {const input=body();input.target.newLead.operator.name='History bus '+i;const saved=await request('/v2/contributions',input,3);assert.equal(saved.status,200);keys.push(input.clientSubmissionId);}
+  const first=await request('/v2/my-routes',undefined,3);assert.equal(first.status,200);assert.equal(first.headers.get('cache-control'),'no-store');assert.equal(first.value.routes.length,20);assert.ok(first.value.nextCursor);
+  const originalCursor=first.value.nextCursor!;
+  const later=body();later.target.newLead.operator.name='History latest bus';assert.equal((await request('/v2/contributions',later,3)).status,200);
+  const last=await request('/v2/my-routes?cursor='+encodeURIComponent(originalCursor),undefined,3);assert.equal(last.status,200);assert.equal(last.value.routes.length,2);assert.equal(last.value.nextCursor,undefined);
+  const received=[...first.value.routes,...last.value.routes].map(row=>row.clientSubmissionId);assert.equal(new Set(received).size,22);assert.deepEqual(new Set(received),new Set(keys));assert.ok(!received.includes(later.clientSubmissionId));
+  assert.equal((await request('/v2/my-routes?cursor='+encodeURIComponent(originalCursor),undefined,0)).status,400);
+  assert.equal((await request('/v2/my-routes/'+keys[0],undefined,0)).status,404);
+  assert.equal((await request('/v2/my-routes',undefined,3)).value.routes[0].clientSubmissionId,later.clientSubmissionId);
+  const dto=first.value.routes[0];assert.deepEqual(Object.keys(dto).sort(),['availability','clientSubmissionId','currentLeadRevision','departureTime','destination','operator','origin','subjectId','submittedAt'].sort());assert.ok(!('payload' in dto));assert.equal(dto.origin.id,cities[0]);assert.equal(dto.departureTime,'00:00');assert.equal(dto.availability,'active');
+});
+test('own route history: recheck sees current revision and retirement, not historical receipt status', async () => {
+  const input=body(),saved=await request('/v2/contributions',input,3);assert.equal(saved.status,200);
+  const initial=(await request('/v2/receipts/'+input.clientSubmissionId,undefined,3)).value.initialReceipt;
+  const old=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;
+  await admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.value.subjectId]);
+  const current=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;assert.equal(current.currentLeadRevision,old.currentLeadRevision!+1);assert.equal(current.operator,input.target.newLead.operator.name);
+  delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
+  try {assert.equal((await request('/v2/my-routes',undefined,3)).status,200);assert.equal((await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).status,200);} finally {process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';}
+  await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.value.subjectId]);
+  const retired=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;assert.equal(retired.availability,'unavailable');assert.equal(retired.currentLeadRevision,undefined);
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,3)).value.initialReceipt,initial);
+  await admin.query('UPDATE v2_leads SET attribution_erased=true WHERE subject_id=$1',[saved.value.subjectId]);
+  assert.equal((await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).status,404);
+  assert.ok(!(await request('/v2/my-routes',undefined,3)).value.routes.some(row=>row.clientSubmissionId===input.clientSubmissionId));
+});
+test('own route history: deleting a contribution removes list/detail and invalidates its cursor without disclosure', async () => {
+  const page=(await request('/v2/my-routes',undefined,3)).value;assert.ok(page.nextCursor);
+  const anchor=page.routes[0];await admin.query('DELETE FROM v2_contributions WHERE id=(SELECT contribution_id FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2)',[accounts[3],anchor.clientSubmissionId]);
+  assert.equal((await request('/v2/my-routes/'+anchor.clientSubmissionId,undefined,3)).status,404);
+  assert.equal((await request('/v2/my-routes?cursor='+encodeURIComponent(page.nextCursor!),undefined,3)).status,400);
+  assert.equal((await request('/v2/my-routes/'+anchor.clientSubmissionId,undefined,1)).status,404);
 });
 
 registerActualApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
