@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import type pg from 'pg';
 import { GetV2SubjectResponse, SearchV2RoutesResponse } from '@workspace/api-zod';
@@ -69,7 +69,7 @@ export function registerPublicRouteTests(context:()=>Context){
   await context().admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.subjectId]);
   assert.equal(GetV2SubjectResponse.parse((await get('/subjects/'+saved.subjectId)).value).subject.revision,first.revision+1);
   await context().admin.query('DELETE FROM v2_contributions WHERE id=$1',[saved.contributionId]);assert.equal((await get('/subjects/'+saved.subjectId)).status,404);
-  const actor=randomUUID(),token=randomUUID(),account=context().accounts.length;
+  const actor=randomUUID(),token=randomBytes(32).toString('hex'),account=context().accounts.length;
   context().accounts.push(actor);context().tokens.push(token);
   await context().admin.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[actor]);
   await context().admin.query("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);
@@ -80,6 +80,7 @@ export function registerPublicRouteTests(context:()=>Context){
  test('public route read: reviewed reassignment hides the original lead without fabricating a service link',async()=>{
   const a=await create('Assignment bus'),b=await create('Assignment bus'),db=context().admin,o=await observation(a.subjectId),actor=context().accounts[1];
   const state=async(id:string)=>(await db.query('SELECT revision,kind FROM v2_subjects WHERE id=$1',[id])).rows[0];
+  await db.query('BEGIN');try{
   const sa=await state(a.subjectId),sb=await state(b.subjectId);
   const candidate=(await db.query(`INSERT INTO v2_association_candidates(from_subject_id,from_kind,to_subject_id,to_kind,relation,evidence_digest,reason_codes,rule_version,source_revision,target_revision)
    VALUES($1,'lead',$2,'lead','duplicate_of',$3,ARRAY['identity_fixture'],'association/1',$4,$5) RETURNING id`,[a.subjectId,b.subjectId,'b'.repeat(64),sa.revision,sb.revision])).rows[0].id;
@@ -97,16 +98,20 @@ export function registerPublicRouteTests(context:()=>Context){
   const os=(await db.query('SELECT revision FROM v2_observation_states WHERE observation_id=$1',[o.id])).rows[0];
   await db.query('SELECT v2_resolve_observation_target($1,$2,$3,$4,$5,$6)',[o.id,decision,target.revision,os.revision,(await state(a.subjectId)).revision,(await state(b.subjectId)).revision]);
   assert.ok((await db.query('SELECT assignment_id FROM v2_observation_targets WHERE observation_id=$1',[o.id])).rows[0].assignment_id);
+  await db.query('COMMIT');}catch(error){await db.query('ROLLBACK');throw error;}
   assert.equal((await get('/subjects/'+a.subjectId)).status,404);assert.equal(GetV2SubjectResponse.parse((await get('/subjects/'+b.subjectId)).value).subject.kind,'lead');
  });
  test('public route read: a withheld core decision prevents re-exposing its original value',async()=>{
   const saved=await create('Withheld public report'),db=context().admin,o=await observation(saved.subjectId),id=randomUUID();
   const state=(await db.query('SELECT revision,input_generation FROM v2_subjects WHERE id=$1',[saved.subjectId])).rows[0];
+  await db.query('BEGIN');try{
   await db.query("INSERT INTO v2_decision_ids(id,kind) VALUES($1,'field')",[id]);
   await db.query(`INSERT INTO v2_field_decisions(id,subject_id,field_key,scope_key,scope,revision,expected_subject_revision,input_generation,selected_value,support_status,dispute_status,freshness,publication,reason_codes,policy_version,input_digest)
    VALUES($1,$2,'departure.reported',$3,$4,1,$5,$6,$7,'reported','none','unknown','withheld',ARRAY['reported_evidence'],'evidence/1',$8)`,[id,saved.subjectId,o.scope_key,o.scope,state.revision,state.input_generation,o.value,'a'.repeat(64)]);
   await db.query("INSERT INTO v2_field_decision_evidence(field_decision_id,observation_id,disposition,reason_code) VALUES($1,$2,'supporting','reported_evidence')",[id,o.id]);
-  await db.query('SELECT v2_apply_field_decision($1)',[id]);assert.equal((await get('/subjects/'+saved.subjectId)).status,404);
+  await db.query('SELECT v2_apply_field_decision($1)',[id]);
+  await db.query('COMMIT');}catch(error){await db.query('ROLLBACK');throw error;}
+  assert.equal((await get('/subjects/'+saved.subjectId)).status,404);
  });
  test('public route read: stable bounded pages, strict query and hidden/deleted cursor rejection',async()=>{
   for(let i=0;i<23;i++)await create('Page public '+i,'10:00',false,3);
