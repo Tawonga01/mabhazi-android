@@ -6,7 +6,7 @@ import type { ActualDraft } from '../../mobile/lib/actual-journey-model';
 import type { DraftStorage, SecureDraftRecord } from '../../mobile/lib/secure-draft-store';
 import type { V2ActualJourneyRequest } from '@workspace/api-client-react';
 const require = createRequire(import.meta.url);
-const { emptyActualDraft, actualErrors, prepareActual, fareErrors, toggleActualFact, validActualDraft } = require('../../mobile/lib/actual-journey-model.ts') as typeof import('../../mobile/lib/actual-journey-model');
+const { emptyActualDraft, actualErrors, prepareActual, fareErrors, toggleActualFact, validActualDraft, resetActualDraft } = require('../../mobile/lib/actual-journey-model.ts') as typeof import('../../mobile/lib/actual-journey-model');
 const { ActualDraftStore } = require('../../mobile/lib/actual-draft-store.ts') as typeof import('../../mobile/lib/actual-draft-store');
 const { LeadDraftStore } = require('../../mobile/lib/lead-draft-store.ts') as typeof import('../../mobile/lib/lead-draft-store');
 const { recoverOrSubmit } = require('../../mobile/lib/minimum-lead-model.ts') as typeof import('../../mobile/lib/minimum-lead-model');
@@ -136,4 +136,11 @@ test('own-route draft: malformed selection, changed frozen target and foreign ow
   const {route:omitted,...independent}=draft;
   assert.equal(prepareActual(independent,randomUUID()).entrySurface,'own_contribution');
   assert.equal('intendedSubject' in prepareActual(independent,randomUUID()).target.newActualJourney,false);
+});
+
+test('another report: preserve the current target or explicit independent choice, never stale entry context or reported facts', () => {
+  const original={...operatorDraft(),entrySurface:'own_contribution' as const,route:routeContext()};
+  const next=resetActualDraft(original);assert.deepEqual(next.route,original.route);assert.deepEqual(next.facts,[]);assert.equal(next.operator,'');
+  const {route:omitted,...independent}=original, fresh=resetActualDraft(independent);
+  assert.equal(fresh.route,undefined);assert.equal(fresh.entrySurface,'own_contribution');assert.deepEqual(fresh.facts,[]);
 });

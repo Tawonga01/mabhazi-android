@@ -330,7 +330,10 @@ try {
     await s.page.getByRole('button',{name:'Review journey',exact:true}).click();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
     const independent=s.requests()[2];assert.notEqual(independent.clientSubmissionId,frozen);assert.equal('intendedSubject' in independent.target.newActualJourney,false);assert.equal(independent.entrySurface,'own_contribution');
     assert.equal((await admin.query('SELECT count(*) FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],frozen])).rows[0].count,'0');
-    results.push('stale target keeps frozen answers; independent fallback requires explicit choice and successful receipt lookup before a new key/review/save');
+    await s.page.getByRole('button',{name:'Report another journey',exact:true}).click();
+    await s.page.getByText('Independent report',{exact:true}).waitFor();
+    assert.equal(await s.page.getByRole('checkbox',{name:'Operator',exact:true}).getAttribute('aria-checked'),'false');
+    results.push('stale target keeps frozen answers; receipt-checked independent recovery and another report never restore the rejected target');
     await s.context.close();
   }
   {

@@ -19,6 +19,10 @@ export interface ActualDraft {
 }
 export const emptyFare = (): FareDraft => ({ amount: '', currency: '', basis: '', origin: null, destination: null, date: '', passenger: '', passengerLabel: '', ticket: '', ticketLabel: '' });
 export const emptyActualDraft = (): ActualDraft => ({ facts: [], departure: { time: '', date: '', zone: '' }, arrival: { time: '', date: '', zone: '' }, operator: '', operatorDate: '', place: { kind: '', city: null, name: '', instructions: '', date: '' }, fare: emptyFare(), serviceDate: '', timezone: '', knowledgeBasis: '' });
+/** Starting another report follows the current draft, never a superseded entry prop. */
+export function resetActualDraft(d: ActualDraft): ActualDraft {
+  return { ...emptyActualDraft(), ...(d.entrySurface ? { entrySurface: d.entrySurface } : {}), ...(d.route ? { route: d.route } : {}) };
+}
 export const knowledgeChoices = [['travelled', 'I travelled'], ['saw_operating', 'I saw the bus'], ['observed_sign', 'I saw a sign'], ['operator_statement', 'Operator told me'], ['heard_from_other', 'Someone told me'], ['unprovided', 'Not provided']] as const;
 export const fareCurrencies = ['USD', 'ZAR', 'ZWG', 'BWP', 'ZMW', 'MZN'] as const;
 export function validDate(value: string) {

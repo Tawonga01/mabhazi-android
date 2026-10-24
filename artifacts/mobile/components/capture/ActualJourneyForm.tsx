@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-nativ
 import { submitV2ActualJourney, type V2ActualJourneyRequest } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { actualDrafts } from '@/lib/lead-drafts';
-import { actualErrors, emptyActualDraft, toggleActualFact, knowledgeChoices, type ActualDraft, type ActualFact, type ClockDraft, type OwnRouteContext } from '@/lib/actual-journey-model';
+import { actualErrors, emptyActualDraft, resetActualDraft, toggleActualFact, knowledgeChoices, type ActualDraft, type ActualFact, type ClockDraft, type OwnRouteContext } from '@/lib/actual-journey-model';
 import { prepareActual } from '@/lib/actual-journey-model';
 import { useCapture, type CaptureOptions } from '@/lib/use-capture';
 import { CaptureButton, CaptureFrame, CaptureHelp, CaptureInput, CityField, CityPicker, Choices, Field, ReviewRow, captureStyles as s } from './CapturePrimitives';
@@ -37,7 +37,7 @@ function AccountJourney({ owner, onClose, route }: { owner: string | null; onClo
   }
   const reviewing = c.reviewing || !!c.pending;
   if (fareOpen && !c.locked) return <FocusedFareForm value={d.fare} change={value => update('fare', value)} done={() => setFareOpen(false)} close={() => setFareOpen(false)} skip={() => { c.change(toggleActualFact(d, 'fare')); setFareOpen(false); }} />;
-  const footer = c.receipt ? <><CaptureButton title="Report another journey" onPress={c.another} /><CaptureButton title="Done" secondary onPress={() => void c.close(onClose)} /></> : c.resume ? <>
+  const footer = c.receipt ? <><CaptureButton title="Report another journey" onPress={() => { const next = resetActualDraft(d); c.another(); c.change(next); }} /><CaptureButton title="Done" secondary onPress={() => void c.close(onClose)} /></> : c.resume ? <>
     <CaptureButton title="Resume draft" onPress={c.resumeDraft} disabled={c.busy} />{!c.resume.pending ? <CaptureButton title="Discard unsent draft" secondary onPress={() => void c.discard()} disabled={c.busy} /> : null}
   </> : c.ready ? <><CaptureButton title={reviewing ? c.authExpired ? 'Sign in to check saved receipt' : c.pending ? 'Check and retry' : owner ? 'Save journey report' : 'Sign in to save' : 'Review journey'} busy={c.busy} disabled={reviewing && !c.enabled && !c.pending} onPress={reviewing ? () => void c.submit() : review} />{reviewing && !c.pending ? <CaptureButton title="Edit answers" secondary disabled={c.busy} onPress={c.edit} /> : null}</> : null;
   return <>
