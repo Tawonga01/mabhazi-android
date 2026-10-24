@@ -130,7 +130,7 @@ try {
     await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor();
     assert.equal(s.posts(),2);
     const follow=s.requests()[1];assert.equal(follow.entrySurface,'own_contribution');assert.equal(follow.target.newActualJourney.intendedSubject.id,(await admin.query('SELECT initial_response FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2',[users[0],s.requests()[0].clientSubmissionId])).rows[0].initial_response.subjectId);
-    const actual=(await admin.query("SELECT intended_subject_id,matched_run_subject_id FROM v2_actual_journeys WHERE initial_contribution_id=(SELECT id FROM v2_contributions WHERE user_id=$1 AND payload->>'clientSubmissionId'=$2)",[users[0],follow.clientSubmissionId])).rows[0];
+    const actual=(await admin.query("SELECT intended_subject_id,matched_run_subject_id FROM v2_actual_journeys WHERE initial_contribution_id=(SELECT id FROM v2_contributions WHERE user_id=$1 AND client_submission_id=$2)",[users[0],follow.clientSubmissionId])).rows[0];
     assert.equal(actual.intended_subject_id,follow.target.newActualJourney.intendedSubject.id);assert.equal(actual.matched_run_subject_id,null);
     assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,'0');
     results.push('Saved offers optional owned-lead Fare follow-up before approval; city context only, secure close/resume and lost-response recovery preserve one intended report');
