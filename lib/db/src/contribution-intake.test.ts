@@ -312,7 +312,7 @@ before(async () => {
   await db.query(assessmentApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0031_assessment_worker.sql\n';
   assert.equal((await db.query("SELECT v2_read_field($1,'fare.quoted',v2_assessment_hash($2)) r",[currencyRepairSubject,currencyRepairScope])).rows[0].r.status,'recheck_required');
   assert.equal((await db.query('SELECT count(*) n FROM v2_observations WHERE original_subject_id=$1',[currencyRepairSubject])).rows[0].n,'2');
-  assert.equal((await db.query("SELECT count(*) n FROM v2_jobs j JOIN v2_subjects s ON s.id=j.subject_id WHERE s.id=$1 AND j.kind='assess' AND j.state='pending' AND j.requested_generation=s.input_generation",[currencyRepairSubject])).rows[0].n,'1');
+  assert.equal((await db.query("SELECT count(*) n FROM v2_jobs j JOIN v2_subjects s ON s.id=j.subject_id WHERE s.id=$1 AND j.kind='assess' AND j.policy_version='evidence/1' AND j.state='pending' AND j.requested_generation=s.input_generation",[currencyRepairSubject])).rows[0].n,'1');
   const assessmentFingerprint=(await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d;
   await db.query(assessmentApply);assert.equal((await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d,assessmentFingerprint);
   await db.query('BEGIN');await db.query("UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0031_assessment_worker.sql'");

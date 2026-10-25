@@ -105,7 +105,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  });
  test('assessment worker: withdrawal invalidates reads immediately and recomputes without the old fare',async()=>{
   const r=await fresh(),s=await scope();const o=await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s);await enqueue(r.subjectId);await finish(await claim());
-  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,o,randomUUID()]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await finish(await claim());const f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.value,null);assert.deepEqual(f.candidates,[]);
+  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,o,randomUUID()]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');assert.equal((await q('SELECT v2_worker_drain_assess(20) r')).rows[0].r.failedAttempts,0);const f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.value,null);assert.deepEqual(f.candidates,[]);
  });
  test('assessment worker: account erasure redacts copied results and fences the old lease',async()=>{
   const r=await fresh();await enqueue(r.subjectId);await finish(await claim());await enqueue(r.subjectId);const w=await claim();await q('SET LOCAL ROLE mabhazi_api');await q('DELETE FROM users WHERE id=$1',[context().user]);await q('RESET ROLE');
@@ -137,7 +137,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
   await enqueue(r.subjectId);await finish(await claim());let f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,2);
   const independent=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().other,d])).rows[0].id;await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,independent);
   await enqueue(r.subjectId);await finish(await claim());f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'corroborated');assert.equal(f.publication,'provisional');assert.equal(f.candidates[0].contributors,2);
-  await q('DELETE FROM v2_sources WHERE id=$1',[independent]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await finish(await claim());assert.equal((await read(r.subjectId,'fare.quoted',s)).support,'reported');
+  await q('DELETE FROM v2_sources WHERE id=$1',[independent]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');assert.equal((await q('SELECT v2_worker_drain_assess(20) r')).rows[0].r.failedAttempts,0);assert.equal((await read(r.subjectId,'fare.quoted',s)).support,'reported');
  });
  test('assessment worker: elapsed validity is refused on read and its overdue durable job recomputes',async()=>{
   const r=await fresh(),s=await scope({quotationDate:'2020-01-01'});await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign','2020-01-01');
