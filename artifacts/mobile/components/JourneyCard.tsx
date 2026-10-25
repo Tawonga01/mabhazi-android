@@ -80,7 +80,7 @@ function Stars({
               onPress={() => { setHover(0); onSelect(score); }}
               onPressIn={() => setHover(score)}
               onPressOut={() => setHover(0)}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               activeOpacity={0.7}
             >
               <Ionicons

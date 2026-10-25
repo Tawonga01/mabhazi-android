@@ -769,7 +769,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
               </>
             ) : (
               <>
-                <Feather name={isAuthenticated ? "send" : "log-in"} size={18} color="#FFFFFF" />
+                <Feather name={isAuthenticated ? "send" : "log-in"} size={18} color={colors.accentForeground} />
                 <Text style={styles.submitBtnText}>
                   {isAuthenticated ? "Submit Route" : "Sign in & Submit"}
                 </Text>

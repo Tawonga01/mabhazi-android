@@ -19,6 +19,18 @@ type IconProps = {
 
 function IconShape({ name, filled }: { name: string; filled?: boolean }) {
   switch (name) {
+    case "arrow-left":
+      return <><Line x1="19" y1="12" x2="5" y2="12" /><Polyline points="10 7 5 12 10 17" /></>;
+    case "mail":
+      return <><Rect x="3" y="5" width="18" height="14" rx="2" /><Polyline points="3 6 12 13 21 6" /></>;
+    case "alert-triangle":
+      return <><Path d="M10.3 3.8 2.2 18a2 2 0 0 0 1.7 3h16.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z" /><Line x1="12" y1="9" x2="12" y2="13" /><Circle cx="12" cy="17" r=".6" fill="currentColor" /></>;
+    case "rotate-ccw":
+      return <><Polyline points="3 4 3 10 9 10" /><Path d="M3.4 10A9 9 0 1 1 4 17" /></>;
+    case "trash-2":
+      return <><Path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15" /><Line x1="10" y1="10" x2="10" y2="17" /><Line x1="14" y1="10" x2="14" y2="17" /></>;
+    case "user-x":
+      return <><Circle cx="9" cy="7" r="4" /><Path d="M2 21v-2a7 7 0 0 1 12-5" /><Line x1="17" y1="15" x2="23" y2="21" /><Line x1="23" y1="15" x2="17" y2="21" /></>;
     case "search":
       return <><Circle cx="11" cy="11" r="7" /><Line x1="16.5" y1="16.5" x2="21" y2="21" /></>;
     case "clock":

@@ -19,6 +19,22 @@ fs.mkdirSync(output, { recursive: true });
 const results = [], consoleErrors = [];
 const users = [randomUUID(), randomUUID(), randomUUID()], tokens = users.map(() => randomBytes(32).toString('hex'));
 let cities;
+// Screenshots must represent the settled UI, not the first frame of a modal
+// fade/slide. Geometry/opacity stability also covers RN's JavaScript animation.
+async function takeShot(page,name){
+  await page.evaluate(async()=>{
+    await document.fonts.ready;
+    const limit=performance.now()+2500;let previous='',stableSince=performance.now();
+    while(performance.now()<limit){
+      const signature=JSON.stringify([...document.querySelectorAll('[role="heading"],[role="button"],[tabindex],input')].map(el=>{const r=el.getBoundingClientRect();return [Math.round(r.x*10),Math.round(r.y*10),Math.round(r.width*10),Math.round(r.height*10),getComputedStyle(el).opacity];}));
+      if(signature!==previous){previous=signature;stableSince=performance.now();}
+      else if(performance.now()-stableSince>180)break;
+      await new Promise(requestAnimationFrame);
+    }
+  });
+  await page.screenshot({path:path.join(output,name),fullPage:true});
+}
+
 try {
   await admin.connect();
   for (let i = 0; i < users.length; i++) {
@@ -64,7 +80,7 @@ try {
     if (surfaces[mode]) return {context,page,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
     if (!results.length) {
-      await page.screenshot({path:path.join(output,'contribution-menu.png'),fullPage:true});
+      await takeShot(page,'contribution-menu.png');
       const help=page.getByRole('button',{name:'About drafts',exact:true});
       assert.equal(await help.getAttribute('aria-expanded'),'false');
       await help.click();await page.getByText('Drafts stay in this browser session only.',{exact:false}).waitFor();
@@ -91,7 +107,7 @@ try {
     const s = await session();
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     const saveBox=await s.page.getByRole('button',{name:'Review route',exact:true}).boundingBox();
-    await s.page.screenshot({path:path.join(output,'minimum-form.png'),fullPage:true});
+    await takeShot(s.page,'minimum-form.png');
     assert.ok(saveBox && saveBox.y>=0&&saveBox.y+saveBox.height<=832,`Review should fit inside the modal safe footer: ${JSON.stringify(saveBox)}`);
     await s.fill();
     await s.page.getByRole('button',{name:'Review route',exact:true}).click();
@@ -100,7 +116,7 @@ try {
     assert.equal(s.posts(),1);
     const row=(await admin.query('SELECT payload FROM v2_contributions WHERE user_id=$1',[users[0]])).rows[0];
     assert.equal(row.payload.target.newLead.originCityId,cities[0]);assert.equal(row.payload.target.newLead.destinationCityId,cities[1]);assert.equal('price' in row.payload.target.newLead,false);
-    await s.page.screenshot({path:path.join(output,'saved-result.png'),fullPage:true});
+    await takeShot(s.page,'saved-result.png');
     const receiptHelp=s.page.getByRole('button',{name:'View receipt',exact:true});
     assert.equal(await receiptHelp.getAttribute('aria-expanded'),'false');
     await receiptHelp.click();await s.page.getByText('Received and awaiting processing.',{exact:true}).waitFor();
@@ -123,7 +139,7 @@ try {
     await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();
     await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
     await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
-    await s.page.screenshot({path:path.join(output,'own-route-followup.png'),fullPage:true});
+    await takeShot(s.page,'own-route-followup.png');
     s.loseNext();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
     await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
     await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
@@ -146,7 +162,7 @@ try {
     await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
     assert.equal(await s.page.getByRole('button',{name:'Edit answers',exact:true}).count(),0);
     assert.equal(await s.page.getByLabel('Bus operator name').count(),0);
-    await s.page.screenshot({path:path.join(output,'retry-result.png'),fullPage:true});
+    await takeShot(s.page,'retry-result.png');
     await s.page.getByRole('button',{name:'Check and retry',exact:true}).click();
     await s.page.getByRole('heading',{name:'Contribution saved',exact:true}).waitFor();
     assert.equal(s.posts(),1);assert.equal(Number((await admin.query('SELECT count(*) FROM v2_contributions WHERE user_id=$1',[users[0]])).rows[0].count),Number(before)+1);
@@ -160,7 +176,7 @@ try {
     await s.page.getByText('Accept the current Terms, then tap Save.',{exact:false}).waitFor();
     assert.equal(s.posts(),0);await s.page.getByRole('button',{name:'Edit answers',exact:true}).click();
     assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'Browser fixture bus');
-    await s.page.screenshot({path:path.join(output,'terms-preserved.png'),fullPage:true});
+    await takeShot(s.page,'terms-preserved.png');
     results.push('Terms gate retains all entered answers without automatic submission');
     await s.context.close();
   }
@@ -187,7 +203,7 @@ try {
     await s.page.getByRole('checkbox',{name:'Operator',exact:true}).click();
     await s.page.getByLabel('Observed operator',{exact:true}).fill('Journey fixture bus');
     await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
-    await s.page.screenshot({path:path.join(output,'journey-review.png'),fullPage:true});
+    await takeShot(s.page,'journey-review.png');
     await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
     await s.page.getByRole('heading',{name:'Journey report saved',exact:true}).waitFor(); assert.equal(s.posts(),1);
     const payloads=(await admin.query("SELECT payload FROM v2_contributions WHERE user_id=$1 AND payload->'target' ? 'newActualJourney'",[users[0]])).rows;
@@ -216,7 +232,9 @@ try {
     await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();
     await s.page.getByText('Enter a valid date as YYYY-MM-DD. A paid fare needs its travel date.',{exact:true}).waitFor();assert.equal(s.posts(),0);
     await s.page.getByLabel('Fare date',{exact:true}).fill('2026-10-22');
-    await s.page.screenshot({path:path.join(output,'focused-fare.png'),fullPage:true});
+    await takeShot(s.page,'focused-fare-conditions.png');
+    await s.page.getByLabel('Fare amount',{exact:true}).scrollIntoViewIfNeeded();
+    await takeShot(s.page,'focused-fare.png');
     await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();
     await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
     await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
@@ -242,7 +260,7 @@ try {
     await s.page.getByLabel('Fare amount',{exact:true}).fill('12');
     await s.page.getByRole('button',{name:'Skip fare',exact:true}).click();
     await s.page.getByRole('checkbox',{name:'Fare',exact:true}).click();assert.equal(await s.page.getByLabel('Fare amount',{exact:true}).inputValue(),'');
-    await s.page.screenshot({path:path.join(output,'focused-fare-compact.png'),fullPage:true});
+    await takeShot(s.page,'focused-fare-compact.png');
     assert.equal(s.posts(),0);results.push('compact390x450 fare keeps close/primary/skip visible and removing a fact clears hidden answers');await s.context.close();
   }
 
@@ -263,7 +281,7 @@ try {
     const s=await session(0,true,'search');
     await emptySearch(s.page);
     assert.equal(await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).count(),0);
-    await s.page.screenshot({path:path.join(output,'empty-search.png'),fullPage:true});
+    await takeShot(s.page,'empty-search.png');
     await s.page.getByRole('button',{name:'Add a route',exact:true}).click();
     await s.page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();
     await s.page.getByRole('button',{name:'Choose departure city',exact:true}).getByText('Empty Origin fixture',{exact:true}).waitFor();
@@ -272,7 +290,7 @@ try {
     assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'');
     // Wait for finite dialog transitions so the proof is the settled UI, not a fade frame.
     await s.page.evaluate(async () => { await Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined))); });
-    await s.page.screenshot({path:path.join(output,'empty-search-form.png'),fullPage:true});
+    await takeShot(s.page,'empty-search-form.png');
     await s.page.getByLabel('Departure time in 24-hour format').fill('09:45');
     await s.page.getByLabel('Bus operator name').fill('Empty search fixture bus');
     await s.page.getByRole('button',{name:'Close form and keep draft',exact:true}).click();
@@ -310,7 +328,7 @@ try {
     await s.page.getByText('Search for a route',{exact:true}).waitFor();await s.page.getByText('Search Routes',{exact:true}).click();
     await s.page.getByText('Search could not load',{exact:true}).waitFor({timeout:20000});
     assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
-    await s.page.screenshot({path:path.join(output,'search-error.png'),fullPage:true});
+    await takeShot(s.page,'search-error.png');
     fail=false;await s.page.getByRole('button',{name:'Try search again',exact:true}).click();
     await s.page.getByText('Route report',{exact:true}).first().waitFor();
     assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
@@ -367,23 +385,24 @@ try {
   {
     const s=await session(null,false,'search');
     await s.page.getByText('Search for a route',{exact:true}).waitFor();
-    await s.page.screenshot({path:path.join(output,'search-home.png'),fullPage:true});
+    await takeShot(s.page,'search-home.png');
     await s.page.setViewportSize({width:320,height:568});
     await s.page.evaluate(()=>{for(const el of document.querySelectorAll('div[dir="auto"],input')){const computed=getComputedStyle(el);if(computed.fontSize){el.dataset.originalUiFont=el.style.fontSize;el.style.fontSize=(parseFloat(computed.fontSize)*1.4)+'px';}}});
     await s.page.getByText('Search Routes',{exact:true}).scrollIntoViewIfNeeded();
     const searchBounds=await s.page.getByText('Search Routes',{exact:true}).boundingBox();assert(searchBounds&&searchBounds.y>=0&&searchBounds.y+searchBounds.height<568,'Search action remains reachable with larger text');
     assert.equal(await s.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No horizontal page overflow on narrow Search');
-    await s.page.screenshot({path:path.join(output,'search-small-large-text.png'),fullPage:true});
+    await takeShot(s.page,'search-small-large-text.png');
     await s.page.evaluate(()=>{for(const el of document.querySelectorAll('[data-original-ui-font]')){el.style.fontSize=el.dataset.originalUiFont;delete el.dataset.originalUiFont;}});
     await s.page.setViewportSize({width:390,height:844});
     await s.page.getByText('Search Routes',{exact:true}).click();
     const card=s.page.getByRole('button',{name:'View route: Harare to Bulawayo, UI fixture bus',exact:true});await card.waitFor();
-    await s.page.screenshot({path:path.join(output,'search-results.png'),fullPage:true});
+    await takeShot(s.page,'search-results.png');
     await card.click();await s.page.getByText('Route confidence',{exact:true}).waitFor();
     await s.page.getByText('Manage blocked contributors',{exact:true}).waitFor();
-    await s.page.screenshot({path:path.join(output,'route-details.png'),fullPage:true});
+    await takeShot(s.page,'route-details.png');
     await s.page.getByText('Manage blocked contributors',{exact:true}).click();
     await s.page.getByText('Routes and comments are hidden on this device. Unblock anytime.',{exact:true}).waitFor();
+    await takeShot(s.page,'device-block-manager.png');
     assert.equal(s.posts(),0);results.push('guest search/results opens real route details and local block manager with retained safety controls');await s.context.close();
   }
 
@@ -402,15 +421,17 @@ try {
   {
     const s=await session(0,false,'profile');
     await s.page.getByRole('button',{name:'Edit display name',exact:true}).waitFor();
-    await s.page.screenshot({path:path.join(output,'profile.png'),fullPage:true});
+    await takeShot(s.page,'profile.png');
     await s.page.getByRole('button',{name:'Edit display name',exact:true}).click();
     await s.page.getByLabel('Display name',{exact:true}).fill('Unsaved UI name');
+    await takeShot(s.page,'profile-edit.png');
     await s.page.getByText('You can change your name once every 30 days.',{exact:true}).waitFor();
     await s.page.getByText('Cancel',{exact:true}).click();
     await s.page.getByText('Delete my account',{exact:true}).click();
     await s.page.getByText('Type DELETE MY ACCOUNT to confirm',{exact:true}).waitFor();
     await s.page.getByText('This permanently deletes your Mabhazi account,',{exact:false}).waitFor();
     assert.equal(await s.page.getByText('Delete permanently',{exact:true}).isVisible(),true);
+    await takeShot(s.page,'profile-delete-confirmation.png');
     await s.page.getByText('Cancel',{exact:true}).click();assert.equal(s.posts(),0);
     assert.equal((await admin.query('SELECT count(*) FROM users WHERE id=$1',[users[0]])).rows[0].count,'1');
     results.push('signed-in profile retains name edit/cancel, limit guidance and deletion warning/confirmation; no deletion performed');await s.context.close();
@@ -421,13 +442,13 @@ try {
     await s.page.getByText('Sign in to contribute.',{exact:true}).waitFor();
     await s.page.getByText('Manage blocked contributors',{exact:true}).waitFor();
     await s.page.getByText('Privacy',{exact:true}).waitFor();await s.page.getByText('Terms',{exact:true}).waitFor();
-    await s.page.screenshot({path:path.join(output,'guest-profile.png'),fullPage:true});
+    await takeShot(s.page,'guest-profile.png');
     assert.equal(s.posts(),0);results.push('guest profile keeps sign-in, safety and legal/help links without the repeated feature list');await s.context.close();
   }
   {
     const s=await session(null,false,'departures');
     await s.page.getByText('UI fixture bus',{exact:true}).waitFor();
-    await s.page.screenshot({path:path.join(output,'departures.png'),fullPage:true});
+    await takeShot(s.page,'departures.png');
     assert.equal(s.posts(),0);results.push('departures renders operator and schedule data after copy cleanup');await s.context.close();
   }
   {
@@ -437,7 +458,7 @@ try {
     const monday=s.page.getByRole('checkbox',{name:'Operating day Mon',exact:true});
     assert.equal(await monday.getAttribute('aria-checked'),'false');await monday.click();assert.equal(await monday.getAttribute('aria-checked'),'true');
     await s.page.getByText('Add a stop',{exact:true}).click();
-    await s.page.screenshot({path:path.join(output,'full-route-form.png'),fullPage:true});
+    await takeShot(s.page,'full-route-form.png');
     assert.equal(s.posts(),0);results.push('legacy full form retains explicit operating-day selection and optional stop entry without submitting');await s.context.close();
   }
   // Server-backed own history survives leaving Saved and a fresh browser session.
@@ -451,7 +472,7 @@ try {
     const card=h.page.getByText('History browser bus · 08:30',{exact:true}).locator('..');await card.getByRole('button',{name:'Add details',exact:true}).waitFor();
     assert.equal(await h.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);
     await h.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
-    await h.page.screenshot({path:path.join(output,'my-routes.png'),fullPage:true});
+    await takeShot(h.page,'my-routes.png');
     await card.getByRole('button',{name:'Add details',exact:true}).click();await h.page.getByText('Your submitted route',{exact:true}).waitFor();
     await h.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
     await h.page.getByRole('button',{name:'Choose fare departure city',exact:true}).getByText('Flow Origin fixture',{exact:true}).waitFor();
@@ -493,7 +514,7 @@ try {
   async function seedPublic(name,time){const response=await fetch('http://127.0.0.1:5000/api/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':users[0]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:publicCities[0],destinationCityId:publicCities[1],departureTime:time,operator:{name}}},observations:[]})});assert.equal(response.status,200);return await response.json();}
   const publicA=await seedPublic('Public popup A','08:30'),publicB=await seedPublic('Public popup B','14:00'),publicC=await seedPublic('Road Wolf','07:00');
   async function publicSearch(s){await s.page.getByText('Search for a route',{exact:true}).waitFor();for(const[label,name]of[['From city','Bulawayo'],['To city','Gweru']]){await s.page.getByText(label,{exact:true}).click();await s.page.getByPlaceholder('Type a city name…',{exact:true}).fill(name);await s.page.getByText(name,{exact:true}).click();}await s.page.getByText('Search Routes',{exact:true}).click();}
-  async function publicShot(s,name){await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});await s.page.screenshot({path:path.join(output,name),fullPage:true});}
+  async function publicShot(s,name){await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});await takeShot(s.page,name);}
   async function openPublic(s,name='Public popup A',time='08:30'){await s.page.getByRole('button',{name:'Open route report '+name+' '+time,exact:true}).click();await s.page.getByRole('heading',{name:'Route report',exact:true}).waitFor();await s.page.getByRole('heading',{name:'Route report',exact:true}).locator('..').locator('..').getByText(name,{exact:true}).waitFor();}
   {
    const s=await session(1,true,'search');await publicSearch(s);await s.page.getByRole('button',{name:'Open route report Public popup B 14:00',exact:true}).waitFor();await publicShot(s,'public-search.png');await openPublic(s);await s.page.getByRole('heading',{name:'Route report',exact:true}).locator('..').locator('..').getByText('Days not confirmed',{exact:true}).waitFor();assert.equal(s.posts(),0);await publicShot(s,'public-route-detail.png');
@@ -550,6 +571,20 @@ try {
    const pending=await session(null,false,'search');await publicSearch(pending);await openPublic(pending,'Road Wolf','07:00');await pending.page.getByText('Some reports are still being checked.',{exact:true}).waitFor();assert.equal(await pending.page.getByText('USD 42',{exact:true}).count(),0);assert.equal(await pending.page.getByText('No fare reports yet.',{exact:true}).count(),0);await publicShot(pending,'dated-fare-pending.png');results.push('own fare has no self-block action; changed evidence withholds cached amounts and shows checking rather than a false empty result');await pending.context.close();
   }
 
+  // Owned public web pages: actual local backend HTML with the same real
+  // CSS, without signing in, sending mail or changing administrative records.
+  {
+    const context=await browser.newContext({viewport:{width:390,height:844}});
+    await context.route('**/*',route=>new URL(route.request().url()).origin==='http://127.0.0.1:5000'?route.continue():route.abort());
+    const page=await context.newPage();page.on('pageerror',e=>consoleErrors.push(e.message));
+    for(const [url,name] of [['/','website'],['/api/privacy','web-privacy'],['/api/terms','web-terms'],['/api/support','web-support'],['/api/delete-account','web-delete-account'],['/api/admin','admin-sign-in']]){
+      await page.goto('http://127.0.0.1:5000'+url);await page.getByRole('heading',{level:1}).waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No horizontal overflow on '+name);
+      await takeShot(page,name+'.png');
+    }
+    await context.close();results.push('owned website, privacy, Terms, support, account deletion and admin sign-in render at phone width without external requests or mutations');
+  }
+  for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));

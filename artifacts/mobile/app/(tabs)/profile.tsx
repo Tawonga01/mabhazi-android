@@ -631,27 +631,6 @@ export default function ProfileScreen() {
             {/* ── Pending route association proposals ── */}
             <ProposalInbox colors={colors} />
 
-            <TouchableOpacity
-              style={[styles.logoutBtn, { borderColor: colors.destructive }]}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Feather name="log-out" size={18} color={colors.destructive} />
-              <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: ui.type.semibold }]}>
-                Log out
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.deleteBtn, { borderColor: colors.destructive }]}
-              onPress={openDeleteModal}
-              activeOpacity={0.8}
-            >
-              <Feather name="trash-2" size={17} color={colors.destructive} />
-              <Text style={[styles.deleteText, { color: colors.destructive, fontFamily: ui.type.semibold }]}>
-                Delete my account
-              </Text>
-            </TouchableOpacity>
           </>
         ) : (
           <View style={styles.guestContainer}>
@@ -665,7 +644,7 @@ export default function ProfileScreen() {
               Sign in to contribute.
             </Text>
             <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: isLoggingIn ? colors.mutedForeground : colors.primary }]}
+              style={[styles.loginBtn, { backgroundColor: isLoggingIn ? colors.muted : colors.accent }]}
               onPress={handleLogin}
               activeOpacity={0.85}
               disabled={isLoggingIn || !!configurationError}
@@ -705,6 +684,28 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
         <LegalLinks colors={colors} />
+        {isAuthenticated && user ? <View style={{gap:8}}>            <TouchableOpacity
+              style={[styles.logoutBtn, { borderColor: colors.border, borderWidth: 0 }]}
+              onPress={handleLogout}
+              activeOpacity={0.8}
+            >
+              <Feather name="log-out" size={18} color={colors.primary} />
+              <Text style={[styles.logoutText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
+                Log out
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.deleteBtn, { borderColor: colors.border, borderWidth: 0 }]}
+              onPress={openDeleteModal}
+              activeOpacity={0.8}
+            >
+              <Feather name="trash-2" size={17} color={colors.destructive} />
+              <Text style={[styles.deleteText, { color: colors.destructive, fontFamily: ui.type.semibold }]}>
+                Delete my account
+              </Text>
+            </TouchableOpacity>
+</View> : null}
       </ScrollView>
 
       <BlockedContributorsManager
@@ -719,7 +720,7 @@ export default function ProfileScreen() {
         onRequestClose={closeDeleteModal}
       >
         <View style={styles.deleteBackdrop}>
-          <View style={[styles.deleteModal, { backgroundColor: colors.card }]}>
+          <ScrollView style={[styles.deleteModal, { backgroundColor: colors.card, maxHeight: "100%", flexGrow: 0, padding: 0 }]} contentContainerStyle={{padding:24,gap:12}} keyboardShouldPersistTaps="handled">
             {deleteState === "success" ? (
               <>
                 <View style={[styles.deleteIcon, { backgroundColor: "#DCFCE7" }]}>
@@ -815,7 +816,7 @@ export default function ProfileScreen() {
                 </View>
               </>
             )}
-          </View>
+</ScrollView>
         </View>
       </Modal>
     </View>
@@ -1082,5 +1083,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
-  confirmBtnText: { color: ui.color.ink, fontSize: 14 },
+  confirmBtnText: { color: "#FFFFFF", fontSize: 14 },
 });

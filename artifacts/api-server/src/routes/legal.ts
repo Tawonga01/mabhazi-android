@@ -40,31 +40,28 @@ const termsAcceptanceSchema = z.object({
 
 const pageStyles = `
   :root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  body { margin: 0; background: #f0f4f8; color: #0f1629; line-height: 1.6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #F4F6F9; color: #172D46; font-size: 16px; line-height: 1.6; }
   main { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; }
-  header { background: #1e3a5f; color: #fff; padding: 28px 20px; }
+  header { background: #102744; color: #fff; padding: 28px 20px; }
   header > div { max-width: 760px; margin: 0 auto; }
-  h1 { margin: 0; font-size: 28px; line-height: 1.2; }
-  h2 { color: #1e3a5f; font-size: 20px; margin: 28px 0 8px; }
-  h3 { color: #1e3a5f; font-size: 16px; margin: 20px 0 4px; }
-  p, li { font-size: 15px; }
-  a { color: #1e3a5f; font-weight: 600; }
-  nav { max-width: 760px; margin: 0 auto; padding: 14px 20px 0; }
-  nav a { margin-right: 14px; font-size: 14px; }
-  .card { background: #fff; border: 1px solid #d1d9e6; border-radius: 14px; padding: 20px; margin-top: 20px; }
+  h1 { margin: 0; font-size: 28px; line-height: 1.2; letter-spacing: -.025em; }
+  h2 { color: #102744; font-size: 21px; line-height: 1.35; margin: 28px 0 12px; }
+  h3 { color: #102744; font-size: 17px; margin: 20px 0 8px; }
+  p, li { font-size: 16px; }
+  a { color: #102744; font-weight: 600; text-underline-offset: 3px; }
+  nav { max-width: 760px; margin: 0 auto; padding: 12px 20px 0; display: flex; flex-wrap: wrap; gap: 4px 20px; }
+  nav a { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; }
+  .card { background: #fff; border: 1px solid #D7E0E9; border-radius: 16px; padding: 20px; margin-top: 20px; }
   .warning { border-color: #fca5a5; background: #fff7f7; }
   .success { border-color: #86efac; background: #f0fdf4; }
-  .muted { color: #64748b; font-size: 13px; }
-  label { display: block; font-weight: 600; margin: 16px 0 6px; }
-  input[type=text] { box-sizing: border-box; width: 100%; border: 1px solid #aebdce; border-radius: 8px; padding: 12px; font: inherit; }
-  button { border: 0; border-radius: 8px; padding: 12px 18px; background: #ef4444; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-  footer { color: #64748b; font-size: 13px; margin-top: 36px; }
-
-body{background:#F4F6F9;color:#172D46;font:16px/1.6 system-ui,sans-serif}
-main{max-width:760px}h1{line-height:1.18;letter-spacing:-.025em}h2{font-size:21px;line-height:1.35}
-a,button{min-height:44px}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #A65315;outline-offset:3px}
-input,textarea,select,button{font:inherit}button{border-radius:12px}
-@media(max-width:480px){body{padding:20px 16px}main{padding:20px}h1{font-size:28px}}
+  .muted { color: #617186; font-size: 14px; }
+  label { display: block; font-weight: 600; margin: 16px 0 8px; }
+  input[type=text] { width: 100%; min-height: 50px; border: 1px solid #D7E0E9; border-radius: 12px; padding: 12px; font: inherit; }
+  button { border: 0; border-radius: 12px; min-height: 48px; padding: 12px 18px; background: #B4233B; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  footer { color: #617186; font-size: 14px; margin-top: 36px; }
+  a:focus-visible,button:focus-visible,input:focus-visible { outline: 3px solid #A65315; outline-offset: 3px; }
+  @media(max-width:480px) { main { padding: 24px 20px 48px; } }
 `;
 
 function escapeHtml(value: string): string {
