@@ -332,4 +332,6 @@ INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,t
  SELECT 'refresh_tasks',s.id,s.input_generation,'prompts/1',s.id FROM public.v2_subjects s
  WHERE s.lifecycle='active' AND (EXISTS(SELECT 1 FROM public.v2_current_assessments c WHERE c.subject_id=s.id)
   OR EXISTS(SELECT 1 FROM public.v2_question_tasks t WHERE t.subject_id=s.id))
+ AND NOT EXISTS(SELECT 1 FROM public.v2_jobs j WHERE j.subject_id=s.id AND j.kind='refresh_tasks'
+  AND j.policy_version='prompts/1' AND j.requested_generation=s.input_generation AND j.state IN('pending','leased','failed'))
  ON CONFLICT DO NOTHING;

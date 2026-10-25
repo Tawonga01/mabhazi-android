@@ -338,6 +338,25 @@ before(async () => {
     ['GRANT INSERT ON v2_public_fare_refs TO mabhazi_api','fare_relation_fence_changed'],
     ['ALTER TABLE v2_public_fare_refs DROP CONSTRAINT v2_public_fare_refs_observation_id_fkey','fare_foreign_key_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
+  // Exact hosted0033 upgrade, replay and drift fences; original evidence stays intact.
+  const taskApply=await readFile(new URL('../scripts/preview-apply-0033.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_worker_claim_tasks() RETURNS uuid LANGUAGE sql AS 'SELECT NULL::uuid'");
+  await assert.rejects(()=>db.query(taskApply),(e:unknown)=>e instanceof Error&&e.message.includes('prompt_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const originalTaskEvidence=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows;
+  const preservedTaskFailureId=randomUUID();
+  await db.query("INSERT INTO v2_jobs(id,kind,subject_id,requested_generation,policy_version,trigger_id,state,attempt,last_error_code) SELECT $1,'refresh_tasks',id,input_generation,'prompts/1',gen_random_uuid(),'failed',8,'processing_error' FROM v2_subjects WHERE id=$2",[preservedTaskFailureId,currencyRepairSubject]);
+  const failureBudgetBefore=(await db.query("SELECT * FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks' AND policy_version='prompts/1' ORDER BY id",[currencyRepairSubject])).rows;
+  await db.query(taskApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0033_prompt_refresh_worker.sql\n';
+  await db.query(taskApply);assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,originalTaskEvidence);
+  assert.deepEqual((await db.query("SELECT * FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks' AND policy_version='prompts/1' ORDER BY id",[currencyRepairSubject])).rows,failureBudgetBefore);
+  await db.query('DELETE FROM v2_jobs WHERE id=$1',[preservedTaskFailureId]);
+  for(const [change,expected]of[
+    ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0033_prompt_refresh_worker.sql'",'prompt_preview_hash_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_worker_drain_tasks(integer) TO PUBLIC','prompt_function_fence_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_prompt_erase_worker_cursor() TO mabhazi_api','prompt_function_fence_changed'],
+    ['ALTER TABLE v2_subjects DISABLE TRIGGER v2_worker_tasks_input_changed','prompt_worker_trigger_changed'],
+    ['ALTER TABLE v2_observations DISABLE TRIGGER ab_v2_prompt_worker_cursor_erasure','prompt_worker_trigger_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(taskApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);

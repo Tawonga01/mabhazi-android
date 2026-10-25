@@ -37,26 +37,29 @@ export function registerPromptWorkerTests(context:()=>Context){
  test('task worker: real intake pipeline generates questions without inventing facts or invitations',async()=>{
   const r=await fresh();await q("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE subject_id<>$1 AND state='pending'",[r.subjectId]);
   await q('SELECT v2_worker_drain_normalise(20)');await q('SELECT v2_worker_drain_associate(20)');await q('SELECT v2_worker_drain_assess(20)');
-  const before=(await q('SELECT count(*) n FROM v2_observations')).rows[0].n;
+  const untouched=['v2_observations','v2_prompt_invitations','v2_runs'];
+  const before=await Promise.all(untouched.map(async t=>(await q(`SELECT count(*) n FROM ${t}`)).rows[0].n));
   const tick=(await q('SELECT v2_worker_drain_tasks(20) r')).rows[0].r;assert.ok(tick.done>=1);assert.equal(tick.failedAttempts,0);
   assert.deepEqual((await active(r.subjectId)).map(x=>x.registry_key),['clarify_time_basis','complete_pattern','identify_service','operating_days','pickup_place']);
-  assert.equal((await q('SELECT count(*) n FROM v2_observations')).rows[0].n,before);assert.equal((await q('SELECT count(*) n FROM v2_prompt_invitations')).rows[0].n,'0');
-  assert.equal((await q('SELECT count(*) n FROM v2_runs')).rows[0].n,'0');
+  assert.deepEqual(await Promise.all(untouched.map(async t=>(await q(`SELECT count(*) n FROM ${t}`)).rows[0].n)),before);
  });
  test('task worker: no fare context, travel, preference, email or default fare is invented',async()=>{
-  const r=await fresh();await run(r.subjectId);assert.ok((await active(r.subjectId)).length>0);
+  const r=await fresh(),tables=['v2_prompt_preferences','v2_prompt_sessions','v2_prompt_requests','v2_prompt_events'];
+  const before=await Promise.all(tables.map(async t=>(await q(`SELECT count(*) n FROM ${t}`)).rows[0].n));
+  await run(r.subjectId);assert.ok((await active(r.subjectId)).length>0);
   assert.ok(!(await tasks(r.subjectId)).some(x=>x.field_key.startsWith('fare.')));
-  for(const table of ['v2_prompt_preferences','v2_prompt_sessions','v2_prompt_requests','v2_prompt_events'])assert.equal((await q(`SELECT count(*) n FROM ${table}`)).rows[0].n,'0');
+  assert.deepEqual(await Promise.all(tables.map(async t=>(await q(`SELECT count(*) n FROM ${t}`)).rows[0].n)),before);
  });
  test('task worker: a replay preserves needed task identities and a paused task',async()=>{
   const r=await fresh();await run(r.subjectId);const before=await active(r.subjectId);await q("UPDATE v2_question_tasks SET state='paused' WHERE id=$1",[before[0].id]);
   await run(r.subjectId);const after=await active(r.subjectId);assert.deepEqual(after.map(x=>x.id),before.map(x=>x.id));assert.equal(after[0].state,'paused');
  });
  test('task worker: a current report satisfies the pickup question without claiming verification',async()=>{
+  const resolutions=(await q('SELECT count(*) n FROM v2_field_resolutions')).rows[0].n;
   const r=await fresh();await run(r.subjectId);const old=(await active(r.subjectId)).find(x=>x.registry_key==='pickup_place');assert.ok(old);
   await add(r.subjectId);await run(r.subjectId);assert.ok(!(await active(r.subjectId)).some(x=>x.registry_key==='pickup_place'));
   const oldRow=(await tasks(r.subjectId)).find(x=>x.id===old.id);assert.ok(['satisfied','obsolete'].includes(oldRow!.state));
-  assert.equal((await q('SELECT count(*) n FROM v2_field_resolutions')).rows[0].n,'0');
+  assert.equal((await q('SELECT count(*) n FROM v2_field_resolutions')).rows[0].n,resolutions);
  });
  test('task worker: dated stale pickup creates a recheck while undated missing facts do not',async()=>{
   const r=await fresh();await add(r.subjectId,'boarding.pickup',undefined,{},context().user,400);await run(r.subjectId);
@@ -68,9 +71,12 @@ export function registerPromptWorkerTests(context:()=>Context){
   await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,o,randomUUID()]);await run(r.subjectId);
   assert.ok(!(await active(r.subjectId)).some(x=>x.registry_key==='confirm_current_fact'&&x.field_key==='boarding.pickup'));
  });
- test('task worker: future observations never count as a current or stale answer',async()=>{
-  const r=await fresh();await add(r.subjectId,'boarding.pickup',undefined,{},context().user,-2);await run(r.subjectId);
-  assert.ok((await active(r.subjectId)).some(x=>x.registry_key==='pickup_place'));assert.ok(!(await active(r.subjectId)).some(x=>x.registry_key==='confirm_current_fact'));
+ test('task worker: future report dates are rejected and future-effective evidence is not current or stale',async()=>{
+  const r=await fresh();await denied(()=>add(r.subjectId,'boarding.pickup',undefined,{},context().user,-2),'23514');
+  const dates=(await q("SELECT to_char(current_date+2,'YYYY-MM-DD') start,to_char(current_date+5,'YYYY-MM-DD') finish")).rows[0];
+  const scope=await fareScope({timeBasis:'scheduled',serviceDate:undefined,effectiveFrom:dates.start,effectiveTo:dates.finish});
+  await add(r.subjectId,'fare.advertised',{amount:'15',currency:'USD'},scope);await run(r.subjectId);
+  assert.ok((await active(r.subjectId)).some(x=>x.registry_key==='fare_advertised'));assert.ok(!(await active(r.subjectId)).some(x=>x.registry_key==='confirm_current_fact'));
  });
  test('task worker: scoped current conflict produces a context task that still needs volunteered knowledge',async()=>{
   const id=(await q("INSERT INTO v2_subjects(kind) VALUES('stop') RETURNING id")).rows[0].id;await q("INSERT INTO v2_stops(subject_id,name) VALUES($1,'Synthetic task terminal')",[id]);
