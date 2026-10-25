@@ -486,9 +486,9 @@ test("four details suffice, midnight is explicit, no price or recurring schedule
   const row = (await db.query("SELECT * FROM v2_leads WHERE subject_id=$1", [c.subjectId])).rows[0];
   assert.equal(row.reported_departure_seconds, 0);
   assert.equal(row.resolved_status, "unresolved");
-  assert.equal((await db.query("SELECT count(*) FROM v2_observations WHERE field_key LIKE 'fare.%'")).rows[0].count, "0");
-  assert.equal((await db.query("SELECT knowledge_basis,observed_from FROM v2_observations")).rows[0].knowledge_basis, "unprovided");
-  assert.equal((await db.query("SELECT observed_from FROM v2_observations")).rows[0].observed_from, null);
+  assert.equal((await db.query("SELECT count(*) FROM v2_observations WHERE contribution_id=$1 AND field_key LIKE 'fare.%'",[c.id])).rows[0].count, "0");
+  assert.equal((await db.query("SELECT knowledge_basis,observed_from FROM v2_observations WHERE contribution_id=$1",[c.id])).rows[0].knowledge_basis, "unprovided");
+  assert.equal((await db.query("SELECT observed_from FROM v2_observations WHERE contribution_id=$1",[c.id])).rows[0].observed_from, null);
 });
 
 test("community leads reject missing required fields and sentinel operators", async () => {

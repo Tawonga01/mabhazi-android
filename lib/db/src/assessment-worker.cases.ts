@@ -132,8 +132,12 @@ export function registerAssessmentWorkerTests(context:()=>Context){
   assert.equal((await q("SELECT EXISTS(SELECT 1 FROM pg_proc p,LATERAL aclexplode(p.proacl) acl WHERE p.oid='public.v2_worker_drain_assess(integer)'::regprocedure AND acl.grantee=0 AND acl.privilege_type='EXECUTE') allowed")).rows[0].allowed,false);
  });
  test('assessment worker: shared documents do not corroborate, while independent dated source footprints can',async()=>{
-  const r=await fresh(),s=await scope(),d=await today();const shared=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date,visibility) VALUES($1,'document',$2,'public_metadata') RETURNING id",[context().user,d])).rows[0].id;
-  await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign',d,shared);await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,shared);
+  const r=await fresh(),s=await scope(),d=await today();const shared=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().user,d])).rows[0].id;
+  const copied=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().other,d])).rows[0].id;
+  await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','fixture') ON CONFLICT DO NOTHING",[context().other]);
+  const sourceCase=(await q('SELECT v2_open_source_case($1,$2,$3) id',[context().other,shared,copied])).rows[0].id;
+  await q("SELECT v2_review_sources($1,$2,1,(SELECT revision FROM v2_source_graph WHERE id),'same_origin','source_inspected',NULL,$3,'source/1',NULL)",[context().other,sourceCase,randomUUID()]);
+  await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign',d,shared);await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,copied);
   await enqueue(r.subjectId);await finish(await claim());let f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,2);
   const independent=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().other,d])).rows[0].id;await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,independent);
   await enqueue(r.subjectId);await finish(await claim());f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'corroborated');assert.equal(f.publication,'provisional');assert.equal(f.candidates[0].contributors,2);
