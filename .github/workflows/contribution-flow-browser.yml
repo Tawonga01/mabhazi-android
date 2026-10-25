@@ -43,7 +43,9 @@ jobs:
       - name: Install a separate pinned browser-test runtime
         run: |
           npm install --prefix "$RUNNER_TEMP/mabhazi-browser-runtime" --no-save --package-lock=false playwright@1.56.1
-          "$RUNNER_TEMP/mabhazi-browser-runtime/node_modules/.bin/playwright" install --with-deps chromium
+          # ubuntu-latest already provides the Chromium system libraries. Avoid
+          # apt upgrades/font downloads; the actual launch below still verifies them.
+          "$RUNNER_TEMP/mabhazi-browser-runtime/node_modules/.bin/playwright" install chromium
           echo "PLAYWRIGHT_RUNTIME=$RUNNER_TEMP/mabhazi-browser-runtime" >> "$GITHUB_ENV"
       - name: Exercise form, save, lost acknowledgement and Terms recovery
         run: pnpm --dir artifacts/api-server exec tsx scripts/contribution-flow-browser.mjs
