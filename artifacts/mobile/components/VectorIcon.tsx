@@ -43,6 +43,8 @@ function IconShape({ name, filled }: { name: string; filled?: boolean }) {
       return <Polyline points="15 18 9 12 15 6" />;
     case "chevron-right":
       return <Polyline points="9 18 15 12 9 6" />;
+    case "chevron-up":
+      return <Polyline points="6 15 12 9 18 15" />;
     case "chevron-down":
       return <Polyline points="6 9 12 15 18 9" />;
     case "arrow-right":
