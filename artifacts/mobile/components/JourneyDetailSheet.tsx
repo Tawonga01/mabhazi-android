@@ -2,6 +2,7 @@ import { ui } from '@/constants/ui';
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
+  Image,
   Text,
   Modal,
   Animated,
@@ -524,25 +525,14 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
             <View style={[ss.handle, { backgroundColor: colors.border }]} />
           </View>
 
-          {/* Header */}
-          <View style={[ss.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-            <View style={[ss.companyBadge, { backgroundColor: colors.primary }]}>
-              <Feather name="truck" size={12} color="#fff" />
-              <Text style={ss.companyBadgeText} numberOfLines={1}>{journey.busCompany}</Text>
+          {/* Journey context remains visible while the useful detail scrolls. */}
+          <View style={{backgroundColor:ui.color.navy,padding:20,flexDirection:'row',alignItems:'flex-start',gap:12}}>
+            <View style={{flex:1,gap:12}}>
+              <Text accessibilityRole="header" style={{color:'#FFFFFF',fontFamily:ui.type.bold,fontSize:25,lineHeight:33}}>{journey.fromCity} → {journey.toCity}</Text>
+              <View style={{flexDirection:'row',gap:10,alignItems:'center'}}><Image source={require('../assets/images/departures-bus.png')} style={{width:24,height:24,tintColor:ui.color.orange}} resizeMode="contain" accessible={false}/><Text style={{color:'#F3F6FA',fontFamily:ui.type.semibold,fontSize:16,flex:1}}>{journey.busCompany}</Text></View>
+              <Text style={{color:'#B6C5D8',fontFamily:ui.type.regular,fontSize:14,lineHeight:21}}>{journey.departureTime} → {journey.arrivalTime} · {journey.scheduledDays}</Text>
             </View>
-            <View style={ss.headerRoute}>
-              <Text style={[ss.headerCity, { color: colors.foreground, fontFamily: ui.type.bold }]}
-                numberOfLines={1}>{journey.fromCity}</Text>
-              <Feather name="arrow-right" size={14} color={colors.mutedForeground} />
-              <Text style={[ss.headerCity, { color: colors.foreground, fontFamily: ui.type.bold }]}
-                numberOfLines={1}>{journey.toCity}</Text>
-            </View>
-            <TouchableOpacity
-              style={[ss.closeBtn, { backgroundColor: colors.secondary }]}
-              onPress={onClose}
-            >
-              <Feather name="x" size={18} color={colors.foreground} />
-            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close route details" onPress={onClose} style={{width:44,height:44,borderRadius:22,backgroundColor:'#233B57',alignItems:'center',justifyContent:'center'}}><Feather name="x" size={22} color="#DDE7F1"/></TouchableOpacity>
           </View>
 
           <KeyboardAvoidingView
@@ -563,6 +553,99 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                 </View>
               ) : (
                 <>
+<Section title="Fare Tracker" icon="dollar-sign">
+                    <View style={ss.fareRow}>
+                      <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                          Listed price
+                        </Text>
+                        <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
+                          ${journey.price.toFixed(2)}
+                        </Text>
+                      </View>
+
+                      {data?.priceToday != null ? (
+                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                            Community today
+                          </Text>
+                          <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
+                            ${data.priceToday.toFixed(2)}
+                          </Text>
+                          {data.priceYesterday != null && data.priceToday !== data.priceYesterday && (
+                            <View style={[
+                              ss.fareChangePill,
+                              { backgroundColor: data.priceToday > data.priceYesterday ? "#FEE2E2" : "#DCFCE7" },
+                            ]}>
+                              <Feather
+                                name={data.priceToday > data.priceYesterday ? "trending-up" : "trending-down"}
+                                size={11}
+                                color={data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A"}
+                              />
+                              <Text style={[ss.fareChangeText, {
+                                color: data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A",
+                                fontFamily: ui.type.medium,
+                              }]}>
+                                was ${data.priceYesterday.toFixed(2)} yesterday
+                              </Text>
+                            </View>
+                          )}
+                          {data.priceYesterday != null && data.priceToday === data.priceYesterday && (
+                            <Text style={[ss.fareStable, { color: "#16A34A", fontFamily: ui.type.regular }]}>
+                              Same as yesterday
+                            </Text>
+                          )}
+                        </View>
+                      ) : isAuthenticated ? (
+                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                            What I paid
+                          </Text>
+                          <View style={ss.fareInputRow}>
+                            <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>
+                              $
+                            </Text>
+                            <TextInput
+                              style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
+                              placeholder="0.00"
+                              placeholderTextColor={colors.mutedForeground}
+                              value={reportedPrice}
+                              onChangeText={setReportedPrice}
+                              keyboardType="decimal-pad"
+                              maxLength={8}
+                            />
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={[ss.fareBlock, ss.fareBlockEmpty, { backgroundColor: colors.secondary, borderColor: colors.border, borderStyle: "dashed" }]}>
+                          <Feather name="lock" size={14} color={colors.mutedForeground} />
+                          <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular, marginTop: 4 }]}>
+                            Sign in to report
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {/* If already has community price, also show input for authenticated users */}
+                    {isAuthenticated && data?.priceToday != null && (
+                      <View style={ss.fareUpdateRow}>
+                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                          What I paid today ($)
+                        </Text>
+                        <View style={ss.fareInputRow}>
+                          <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>$</Text>
+                          <TextInput
+                            style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
+                            placeholder="0.00"
+                            placeholderTextColor={colors.mutedForeground}
+                            value={reportedPrice}
+                            onChangeText={setReportedPrice}
+                            keyboardType="decimal-pad"
+                            maxLength={8}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  </Section>
                   {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
                   {/* ── UGC safety controls ── */}
                   <Section title="Safety" icon="shield">
@@ -598,9 +681,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                   <Section title="Route confidence" icon="shield">
                     <View style={ss.confidenceTopRow}>
                       <Indicator level={confidenceLevel} text={confidenceText} />
-                      <Text style={[ss.confidenceScore, { color: colors.foreground, fontFamily: ui.type.bold }]}>
-                        {hasConfidenceData ? `${confidenceScore}%` : "—"}
-                      </Text>
+
                     </View>
 
                     <View style={[ss.confidenceTrack, { backgroundColor: colors.muted }]}>
@@ -871,99 +952,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                   </Section>
 
                   {/* ── Fare Tracker ── */}
-                  <Section title="Fare Tracker" icon="dollar-sign">
-                    <View style={ss.fareRow}>
-                      <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
-                          Listed price
-                        </Text>
-                        <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
-                          ${journey.price.toFixed(2)}
-                        </Text>
-                      </View>
-
-                      {data?.priceToday != null ? (
-                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
-                            Community today
-                          </Text>
-                          <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
-                            ${data.priceToday.toFixed(2)}
-                          </Text>
-                          {data.priceYesterday != null && data.priceToday !== data.priceYesterday && (
-                            <View style={[
-                              ss.fareChangePill,
-                              { backgroundColor: data.priceToday > data.priceYesterday ? "#FEE2E2" : "#DCFCE7" },
-                            ]}>
-                              <Feather
-                                name={data.priceToday > data.priceYesterday ? "trending-up" : "trending-down"}
-                                size={11}
-                                color={data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A"}
-                              />
-                              <Text style={[ss.fareChangeText, {
-                                color: data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A",
-                                fontFamily: ui.type.medium,
-                              }]}>
-                                was ${data.priceYesterday.toFixed(2)} yesterday
-                              </Text>
-                            </View>
-                          )}
-                          {data.priceYesterday != null && data.priceToday === data.priceYesterday && (
-                            <Text style={[ss.fareStable, { color: "#16A34A", fontFamily: ui.type.regular }]}>
-                              Same as yesterday
-                            </Text>
-                          )}
-                        </View>
-                      ) : isAuthenticated ? (
-                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
-                            What I paid
-                          </Text>
-                          <View style={ss.fareInputRow}>
-                            <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>
-                              $
-                            </Text>
-                            <TextInput
-                              style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
-                              placeholder="0.00"
-                              placeholderTextColor={colors.mutedForeground}
-                              value={reportedPrice}
-                              onChangeText={setReportedPrice}
-                              keyboardType="decimal-pad"
-                              maxLength={8}
-                            />
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={[ss.fareBlock, ss.fareBlockEmpty, { backgroundColor: colors.secondary, borderColor: colors.border, borderStyle: "dashed" }]}>
-                          <Feather name="lock" size={14} color={colors.mutedForeground} />
-                          <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular, marginTop: 4 }]}>
-                            Sign in to report
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {/* If already has community price, also show input for authenticated users */}
-                    {isAuthenticated && data?.priceToday != null && (
-                      <View style={ss.fareUpdateRow}>
-                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
-                          What I paid today ($)
-                        </Text>
-                        <View style={ss.fareInputRow}>
-                          <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>$</Text>
-                          <TextInput
-                            style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
-                            placeholder="0.00"
-                            placeholderTextColor={colors.mutedForeground}
-                            value={reportedPrice}
-                            onChangeText={setReportedPrice}
-                            keyboardType="decimal-pad"
-                            maxLength={8}
-                          />
-                        </View>
-                      </View>
-                    )}
-                  </Section>
+                  
 
                   {/* ── Community Insights ── */}
                   <Section title="Community Insights" icon="bar-chart-2">
@@ -1102,7 +1091,7 @@ const ss = StyleSheet.create({
   sectionIconWrap: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   sectionTitle: { fontSize: 19, textTransform: 'none', letterSpacing: 0 },
   emptyText: {lineHeight: 21,  fontSize: 14, fontStyle: 'normal' },
-  confidenceTopRow: {
+  confidenceTopRow: { flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1219,12 +1208,12 @@ const ss = StyleSheet.create({
     gap: 6,
     paddingTop: 4,
   },
-  indicatorPill: {
+  indicatorPill: { maxWidth: "100%", flexShrink: 1,
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 12, paddingVertical: 9, borderRadius: 20, alignSelf: "flex-start",
   },
   indicatorDot: { width: 8, height: 8, borderRadius: 4 },
-  indicatorText: { fontSize: 13 },
+  indicatorText: { fontSize: 14, lineHeight: 21, flexShrink: 1 },
   yesNoCard: {gap: 12, flexWrap: 'wrap', 
     flexDirection: "row",
     alignItems: "center",

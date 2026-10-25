@@ -26,7 +26,7 @@ async function takeShot(page,name){
     await document.fonts.ready;
     const limit=performance.now()+2500;let previous='',stableSince=performance.now();
     while(performance.now()<limit){
-      const signature=JSON.stringify([...document.querySelectorAll('[role="heading"],[role="button"],[tabindex],input')].map(el=>{const r=el.getBoundingClientRect();return [Math.round(r.x*10),Math.round(r.y*10),Math.round(r.width*10),Math.round(r.height*10),getComputedStyle(el).opacity];}));
+      const signature=JSON.stringify([...document.querySelectorAll('[role="heading"],[role="button"],[tabindex],input,[style*="opacity"],[style*="transform"]')].map(el=>{const r=el.getBoundingClientRect();return [Math.round(r.x*10),Math.round(r.y*10),Math.round(r.width*10),Math.round(r.height*10),getComputedStyle(el).opacity];}));
       if(signature!==previous){previous=signature;stableSince=performance.now();}
       else if(performance.now()-stableSince>180)break;
       await new Promise(requestAnimationFrame);
@@ -396,6 +396,8 @@ try {
     await s.page.setViewportSize({width:390,height:844});
     await s.page.getByText('Search Routes',{exact:true}).click();
     const card=s.page.getByRole('button',{name:'View route: Harare to Bulawayo, UI fixture bus',exact:true});await card.waitFor();
+    const compactSearch=s.page.getByText('Any',{exact:true}).first();await compactSearch.waitFor();
+    await s.page.waitForFunction(()=>{const labels=[...document.querySelectorAll('div[dir="auto"]')].filter(el=>el.textContent==='Any');return labels.some(el=>{const r=el.getBoundingClientRect();return r.y>=0&&r.y+r.height<300;});});
     await takeShot(s.page,'search-results.png');
     await card.click();await s.page.getByText('Route confidence',{exact:true}).waitFor();
     await s.page.getByText('Manage blocked contributors',{exact:true}).waitFor();

@@ -31,6 +31,10 @@ function IconShape({ name, filled }: { name: string; filled?: boolean }) {
       return <><Path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15" /><Line x1="10" y1="10" x2="10" y2="17" /><Line x1="14" y1="10" x2="14" y2="17" /></>;
     case "user-x":
       return <><Circle cx="9" cy="7" r="4" /><Path d="M2 21v-2a7 7 0 0 1 12-5" /><Line x1="17" y1="15" x2="23" y2="21" /><Line x1="23" y1="15" x2="17" y2="21" /></>;
+    case "file-text":
+      return <><Path d="M14 2H5v20h14V7l-5-5Z" /><Polyline points="14 2 14 7 19 7" /><Line x1="8" y1="12" x2="16" y2="12" /><Line x1="8" y1="16" x2="16" y2="16" /></>;
+    case "help-circle":
+      return <><Circle cx="12" cy="12" r="9" /><Path d="M9.5 8.5a2.6 2.6 0 0 1 5 1c0 2-2.5 2-2.5 4" /><Circle cx="12" cy="17" r=".6" fill="currentColor" /></>;
     case "search":
       return <><Circle cx="11" cy="11" r="7" /><Line x1="16.5" y1="16.5" x2="21" y2="21" /></>;
     case "clock":

@@ -1,6 +1,6 @@
 import { ui } from '@/constants/ui';
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, Animated } from "react-native";
 import { AntDesign, Feather, Ionicons } from "@/components/VectorIcon";
 import { useColors } from "@/hooks/useColors";
 import { useBlockedContributors } from "@/hooks/useBlockedContributors";
@@ -212,7 +212,7 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
     <View style={[styles.inner]}>
       <View style={styles.header}>
         <View style={[styles.companyBadge, { backgroundColor: colors.primary }]}>
-          <Feather name="truck" size={12} color={colors.primaryForeground} />
+          <Image source={require("../assets/images/departures-bus.png")} style={{width:16,height:16,tintColor:colors.primaryForeground}} resizeMode="contain" accessible={false}/>
           <Text style={[styles.companyText, { color: colors.primaryForeground }]} numberOfLines={1}>
             {journey.busCompany}
           </Text>

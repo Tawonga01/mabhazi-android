@@ -77,6 +77,8 @@ export default function SearchScreen() {
   const [toCityModal, setToCityModal] = useState(false);
 
   const expandAnim = useRef(new Animated.Value(1)).current;
+  const headerScroll = useRef<ScrollView>(null);
+  useEffect(() => { headerScroll.current?.scrollTo({y:0,animated:false}); },[isExpanded]);
 
   // Auto-trigger search when navigated here from Contribute with pre-filled cities
   useEffect(() => {
@@ -275,7 +277,7 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView style={{ flexGrow: 0, flexShrink: 1, maxHeight: isExpanded ? '80%' : undefined }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+      <ScrollView ref={headerScroll} style={{ flexGrow: 0, flexShrink: isExpanded ? 1 : 0, maxHeight: isExpanded ? '80%' : undefined }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.header,
           {
