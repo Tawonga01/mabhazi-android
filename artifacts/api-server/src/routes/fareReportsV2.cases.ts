@@ -32,7 +32,7 @@ export function registerFareReportTests(context:()=>Context){
   assert.equal(item.amount,'25');assert.equal(item.currency,'USD');assert.equal(item.kind,'paid');assert.equal(item.scope.serviceDate,await date());assert.equal(item.temporalClass,'historical');assert.equal(item.status,'reported');assert.equal(item.freshness,'unknown');assert.equal(item.canBlock,false);
   const obs=(await q("SELECT id FROM v2_observations WHERE contribution_id=$1 AND field_key='fare.paid'",[a.contributionId])).rows[0].id;assert.notEqual(item.id,obs);
   const raw=JSON.stringify(page);for(const privateValue of [...context().accounts,obs,a.contributionId,a.subjectId,a.input.clientSubmissionId])assert.ok(!raw.includes(privateValue));for(const key of ['contributors','confidence','sources','payload','selectedValue','price','nextDeparture'])assert.ok(!raw.includes('"'+key+'"'));
-  const detail=(await http('/v2/subjects/'+l.subjectId)).value.subject;assert.equal(detail.publicationStatus,'details_needed');assert.equal(detail.timedDepartureEligible,false);assert.equal(detail.fares,undefined);assert.equal(detail.price,undefined);
+  const detail=(await http('/v2/subjects/'+l.subjectId)).value.subject;assert.equal(detail.publicationStatus,'details_needed');assert.equal(detail.timedDepartureEligible,false);assert.equal('fares' in detail,false);assert.equal('price' in detail,false);
   const r=await get(l.subjectId);assert.equal(r.headers.get('cache-control'),'no-store');for(const name of ['Authorization','Cookie','X-Mabhazi-Blocked-Contributors','X-Mabhazi-Account'])assert.ok(r.headers.get('vary')?.includes(name));
  });
  test('fare reports: currency, price type, date, passenger and ticket conditions never collapse',async()=>{
