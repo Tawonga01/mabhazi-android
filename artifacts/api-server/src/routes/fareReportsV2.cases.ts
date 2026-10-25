@@ -32,7 +32,7 @@ export function registerFareReportTests(context:()=>Context){
   // Consumer ticks are bounded; stale generations may need several real ticks.
   for(let tick=0;tick<20;tick++){
    for(const kind of ['normalise','associate','assess']){const r=(await q('SELECT v2_worker_drain_'+kind+'(20) r')).rows[0].r;assert.equal(r.failedAttempts,0,JSON.stringify(r));}
-   const due=(await q("SELECT count(*) n FROM v2_jobs WHERE subject_id=ANY($1::uuid[]) AND kind IN('normalise','associate','assess') AND state='pending' AND available_at<=clock_timestamp()",[ids])).rows[0].n;if(due==='0')return;
+   const due=(await q("SELECT count(*) n FROM v2_jobs WHERE subject_id=ANY($1::uuid[]) AND ((kind='normalise' AND policy_version='intake/1') OR (kind='associate' AND policy_version IN('association/1','pattern-association/1','actual-association/1')) OR (kind='assess' AND policy_version='evidence/1')) AND state='pending' AND available_at<=clock_timestamp()",[ids])).rows[0].n;if(due==='0')return;
   }
   assert.fail('Selected fixture jobs did not settle within20 bounded ticks');
  }

@@ -1,6 +1,6 @@
 import {FareReports} from './FareReports';
 import React,{useEffect,useRef,useState} from 'react';
-import {ActivityIndicator,Text} from 'react-native';
+import {ActivityIndicator,Image,StyleSheet,Text,View} from 'react-native';
 import {getV2Subject,routeV2Safety,type V2PublicLead} from '@workspace/api-client-react';
 import {useAuth} from '@/lib/auth';
 import {useBlockedContributors} from '@/hooks/useBlockedContributors';
@@ -29,14 +29,26 @@ export function PublicRouteDetail({subjectId,onClose,onContribute}:{subjectId:st
  async function safetyAction(action:'report'|'block'){if(!owner||busy||!safety.isReady)return;setBusy(true);setMessage('');try{await boundedRequest(signal=>routeV2Safety(subjectId,{action,...(action==='report'&&reason?{reason}:{})},{signal,headers:{'X-Mabhazi-Account':owner}}));if(!current())return;if(action==='block')onClose();else{setReportOpen(false);setMessage('Report received.');}}
  catch(error){if(current())setMessage((error as {data?:{error?:string}}).data?.error??'The safety action could not be confirmed. Try again.');}finally{if(current())setBusy(false);}}
  const ready=!!route&&loadedIdentity===identity&&safety.isReady&&!auth.isLoading;
- return <CaptureFrame title="Route report" closeLabel="Close route report" onClose={onClose} busy={busy||fareBusy} footer={ready?<>{owner?<><CaptureButton title="Add fare" disabled={busy||fareBusy||!route?.contributionTargetEligible} onPress={()=>void contribute(true)}/><CaptureButton title="Report a journey" secondary disabled={busy||fareBusy||!route?.contributionTargetEligible} onPress={()=>void contribute(false)}/></>:<CaptureButton title="Sign in to contribute" disabled={busy} onPress={()=>void login()}/>}</>:undefined}>
-  {auth.isLoading||safety.isLoading||busy&&!route?<ActivityIndicator accessibilityLabel="Loading route report"/>:null}
-  {safety.error?<><Text accessibilityRole="alert" style={s.error}>Safety settings could not load.</Text><CaptureButton title="Try safety settings again" onPress={()=>void safety.retryBlockedContributors().catch(()=>undefined)}/></>:null}
-  {error?<><Text accessibilityRole="alert" style={s.error}>{error}</Text><CaptureButton title="Try route again" secondary disabled={busy} onPress={()=>setRetry(v=>v+1)}/></>:null}
-  {ready&&route?<><Text style={s.title}>{route.origin.name} → {route.destination.name}</Text><Text style={s.reviewValue}>{route.operatorReport.value}</Text><Text style={s.label}>Details needed</Text><ReviewRow label="Reported time" value={route.reportedTime.value}/><Text style={s.note}>Days not confirmed</Text>
-   <FareReports key={identity} subjectId={route.subjectId} onBusy={setFareBusy} onChanged={()=>setRetry(v=>v+1)}/>
-   <CaptureHelp label="About this report"><Text style={s.note}>This is a reported route. A timetable and fare have not been selected.</Text><ReviewRow label="Operator report received" value={String(route.operatorReport.submittedAt).slice(0,10)}/><ReviewRow label="Time report received" value={String(route.reportedTime.submittedAt).slice(0,10)}/><Text style={s.note}>Observation dates: {route.operatorReport.observedDate??'Unknown'} · {route.reportedTime.observedDate??'Unknown'}</Text></CaptureHelp>
-   {owner?<CaptureHelp label="Report or hide"><CaptureButton title="Report this route" secondary disabled={busy} onPress={()=>setReportOpen(v=>!v)}/>{reportOpen?<><Choices<typeof reason> label="Report reason" value={reason} options={[[ 'inaccurate','Incorrect details' ],['spam','Spam'],['offensive','Offensive content'],['unsafe','Unsafe content'],['other','Other']]} onChange={setReason}/><CaptureButton title="Send route report" disabled={busy||!reason} onPress={()=>void safetyAction('report')}/></>:null}<CaptureButton title="Hide this contributor’s route reports" secondary disabled={busy} onPress={()=>void safetyAction('block')}/></CaptureHelp>:null}
-  </>:null}{message?<Text accessibilityRole="alert" style={s.note}>{message}</Text>:null}
+ return <CaptureFrame appearance="route" title="Route report" closeLabel="Close route report" onClose={onClose} busy={busy||fareBusy} footer={ready?<>{owner?<><CaptureButton title="Add fare" disabled={busy||fareBusy||!route?.contributionTargetEligible} onPress={()=>void contribute(true)}/><CaptureButton title="Report a journey" secondary onDark disabled={busy||fareBusy||!route?.contributionTargetEligible} onPress={()=>void contribute(false)}/></>:<CaptureButton title="Sign in to contribute" disabled={busy} onPress={()=>void login()}/>}</>:undefined}>
+  {auth.isLoading||safety.isLoading||busy&&!route?<ActivityIndicator color="#FF9B45" accessibilityLabel="Loading route report"/>:null}
+  {safety.error?<><Text accessibilityRole="alert" style={r.error}>Safety settings could not load.</Text><CaptureButton title="Try safety settings again" secondary onDark onPress={()=>void safety.retryBlockedContributors().catch(()=>undefined)}/></>:null}
+  {error?<><Text accessibilityRole="alert" style={r.error}>{error}</Text><CaptureButton title="Try route again" secondary onDark disabled={busy} onPress={()=>setRetry(v=>v+1)}/></>:null}
+  {ready&&route?<>
+   <View style={r.context}>
+    <Text style={r.route}>{route.origin.name} → {route.destination.name}</Text>
+    <View style={r.service}><Image source={require('../../assets/images/departures-bus.png')} accessible={false} style={r.bus}/><View style={{flex:1,gap:5}}><Text style={r.operator}>{route.operatorReport.value}</Text><Text style={r.time}>{route.reportedTime.value}<Text> · </Text><Text>Days not confirmed</Text></Text></View></View>
+   </View>
+   <View style={r.reports}>
+    <FareReports key={identity} subjectId={route.subjectId} onBusy={setFareBusy} onChanged={()=>setRetry(v=>v+1)}/>
+    <View style={r.rule}/>
+    <CaptureHelp label="About this route"><Text style={s.label}>Details needed</Text><Text style={s.note}>Community reports. A timetable and current fare have not been confirmed.</Text><ReviewRow label="Operator report received" value={String(route.operatorReport.submittedAt).slice(0,10)}/><ReviewRow label="Time report received" value={String(route.reportedTime.submittedAt).slice(0,10)}/></CaptureHelp>
+    {owner?<CaptureHelp label="Report or hide"><CaptureButton title="Report this route" secondary disabled={busy} onPress={()=>setReportOpen(v=>!v)}/>{reportOpen?<><Choices<typeof reason> label="Report reason" value={reason} options={[[ 'inaccurate','Incorrect details' ],['spam','Spam'],['offensive','Offensive content'],['unsafe','Unsafe content'],['other','Other']]} onChange={setReason}/><CaptureButton title="Send route report" disabled={busy||!reason} onPress={()=>void safetyAction('report')}/></>:null}<CaptureButton title="Hide this contributor’s route reports" secondary disabled={busy} onPress={()=>void safetyAction('block')}/></CaptureHelp>:null}
+   </View>
+  </>:null}{message?<Text accessibilityRole="alert" style={r.message}>{message}</Text>:null}
  </CaptureFrame>;
 }
+const r=StyleSheet.create({
+ context:{gap:22},route:{fontSize:28,lineHeight:35,fontWeight:'700',letterSpacing:-0.7,color:'#F4F6F9'},
+ service:{flexDirection:'row',alignItems:'center',gap:13},bus:{width:27,height:30,tintColor:'#FF9B45'},operator:{fontSize:18,lineHeight:25,fontWeight:'600',color:'#F4F6F9'},time:{fontSize:14,lineHeight:21,color:'#B6C5D8'},
+ reports:{borderRadius:24,backgroundColor:'#F4F6F9',padding:20,gap:2},rule:{height:1,backgroundColor:'#DFE5ED',marginTop:8},error:{fontSize:15,lineHeight:22,color:'#FFD1C2'},message:{fontSize:15,lineHeight:22,color:'#E0E9F3'}
+});

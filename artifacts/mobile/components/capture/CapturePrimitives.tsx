@@ -27,7 +27,7 @@ export const captureStyles = StyleSheet.create({
   disabled: { opacity: 0.5 }, reviewValue: { color: '#102744', fontSize: 17, lineHeight: 24 },
 });
 const s = captureStyles;
-export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '', closeLabel = 'Close form and keep draft' }: { title: string; closeLabel?: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
+export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '', closeLabel = 'Close form and keep draft', appearance='form' }: { title: string; appearance?:'form'|'route'; closeLabel?: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
   const insets = useSafeAreaInsets(), body = useRef<ScrollView>(null), presentation = useContext(CaptureFrameContext);
   useEffect(() => presentation?.register(onClose, busy), [presentation, onClose, busy]);
   useEffect(() => { body.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
@@ -39,19 +39,19 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
   // A root modal owns its system inset; a tab screen already has the Android inset.
   return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: presentation?.overlay ? insets.bottom + 12 : Platform.OS === 'web' ? 96 : 12 }]}>
     <KeyboardAvoidingView style={s.avoid} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
-      <View style={s.panel}>
-        <View style={s.header}><Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text>
-          {onClose ? <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} disabled={busy} onPress={onClose} style={[s.close, busy && s.disabled]}><Feather name="x" size={22} color="#24476A" /></Pressable> : null}
+      <View style={[s.panel,appearance==='route'&&{backgroundColor:'#102744'}]}>
+        <View style={[s.header,appearance==='route'&&{borderBottomWidth:0,paddingBottom:0}]}><Text accessibilityRole="header" style={[s.title,{flex:1},appearance==='route'&&{fontSize:16,fontWeight:'500',color:'#B6C5D8'}]}>{title}</Text>
+          {onClose ? <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} disabled={busy} onPress={onClose} style={[s.close,appearance==='route'&&{backgroundColor:'#233B57',borderRadius:22},busy&&s.disabled]}><Feather name="x" size={22} color={appearance==='route'?'#DDE7F1':'#24476A'} /></Pressable> : null}
         </View>
-        <ScrollView ref={body} style={{ flexShrink: 1 }} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{children}</ScrollView>
-        {footer ? <View style={s.footer}>{footer}</View> : null}
+        <ScrollView ref={body} style={{ flexShrink: 1 }} contentContainerStyle={[s.body,appearance==='route'&&{paddingTop:18,gap:24}]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{children}</ScrollView>
+        {footer ? <View style={[s.footer,appearance==='route'&&{borderTopWidth:0,backgroundColor:'#102744',paddingTop:6}]}>{footer}</View> : null}
       </View>
     </KeyboardAvoidingView>
   </View>;
 }
-export function CaptureButton({ title, onPress, disabled = false, busy = false, secondary = false }: { title: string; onPress(): void; disabled?: boolean; busy?: boolean; secondary?: boolean }) {
+export function CaptureButton({ title, onPress, disabled = false, busy = false, secondary = false, onDark = false }: { title: string; onPress(): void; disabled?: boolean; busy?: boolean; secondary?: boolean; onDark?:boolean }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ disabled: disabled || busy }} disabled={disabled || busy} onPress={onPress} style={[secondary ? s.secondary : s.primary, (disabled || busy) && s.disabled]}>
-    {busy ? <ActivityIndicator color="#102744" accessibilityLabel="Please wait" /> : <Text style={secondary ? s.secondaryText : s.primaryText}>{title}</Text>}
+    {busy ? <ActivityIndicator color="#102744" accessibilityLabel="Please wait" /> : <Text style={[secondary?s.secondaryText:s.primaryText,secondary&&onDark&&{color:'#D6E2EE'}]}>{title}</Text>}
   </Pressable>;
 }
 export function CaptureHelp({ label, children }: { label: string; children: React.ReactNode }) {
