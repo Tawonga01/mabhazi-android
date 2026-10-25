@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React from "react";
 import {
   ActivityIndicator,
@@ -49,10 +50,10 @@ export function BlockedContributorsManager({
         <View style={[styles.dialog, { backgroundColor: colors.background }]}>
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.title, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                 Blocked contributors
               </Text>
-              <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                 Routes and comments are hidden on this device. Unblock anytime.
               </Text>
             </View>
@@ -69,7 +70,7 @@ export function BlockedContributorsManager({
             <ActivityIndicator color={colors.primary} style={{ paddingVertical: 28 }} />
           ) : error ? (
             <View style={styles.errorBlock}>
-              <Text style={[styles.empty, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.empty, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                 {error}
               </Text>
               <View style={styles.errorActions}>
@@ -77,7 +78,7 @@ export function BlockedContributorsManager({
                   style={[styles.errorAction, { borderColor: colors.border }]}
                   onPress={() => void retryBlockedContributors()}
                 >
-                  <Text style={[styles.unblockText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.unblockText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                     Try again
                   </Text>
                 </TouchableOpacity>
@@ -85,14 +86,14 @@ export function BlockedContributorsManager({
                   style={[styles.errorAction, { backgroundColor: colors.destructive }]}
                   onPress={() => void resetBlockedContributors()}
                 >
-                  <Text style={[styles.unblockText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.unblockText, { color: colors.primaryForeground, fontFamily: ui.type.semibold }]}>
                     Reset blocked settings
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
           ) : blockedContributors.length === 0 ? (
-            <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            <Text style={[styles.empty, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
               You have not blocked any contributors.
             </Text>
           ) : (
@@ -110,7 +111,7 @@ export function BlockedContributorsManager({
                     <Feather name="user-x" size={15} color={colors.mutedForeground} />
                   </View>
                   <Text
-                    style={[styles.name, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}
+                    style={[styles.name, { color: colors.foreground, fontFamily: ui.type.medium }]}
                     numberOfLines={1}
                   >
                     {contributor.name}
@@ -122,7 +123,7 @@ export function BlockedContributorsManager({
                       void unblockContributor(contributor.id);
                     }}
                   >
-                    <Text style={[styles.unblockText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                    <Text style={[styles.unblockText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                       Unblock
                     </Text>
                   </TouchableOpacity>
@@ -137,7 +138,7 @@ export function BlockedContributorsManager({
             onPress={onClose}
             activeOpacity={0.8}
           >
-            <Text style={[styles.doneText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.doneText, { color: colors.primaryForeground, fontFamily: ui.type.semibold }]}>
               Done
             </Text>
           </TouchableOpacity>
@@ -154,34 +155,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  dialog: {
+  dialog: {alignSelf: 'center', width: "100%", maxWidth: 450, 
     maxHeight: "82%",
-    borderRadius: 20,
+    borderRadius: 26,
     padding: 20,
     gap: 16,
   },
   header: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  title: { fontSize: 19, marginBottom: 7 },
-  subtitle: { fontSize: 13, lineHeight: 19 },
-  close: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 23, marginBottom: 7 },
+  subtitle: { fontSize: 14, lineHeight: 21 },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   list: { maxHeight: 260 },
-  row: {
+  row: {paddingVertical: 12, borderBottomWidth: 1, 
     minHeight: 52,
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 0,
+    borderWidth: 0,
     padding: 8,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
   },
   avatar: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  name: { flex: 1, fontSize: 14 },
-  unblock: { borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
-  unblockText: { fontSize: 12 },
+  name: { flex: 1, fontSize: 16 },
+  unblock: {justifyContent: 'center', minHeight: 44,  borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  unblockText: { fontSize: 14 },
   empty: { textAlign: "center", paddingVertical: 28, lineHeight: 20 },
   errorBlock: { alignItems: "stretch", gap: 4 },
   errorActions: { flexDirection: "row", gap: 8, justifyContent: "center" },
-  errorAction: { borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  errorAction: {justifyContent: 'center', minHeight: 44,  borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   done: { minHeight: 44, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  doneText: { fontSize: 14 },
+  doneText: { fontSize: 16 },
 });

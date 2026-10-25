@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useRef, useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { fareCurrencies, fareErrors, type FareDraft } from '@/lib/actual-journey-model';
@@ -29,12 +30,12 @@ export function FocusedFareForm({ value: f, change, done, close, skip }: { value
         <ReviewRow label="Passenger" value={f.passenger === 'other' ? f.passengerLabel : f.passenger} />
         <ReviewRow label="Ticket" value={f.ticket === 'other' ? f.ticketLabel : f.ticket.replace('_', ' ')} />
       </View> : <>
-        <Field label="Fare amount *" error={errors['fare.amount']}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Choose fare currency" style={[s.input, { justifyContent: 'center', minHeight: 72 }]} onPress={() => setCurrencyOpen(true)}><Text style={s.label}>{f.currency || 'Currency'} ▾</Text></Pressable>
-          <CaptureInput ref={v => { refs.current.amount = v; }} accessibilityLabel="Fare amount" value={f.amount} onChangeText={v => update('amount', v)} placeholder="—" keyboardType="decimal-pad" maxLength={13} style={{ flex: 1, minWidth: 0, fontSize: 34, minHeight: 72, fontWeight: '700' }} />
+        <Field label="Fare amount *" error={errors['fare.amount']}><View style={{ flexDirection:'row',alignItems:'center',backgroundColor:ui.color.paper,borderWidth:1,borderColor:ui.color.border,borderRadius:16,padding:8,gap:8 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Choose fare currency" style={{justifyContent:'center',minHeight:64,minWidth:96,paddingHorizontal:8,borderRightWidth:1,borderColor:ui.color.border}} onPress={() => setCurrencyOpen(true)}><Text style={s.label}>{f.currency || 'Currency'} ▾</Text></Pressable>
+          <CaptureInput ref={v => { refs.current.amount = v; }} accessibilityLabel="Fare amount" value={f.amount} onChangeText={v => update('amount', v)} placeholder="—" keyboardType="decimal-pad" maxLength={13} style={{ flex: 1, minWidth: 0, fontSize: 34, minHeight: 72, fontWeight:'600',borderWidth:0,paddingLeft:4,backgroundColor:'transparent' }} />
         </View></Field>
         {errors['fare.currency'] ? <Text accessibilityRole="alert" style={s.error}>{errors['fare.currency']}</Text> : null}
-        <Choices label="Price type" value={f.basis} options={[[ 'paid', 'Paid' ], ['quoted', 'Quoted'], ['advertised', 'Advertised']]} onChange={v => { change({ ...f, basis: v, date: '' }); setErrors({}); }} error={errors['fare.basis']} />
+        <Choices segmented label="Price type" value={f.basis} options={[[ 'paid', 'Paid' ], ['quoted', 'Quoted'], ['advertised', 'Advertised']]} onChange={v => { change({ ...f, basis: v, date: '' }); setErrors({}); }} error={errors['fare.basis']} />
         <View style={s.group}>
           <CityField label="Fare departure city" city={f.origin} onPress={() => setPicker('origin')} error={errors['fare.origin']} />
           <CityField label="Fare destination city" city={f.destination} onPress={() => setPicker('destination')} error={errors['fare.destination']} />

@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -250,9 +251,11 @@ export default function SearchScreen() {
     default: insets.bottom + 20,
   });
 
+  const [searchContentHeight, setSearchContentHeight] = useState(378);
+  const [compactContentHeight, setCompactContentHeight] = useState(64);
   const cardHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 378],
+    outputRange: [0, searchContentHeight],
   });
 
   const cardOpacity = expandAnim.interpolate({
@@ -267,13 +270,13 @@ export default function SearchScreen() {
 
   const compactHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [52, 0],
+    outputRange: [compactContentHeight, 0],
   });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
+      <ScrollView style={{ flexGrow: 0, flexShrink: 1, maxHeight: isExpanded ? '80%' : undefined }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
           styles.header,
           {
             backgroundColor: colors.primary,
@@ -297,6 +300,7 @@ export default function SearchScreen() {
         >
           <TouchableOpacity
             style={[styles.compactBarInner, { backgroundColor: "#FFFFFF" }]}
+            onLayout={event => setCompactContentHeight(Math.ceil(event.nativeEvent.layout.height))}
             onPress={expandSearch}
             activeOpacity={0.85}
           >
@@ -341,7 +345,7 @@ export default function SearchScreen() {
           style={{ height: cardHeight, opacity: cardOpacity, overflow: "hidden" }}
           pointerEvents={isExpanded ? "auto" : "none"}
         >
-          <View style={styles.searchCard}>
+          <View style={styles.searchCard} onLayout={event => setSearchContentHeight(Math.ceil(event.nativeEvent.layout.height))}>
             <View style={styles.inputRow}>
               <View
                 style={[styles.inputIcon, { backgroundColor: colors.secondary }]}
@@ -360,7 +364,7 @@ export default function SearchScreen() {
                   style={{
                     flex: 1,
                     fontSize: 15,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                     color: fromCity ? colors.foreground : colors.mutedForeground,
                   }}
                   numberOfLines={1}
@@ -419,7 +423,7 @@ export default function SearchScreen() {
                   style={{
                     flex: 1,
                     fontSize: 15,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                     color: toCity ? colors.foreground : colors.mutedForeground,
                   }}
                   numberOfLines={1}
@@ -449,7 +453,7 @@ export default function SearchScreen() {
                   styles.dayFilterLabel,
                   {
                     color: colors.mutedForeground,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                   },
                 ]}
               >
@@ -479,8 +483,8 @@ export default function SearchScreen() {
                           {
                             color: active ? "#FFFFFF" : colors.foreground,
                             fontFamily: active
-                              ? "Inter_600SemiBold"
-                              : "Inter_400Regular",
+                              ? ui.type.semibold
+                              : ui.type.regular,
                           },
                         ]}
                       >
@@ -497,12 +501,12 @@ export default function SearchScreen() {
               onPress={handleSearch}
               activeOpacity={0.85}
             >
-              <Feather name="search" size={18} color="#FFFFFF" />
+              <Feather name="search" size={18} color={colors.accentForeground} />
               <Text style={styles.searchBtnText}>Search Routes</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
+      </ScrollView>
 
       {viewState === 'loading' ? (
         <View style={styles.centered}>
@@ -510,7 +514,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.loadingText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             Finding routes...
@@ -527,7 +531,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.destructive, fontFamily: "Inter_600SemiBold" },
+              { color: colors.destructive, fontFamily: ui.type.semibold },
             ]}
           >
             Block settings unavailable
@@ -535,7 +539,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             {blockedContributorsError}
@@ -548,7 +552,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.loadingText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             Loading safety settings...
@@ -562,7 +566,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+              { color: colors.foreground, fontFamily: ui.type.semibold },
             ]}
           >
             No routes found
@@ -570,7 +574,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             Know a bus on this route?
@@ -583,7 +587,7 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+              { color: colors.foreground, fontFamily: ui.type.semibold },
             ]}
           >
             Search for a route
@@ -632,7 +636,7 @@ export default function SearchScreen() {
                    styles.resultsCount,
                    {
                      color: colors.mutedForeground,
-                     fontFamily: "Inter_500Medium",
+                     fontFamily: ui.type.medium,
                    },
                  ]}
                >
@@ -673,16 +677,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 20,
   },
   appTitle: {
     fontSize: 26,
-    fontFamily: "Inter_700Bold",
-    marginBottom: 2,
+    fontFamily: ui.type.bold,
+    marginBottom: 16,
   },
   appSubtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: ui.type.regular,
     marginBottom: 8,
   },
   compactBar: {
@@ -694,12 +698,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0,
     shadowRadius: 12,
-    elevation: 4,
+    elevation: 0,
   },
   compactRoute: {
     flex: 1,
@@ -708,8 +712,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   compactCity: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    fontFamily: ui.type.semibold,
     flexShrink: 1,
   },
   compactDay: {
@@ -720,55 +724,55 @@ const styles = StyleSheet.create({
   },
   compactDayText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    fontFamily: ui.type.semibold,
   },
   editBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 10,
   },
   searchCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: ui.radius.group,
     padding: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: 0,
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  inputIcon: {
+  inputIcon: {backgroundColor: ui.color.soft, 
     width: 36,
     height: 36,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  input: {
+  input: {minHeight: 50, 
     flex: 1,
-    fontSize: 15,
-    paddingVertical: 10,
+    fontSize: 16,
+    paddingVertical: 12,
   },
   swapRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 0,
     paddingLeft: 48,
   },
   dividerLine: { flex: 1, height: 1 },
   swapBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -776,7 +780,7 @@ const styles = StyleSheet.create({
   },
   separator: { height: 1, marginVertical: 8 },
   dayFilterSection: { gap: 8, marginBottom: 4 },
-  dayFilterLabel: { fontSize: 12 },
+  dayFilterLabel: { fontSize: 14 },
   dayChips: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -786,13 +790,13 @@ const styles = StyleSheet.create({
   dayChip: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  dayChipText: { fontSize: 13 },
-  searchBtn: {
+  dayChipText: { fontSize: 14 },
+  searchBtn: {minHeight: 50, 
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -802,9 +806,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   searchBtnText: {
-    color: "#FFFFFF",
+    color: ui.color.ink,
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: ui.type.semibold,
   },
   centered: {
     flex: 1,
@@ -814,11 +818,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   loadingText: { fontSize: 15, marginTop: 8 },
-  emptyTitle: { fontSize: 18, marginTop: 12, textAlign: "center" },
-  emptySubtitle: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  emptyTitle: { fontSize: 23, marginTop: 12, textAlign: "center" },
+  emptySubtitle: { fontSize: 16, textAlign: "center", lineHeight: 24 },
   list: { paddingTop: 16 },
   resultsCount: {
-    fontSize: 13,
+    fontSize: 14,
     paddingHorizontal: 16,
     paddingBottom: 8,
   },

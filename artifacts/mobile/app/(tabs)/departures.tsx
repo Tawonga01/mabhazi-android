@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -176,34 +177,34 @@ export default function DeparturesScreen() {
       {isBlockedContributorsLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Loading safety settings…
           </Text>
         </View>
       ) : blockedContributorsError ? (
         <View style={styles.centered}>
           <Feather name="alert-triangle" size={48} color={colors.destructive} />
-          <Text style={[styles.emptyTitle, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.emptyTitle, { color: colors.destructive, fontFamily: ui.type.semibold }]}>
             Block settings unavailable
           </Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             {blockedContributorsError}
           </Text>
         </View>
       ) : isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Loading departures…
           </Text>
         </View>
       ) : rows.length === 0 ? (
         <View style={styles.centered}>
           <Feather name="inbox" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
             No departures from {fromCity}
           </Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Try another city.
           </Text>
         </View>
@@ -247,7 +248,7 @@ export default function DeparturesScreen() {
                       styles.timeText,
                       {
                         color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_700Bold",
+                        fontFamily: ui.type.bold,
                       },
                     ]}
                   >
@@ -262,7 +263,7 @@ export default function DeparturesScreen() {
                       styles.destText,
                       {
                         color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_700Bold",
+                        fontFamily: ui.type.bold,
                       },
                     ]}
                     numberOfLines={1}
@@ -278,7 +279,7 @@ export default function DeparturesScreen() {
                       styles.opText,
                       {
                         color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_500Medium",
+                        fontFamily: ui.type.medium,
                       },
                     ]}
                     numberOfLines={2}
@@ -288,7 +289,7 @@ export default function DeparturesScreen() {
                   <View style={styles.pickupRow}>
                     <Feather name="map-pin" size={9} color={colors.mutedForeground} />
                     <Text
-                      style={[styles.pickupText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+                      style={[styles.pickupText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}
                       numberOfLines={1}
                     >
                       {item.pickupPoint}
@@ -300,13 +301,13 @@ export default function DeparturesScreen() {
                 <View style={{ width: COL_IN, alignItems: "flex-end", gap: 4 }}>
                   {status.isBoarding ? (
                     <View style={[styles.badge, { backgroundColor: "#22C55E" }]}>
-                      <Text style={[styles.badgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
+                      <Text style={[styles.badgeText, { color: "#fff", fontFamily: ui.type.bold }]}>
                         {status.label}
                       </Text>
                     </View>
                   ) : status.isDeparted ? (
                     <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
-                      <Text style={[styles.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                      <Text style={[styles.badgeText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
                         tmrw
                       </Text>
                     </View>
@@ -324,7 +325,7 @@ export default function DeparturesScreen() {
                           styles.badgeText,
                           {
                             color: status.isNext ? "#fff" : colors.foreground,
-                            fontFamily: "Inter_600SemiBold",
+                            fontFamily: ui.type.semibold,
                           },
                         ]}
                       >
@@ -358,7 +359,7 @@ export default function DeparturesScreen() {
               <View style={[styles.grabber, { backgroundColor: colors.border }]} />
             </View>
             <View style={[styles.pickerHead, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.pickerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.pickerTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                 Select departure city
               </Text>
               <TouchableOpacity
@@ -399,7 +400,7 @@ export default function DeparturesScreen() {
                           styles.cityRowText,
                           {
                             color: active ? colors.primary : colors.foreground,
-                            fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
+                            fontFamily: active ? ui.type.semibold : ui.type.regular,
                           },
                         ]}
                       >
@@ -422,17 +423,17 @@ export default function DeparturesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 12 },
+  header: { paddingHorizontal: 20, paddingBottom: 20 },
   headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   headerLeft: { flex: 1, marginRight: 12 },
   headerLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.65)",
+    fontSize: 14,
+    fontFamily: ui.type.regular,
+    color: '#B6C5D8',
     marginBottom: 4,
   },
-  cityBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
-  cityBtnText: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#fff", flexShrink: 1 },
+  cityBtn: {minHeight: 44,  flexDirection: "row", alignItems: "center", gap: 8 },
+  cityBtnText: { fontSize: 28, fontFamily: ui.type.bold, color: "#fff", flexShrink: 1 },
   livePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -443,41 +444,41 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ADE80" },
-  liveText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  liveText: { fontSize: 14, fontFamily: ui.type.semibold, color: "#fff" },
   colHeader: {
     flexDirection: "row",
     paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
   colLabel: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
+    fontSize: 12,
+    fontFamily: ui.type.semibold,
+    letterSpacing: 0,
+    textTransform: 'none',
   },
   colDestLabel: { flex: 1, paddingHorizontal: 8 },
-  row: {
+  row: {minHeight: 76, 
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 11,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderLeftWidth: 3,
+    borderLeftWidth: 0,
   },
-  timeText: { fontSize: 14 },
+  timeText: { fontSize: 16 },
   colDest: { flex: 1, paddingHorizontal: 8 },
-  destText: { fontSize: 14 },
+  destText: { fontSize: 16 },
   pickupRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
-  pickupText: { fontSize: 11, flex: 1 },
-  opText: { fontSize: 12, lineHeight: 17 },
+  pickupText: { fontSize: 14, flex: 1 },
+  opText: { fontSize: 14, lineHeight: 21 },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     alignItems: "center",
   },
-  badgeText: { fontSize: 11 },
+  badgeText: { fontSize: 13 },
   centered: {
     flex: 1,
     alignItems: "center",
@@ -485,8 +486,8 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 40,
   },
-  emptyTitle: { fontSize: 18, textAlign: "center", marginTop: 12 },
-  emptyText: { fontSize: 14, textAlign: "center" },
+  emptyTitle: { fontSize: 23, textAlign: "center", marginTop: 12 },
+  emptyText: {lineHeight: 24,  fontSize: 16, textAlign: "center" },
   pickerBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -511,8 +512,8 @@ const styles = StyleSheet.create({
     padding: 20,
     borderBottomWidth: 1,
   },
-  pickerTitle: { fontSize: 17 },
-  pickerClose: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  pickerTitle: { fontSize: 23 },
+  pickerClose: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   pickerEmpty: { padding: 40, alignItems: "center" },
   cityRow: {
     flexDirection: "row",

@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Modal,
@@ -258,8 +259,8 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
     maxHeight: "85%",
     minHeight: "50%",
     ...Platform.select({
@@ -278,8 +279,8 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 23, fontFamily: ui.type.bold },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -291,22 +292,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  searchInput: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium" },
+  searchInput: { flex: 1, fontSize: 16, fontFamily: ui.type.medium },
   centerBox: { padding: 40, alignItems: "center" },
-  item: {
+  item: {minHeight: 56, 
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   itemIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  itemText: { fontSize: 16, fontFamily: "Inter_500Medium", flex: 1 },
+  itemText: { fontSize: 16, fontFamily: ui.type.medium, flex: 1 },
   empty: { padding: 40, alignItems: "center", gap: 12 },
   emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  emptyText: { fontSize: 15, textAlign: "center", fontFamily: "Inter_400Regular" },
-  useCustomBtn: {
+  emptyText: { fontSize: 15, textAlign: "center", fontFamily: ui.type.regular },
+  useCustomBtn: {minHeight: 48, 
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -315,5 +316,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 8,
   },
-  useCustomText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  useCustomText: { fontSize: 15, fontFamily: ui.type.semibold },
 });

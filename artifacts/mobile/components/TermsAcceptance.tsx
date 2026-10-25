@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
@@ -157,7 +158,7 @@ export function TermsAcceptanceCard({
           <Text
             style={{
               color: colors.foreground,
-              fontFamily: "Inter_600SemiBold",
+              fontFamily: ui.type.semibold,
               fontSize: 14,
             }}
           >
@@ -167,13 +168,13 @@ export function TermsAcceptanceCard({
       </TouchableOpacity>
       <TouchableOpacity accessibilityRole="link" accessibilityLabel="Read the Terms" onPress={() => router.push("/terms")} style={{ minHeight: 44, justifyContent: "center" }}>
         <Text
-          style={{ color: colors.primary, fontFamily: "Inter_600SemiBold", fontSize: 14 }}
+          style={{ color: colors.primary, fontFamily: ui.type.semibold, fontSize: 14 }}
         >
           Read the Terms
         </Text>
       </TouchableOpacity>
       {terms.error ? (
-        <Text accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: "Inter_400Regular", fontSize: 14 }}>
+        <Text accessibilityRole="alert" style={{ color: colors.destructive, fontFamily: ui.type.regular, fontSize: 14 }}>
           {terms.error}
         </Text>
       ) : null}

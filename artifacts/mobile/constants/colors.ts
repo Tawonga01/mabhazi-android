@@ -1,34 +1,15 @@
+import { ui } from './ui';
 const colors = {
   light: {
-    text: "#0F1629",
-    tint: "#F97316",
-
-    background: "#F0F4F8",
-    foreground: "#0F1629",
-
-    card: "#FFFFFF",
-    cardForeground: "#0F1629",
-
-    primary: "#1E3A5F",
-    primaryForeground: "#FFFFFF",
-
-    secondary: "#EEF2FF",
-    secondaryForeground: "#1E3A5F",
-
-    muted: "#E8EDF3",
-    mutedForeground: "#64748B",
-
-    accent: "#F97316",
-    accentForeground: "#FFFFFF",
-
-    destructive: "#EF4444",
-    destructiveForeground: "#FFFFFF",
-
-    border: "#D1D9E6",
-    input: "#D1D9E6",
-  },
-
-  radius: 12,
+    text: ui.color.ink, tint: ui.color.orange,
+    background: ui.color.surface, foreground: ui.color.ink,
+    card: ui.color.paper, cardForeground: ui.color.ink,
+    primary: ui.color.navy, primaryForeground: '#FFFFFF',
+    secondary: ui.color.soft, secondaryForeground: ui.color.navy,
+    muted: ui.color.soft, mutedForeground: ui.color.muted,
+    accent: ui.color.orange, accentForeground: ui.color.navy,
+    destructive: ui.color.danger, destructiveForeground: '#FFFFFF',
+    border: ui.color.border, input: ui.color.border,
+  }, radius: ui.radius.control,
 };
-
 export default colors;

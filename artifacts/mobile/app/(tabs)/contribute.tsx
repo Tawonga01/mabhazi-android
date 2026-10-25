@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
@@ -76,7 +77,7 @@ function NumericInput({ value, min, max, onChange, unit, colors, width = 64 }: N
   return (
     <View style={numStyles.wrap}>
       <TextInput
-        style={[numStyles.box, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, width, fontFamily: "Inter_600SemiBold" }]}
+        style={[numStyles.box, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background, width, fontFamily: ui.type.semibold }]}
         value={focused ? raw : String(value).padStart(2, "0")}
         onChangeText={(t) => { if (/^\d{0,3}$/.test(t)) setRaw(t); }}
         onFocus={() => setFocused(true)}
@@ -89,7 +90,7 @@ function NumericInput({ value, min, max, onChange, unit, colors, width = 64 }: N
         maxLength={3}
         selectTextOnFocus
       />
-      <Text style={[numStyles.unit, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{unit}</Text>
+      <Text style={[numStyles.unit, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>{unit}</Text>
     </View>
   );
 }
@@ -115,11 +116,11 @@ interface FieldProps {
 function Field({ label, icon, value, onChangeText, placeholder, keyboardType = "default", colors }: FieldProps) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>{label}</Text>
       <View style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Feather name={icon} size={16} color={colors.mutedForeground} />
         <TextInput
-          style={[styles.fieldInput, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+          style={[styles.fieldInput, { color: colors.foreground, fontFamily: ui.type.regular }]}
           placeholder={placeholder}
           placeholderTextColor={colors.mutedForeground}
           value={value}
@@ -145,7 +146,7 @@ interface PickerFieldProps {
 function PickerField({ label, icon, value, onPress, onClear, placeholder, colors }: PickerFieldProps) {
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>{label}</Text>
       <TouchableOpacity
         style={[styles.inputWrapper, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={onPress}
@@ -157,7 +158,7 @@ function PickerField({ label, icon, value, onPress, onClear, placeholder, colors
             styles.fieldInput,
             {
               color: value ? colors.foreground : colors.mutedForeground,
-              fontFamily: "Inter_400Regular",
+              fontFamily: ui.type.regular,
             },
           ]}
           numberOfLines={1}
@@ -214,23 +215,23 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
           <View style={[styles.tyIconCircle, { backgroundColor: "#22C55E20" }]}>
             <Feather name="check-circle" size={52} color="#22C55E" />
           </View>
-          <Text style={[styles.tyTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[styles.tyTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
             Route Added!
           </Text>
           <View style={[styles.tyRouteBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <Text style={[styles.tyRoute, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.tyRoute, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
               {fromCity} → {toCity}
             </Text>
             {scheduledDays ? (
               <View style={styles.tyDaysRow}>
                 <Feather name="calendar" size={13} color={colors.primary} />
-                <Text style={[styles.tyDays, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                <Text style={[styles.tyDays, { color: colors.primary, fontFamily: ui.type.medium }]}>
                   {scheduledDays}
                 </Text>
               </View>
             ) : null}
           </View>
-          <Text style={[styles.tySubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.tySubtitle, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Thank you for helping the community!
           </Text>
           <TouchableOpacity
@@ -239,7 +240,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
             activeOpacity={0.85}
           >
             <Feather name="search" size={16} color="#FFFFFF" />
-            <Text style={[styles.tyBtnText, { fontFamily: "Inter_600SemiBold" }]}>Find this Route</Text>
+            <Text style={[styles.tyBtnText, { fontFamily: ui.type.semibold }]}>Find this Route</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tySecondaryBtn, { borderColor: colors.border }]}
@@ -247,7 +248,7 @@ function ThankYouOverlay({ visible, fromCity, toCity, scheduledDays, onDismiss, 
             activeOpacity={0.85}
           >
             <Feather name="plus" size={15} color={colors.primary} />
-            <Text style={[styles.tySecondaryBtnText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>Add Another Route</Text>
+            <Text style={[styles.tySecondaryBtnText, { color: colors.primary, fontFamily: ui.type.medium }]}>Add Another Route</Text>
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -279,7 +280,7 @@ function StopRow({ stop, index, onChange, onRemove, onPickCity, colors }: StopRo
     <View style={[stopStyles.row, { borderColor: colors.border, backgroundColor: colors.background }]}>
       <View style={stopStyles.rowHeader}>
         <View style={[stopStyles.badge, { backgroundColor: colors.primary + "20" }]}>
-          <Text style={[stopStyles.badgeText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+          <Text style={[stopStyles.badgeText, { color: colors.primary, fontFamily: ui.type.bold }]}>
             {index + 1}
           </Text>
         </View>
@@ -300,7 +301,7 @@ function StopRow({ stop, index, onChange, onRemove, onPickCity, colors }: StopRo
         <Text
           style={[
             stopStyles.cityText,
-            { color: stop.city ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" },
+            { color: stop.city ? colors.foreground : colors.mutedForeground, fontFamily: ui.type.regular },
           ]}
           numberOfLines={1}
         >
@@ -316,7 +317,7 @@ function StopRow({ stop, index, onChange, onRemove, onPickCity, colors }: StopRo
       </TouchableOpacity>
 
       <View style={stopStyles.timeRow}>
-        <Text style={[stopStyles.timeLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+        <Text style={[stopStyles.timeLabel, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
           Arrives at
         </Text>
         <NumericInput
@@ -380,7 +381,7 @@ const stopStyles = StyleSheet.create({
     gap: 8,
   },
   timeLabel: { fontSize: 13, flex: 1 },
-  timeSep: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  timeSep: { fontSize: 18, fontFamily: ui.type.semibold },
 });
 
 // ─── Form state ───────────────────────────────────────────────────────────────
@@ -603,7 +604,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
             <Feather name={isAuthenticated ? "user" : "log-in"} size={13} color="rgba(255,255,255,0.8)" />
             <Text style={styles.contributorText}>
               {isAuthenticated
-                ? <>Submitting as <Text style={{ fontFamily: "Inter_600SemiBold" }}>{displayName}</Text></>
+                ? <>Submitting as <Text style={{ fontFamily: ui.type.semibold }}>{displayName}</Text></>
                 : "Sign in when you're ready to submit"}
             </Text>
           </View>
@@ -616,7 +617,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
         >
           {/* Route */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Route
             </Text>
             <PickerField label="Departure City" icon="map-pin" value={form.fromCity} onPress={() => setFromCityModal(true)} onClear={() => setStr("fromCity")("")} placeholder="e.g. Harare" colors={colors} />
@@ -625,7 +626,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
 
           {/* Bus operator */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Bus Operator
             </Text>
             <PickerField label="Company Name" icon="truck" value={form.busCompany} onPress={() => setCompanyModal(true)} onClear={() => setStr("busCompany")("")} placeholder="e.g. Inter Africa" colors={colors} />
@@ -633,12 +634,12 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
 
           {/* Schedule */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Schedule
             </Text>
 
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
                 Departure Time
               </Text>
               <View style={styles.timeRow}>
@@ -651,7 +652,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+              <Text style={[styles.label, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
                 Journey Duration
               </Text>
               <View style={styles.timeRow}>
@@ -663,7 +664,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
             {hasDuration ? (
               <View style={[styles.arrivalBadge, { backgroundColor: "#22C55E15", borderColor: "#22C55E40" }]}>
                 <Feather name="check-circle" size={15} color="#16A34A" />
-                <Text style={[styles.arrivalText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.arrivalText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
                   Arrives at {arrivalTime}
                 </Text>
               </View>
@@ -672,7 +673,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
 
           {/* Operating Days */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Operating Days
             </Text>
             <DaysPicker value={form.scheduledDays} onChange={setStr("scheduledDays")} />
@@ -680,7 +681,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
 
           {/* Stops & Fare */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Stops &amp; Fare
             </Text>
             <Field label="Pickup Point" icon="navigation" value={form.pickupPoint} onChangeText={setStr("pickupPoint")} placeholder="e.g. Harare Roadport" colors={colors} />
@@ -691,11 +692,11 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
           {/* Intermediate Stops (Optional) */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+              <Text style={[styles.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                 Intermediate Stops
               </Text>
               <View style={[styles.optionalBadge, { backgroundColor: colors.secondary }]}>
-                <Text style={[styles.optionalText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.optionalText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                   Optional
                 </Text>
               </View>
@@ -720,7 +721,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
                 activeOpacity={0.7}
               >
                 <Feather name="plus-circle" size={16} color={colors.primary} />
-                <Text style={[styles.addStopText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                <Text style={[styles.addStopText, { color: colors.primary, fontFamily: ui.type.medium }]}>
                   {stops.length === 0 ? "Add a stop" : "Add another stop"}
                 </Text>
               </TouchableOpacity>
@@ -730,7 +731,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
           {submitError ? (
             <View style={[styles.errorBanner, { backgroundColor: "#FEF2F2", borderColor: "#FECACA" }]}>
               <Feather name="alert-circle" size={15} color="#DC2626" />
-              <Text style={[styles.errorBannerText, { color: "#DC2626", fontFamily: "Inter_500Medium" }]}>
+              <Text style={[styles.errorBannerText, { color: "#DC2626", fontFamily: ui.type.medium }]}>
                 {submitError}
               </Text>
             </View>
@@ -739,7 +740,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
           {authNotice && !isAuthenticated ? (
             <View style={[styles.authNotice, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
               <ActivityIndicator size="small" color={colors.primary} animating={isLoggingIn} />
-              <Text style={[styles.authNoticeText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+              <Text style={[styles.authNoticeText, { color: colors.primary, fontFamily: ui.type.medium }]}>
                 {authNotice}
               </Text>
             </View>
@@ -823,8 +824,8 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   pageTitle: {
-    fontSize: 24,
-    fontFamily: "Inter_700Bold",
+    fontSize: 26,
+    fontFamily: ui.type.bold,
     color: "#FFFFFF",
     marginBottom: 6,
   },
@@ -836,20 +837,20 @@ const styles = StyleSheet.create({
   contributorText: {
     fontSize: 13,
     color: "rgba(255,255,255,0.8)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: ui.type.regular,
   },
   scrollContent: {
     paddingTop: 16,
     paddingHorizontal: 16,
-    gap: 14,
+    gap: 20,
   },
   section: {
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     padding: 16,
-    gap: 12,
+    gap: 16,
   },
-  sectionTitle: { fontSize: 15, marginBottom: 2 },
+  sectionTitle: { fontSize: 19, marginBottom: 2 },
   sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -861,25 +862,25 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 20,
   },
-  optionalText: { fontSize: 11 },
-  stopHint: { fontSize: 12, lineHeight: 17, marginTop: -4 },
+  optionalText: { fontSize: 14 },
+  stopHint: { fontSize: 14, lineHeight: 21, marginTop: -4 },
   field: { gap: 6 },
-  label: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.4 },
-  inputWrapper: {
+  label: { fontSize: 14, textTransform: 'none', letterSpacing: 0 },
+  inputWrapper: {minHeight: 50, 
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   fieldInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
   },
   timeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  timeSep: { fontSize: 24, fontFamily: "Inter_600SemiBold" },
+  timeSep: { fontSize: 24, fontFamily: ui.type.semibold },
   divider: { height: 1 },
   arrivalBadge: {
     flexDirection: "row",
@@ -913,7 +914,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 8,
   },
-  readyBannerText: { fontSize: 13, flex: 1 },
+  readyBannerText: { fontSize: 14, flex: 1 },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -923,7 +924,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  errorBannerText: { fontSize: 13, flex: 1 },
+  errorBannerText: { fontSize: 14, flex: 1 },
   authNotice: {
     flexDirection: "row",
     alignItems: "center",
@@ -933,8 +934,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  authNoticeText: { fontSize: 13, lineHeight: 18, flex: 1 },
-  termsCard: {
+  authNoticeText: { fontSize: 14, lineHeight: 21, flex: 1 },
+  termsCard: {minHeight: 44, 
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
@@ -951,7 +952,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 1,
   },
-  termsText: { flex: 1, fontSize: 12, lineHeight: 18 },
+  termsText: { flex: 1, fontSize: 14, lineHeight: 21 },
   submitBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -963,8 +964,8 @@ const styles = StyleSheet.create({
   },
   submitBtnText: {
     fontSize: 16,
-    fontFamily: "Inter_700Bold",
-    color: "#FFFFFF",
+    fontFamily: ui.type.bold,
+    color: ui.color.ink,
   },
   // Login gate
   loginCard: {
@@ -994,7 +995,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 4,
   },
-  loginBtnText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  loginBtnText: { fontSize: 16, fontFamily: ui.type.semibold, color: ui.color.ink },
   // Thank-you overlay
   tyBackdrop: {
     flex: 1,
@@ -1011,14 +1012,14 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   tyIconCircle: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
-  tyTitle: { fontSize: 22 },
+  tyTitle: { fontSize: 26 },
   tyRouteBox: {
     width: "100%",
     borderWidth: 1,
@@ -1042,7 +1043,7 @@ const styles = StyleSheet.create({
     width: "100%",
     justifyContent: "center",
   },
-  tyBtnText: { fontSize: 15, color: "#FFFFFF" },
+  tyBtnText: { fontSize: 16, color: ui.color.ink },
   tySecondaryBtn: {
     flexDirection: "row",
     alignItems: "center",

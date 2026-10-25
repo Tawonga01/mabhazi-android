@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -55,7 +56,7 @@ function StartupScreen() {
       </View>
       <Text style={styles.startupTitle}>Mabhazi</Text>
       <Text style={styles.startupSubtitle}>Finding your next connection</Text>
-      <ActivityIndicator size="small" color="#F97316" style={styles.startupSpinner} />
+      <ActivityIndicator size="small" color={ui.color.orange} style={styles.startupSpinner} />
     </View>
   );
 }
@@ -105,7 +106,7 @@ const styles = StyleSheet.create({
     minHeight: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#1E3A5F",
+    backgroundColor: ui.color.navy,
     padding: 24,
   },
   startupMark: {

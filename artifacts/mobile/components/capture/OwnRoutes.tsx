@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { getV2OwnRoute, listV2OwnRoutes, type V2OwnRoute } from '@workspace/api-client-react';
@@ -60,11 +61,11 @@ export function OwnRoutes({ onClose, onFollowUp, onAddRoute }: { onClose(): void
       {error ? <Text accessibilityRole="alert" style={s.error}>{error}</Text> : null}
       {signIn ? <CaptureButton title="Sign in again" busy={busy} onPress={() => void login()} /> : null}
       {loaded && !routes.length ? <><Text style={s.reviewValue}>No submitted routes yet.</Text><CaptureButton title="Add a route" disabled={busy} onPress={onAddRoute} /></> : null}
-      {routes.map(route => <View key={route.clientSubmissionId} style={s.group}>
+      {routes.map(route => <View key={route.clientSubmissionId} style={{paddingVertical:20,borderBottomWidth:1,borderColor:ui.color.border,gap:8}}>
         <Text style={s.reviewValue}>{route.origin.name} → {route.destination.name}</Text>
-        <Text style={s.reviewValue}>{route.operator} · {route.departureTime}</Text>
+        <Text style={s.note}>{route.operator} · {route.departureTime}</Text>
         <Text style={s.note}>{route.availability === 'active' ? 'Submitted' : 'Unavailable'} · {new Date(route.submittedAt).toLocaleDateString()}</Text>
-        {route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add details" disabled={busy} onPress={() => void select(route.clientSubmissionId)} /> : null}
+        {route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add details" secondary disabled={busy} onPress={() => void select(route.clientSubmissionId)} /> : null}
       </View>)}
       {cursor ? <CaptureButton title="Load more routes" disabled={busy} onPress={() => void load(true)} /> : null}
       {loaded && routes.length ? <CaptureHelp label="About submitted routes"><Text style={s.note}>These are your saved route reports. Submitted does not mean reviewed or published.</Text></CaptureHelp> : null}

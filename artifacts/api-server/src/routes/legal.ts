@@ -59,6 +59,12 @@ const pageStyles = `
   input[type=text] { box-sizing: border-box; width: 100%; border: 1px solid #aebdce; border-radius: 8px; padding: 12px; font: inherit; }
   button { border: 0; border-radius: 8px; padding: 12px 18px; background: #ef4444; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
   footer { color: #64748b; font-size: 13px; margin-top: 36px; }
+
+body{background:#F4F6F9;color:#172D46;font:16px/1.6 system-ui,sans-serif}
+main{max-width:760px}h1{line-height:1.18;letter-spacing:-.025em}h2{font-size:21px;line-height:1.35}
+a,button{min-height:44px}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #A65315;outline-offset:3px}
+input,textarea,select,button{font:inherit}button{border-radius:12px}
+@media(max-width:480px){body{padding:20px 16px}main{padding:20px}h1{font-size:28px}}
 `;
 
 function escapeHtml(value: string): string {

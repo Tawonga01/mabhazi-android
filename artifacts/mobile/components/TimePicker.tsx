@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -99,7 +100,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
             styles.triggerText,
             {
               color: value ? colors.foreground : colors.mutedForeground,
-              fontFamily: value ? "Inter_500Medium" : "Inter_400Regular",
+              fontFamily: value ? ui.type.medium : ui.type.regular,
             },
           ]}
         >
@@ -136,7 +137,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
         <View style={styles.sheetWrapper} pointerEvents="box-none">
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <View style={styles.sheetHeader}>
-              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
                 Set Time
               </Text>
               <TouchableOpacity onPress={() => setOpen(false)}>
@@ -145,15 +146,15 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
             </View>
 
             <View style={[styles.timeDisplay, { backgroundColor: colors.background, borderColor: colors.border }]}>
-              <Text style={[styles.timeDisplayText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+              <Text style={[styles.timeDisplayText, { color: colors.primary, fontFamily: ui.type.bold }]}>
                 {String(hour12).padStart(2, "0")} : {String(minute).padStart(2, "0")}
               </Text>
               <View style={[styles.ampmBadge, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.ampmBadgeText, { fontFamily: "Inter_600SemiBold" }]}>{ampm}</Text>
+                <Text style={[styles.ampmBadgeText, { fontFamily: ui.type.semibold }]}>{ampm}</Text>
               </View>
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
               Hour
             </Text>
             <View style={styles.grid}>
@@ -177,7 +178,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
                         styles.gridCellText,
                         {
                           color: sel ? "#FFFFFF" : colors.foreground,
-                          fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular",
+                          fontFamily: sel ? ui.type.semibold : ui.type.regular,
                         },
                       ]}
                     >
@@ -188,7 +189,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
               })}
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
               Minute
             </Text>
             <View style={styles.grid}>
@@ -211,8 +212,8 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
                       style={[
                         styles.gridCellText,
                         {
-                          color: sel ? "#FFFFFF" : colors.foreground,
-                          fontFamily: sel ? "Inter_600SemiBold" : "Inter_400Regular",
+                          color: sel ? colors.accentForeground : colors.foreground,
+                          fontFamily: sel ? ui.type.semibold : ui.type.regular,
                         },
                       ]}
                     >
@@ -242,7 +243,7 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
                       styles.ampmBtnText,
                       {
                         color: ampm === v ? "#FFFFFF" : colors.foreground,
-                        fontFamily: ampm === v ? "Inter_700Bold" : "Inter_400Regular",
+                        fontFamily: ampm === v ? ui.type.bold : ui.type.regular,
                       },
                     ]}
                   >
@@ -257,8 +258,8 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
               onPress={handleConfirm}
               activeOpacity={0.85}
             >
-              <Feather name="check" size={18} color="#FFFFFF" />
-              <Text style={[styles.confirmBtnText, { fontFamily: "Inter_600SemiBold" }]}>
+              <Feather name="check" size={18} color={colors.accentForeground} />
+              <Text style={[styles.confirmBtnText, { fontFamily: ui.type.semibold }]}>
                 Confirm {String(hour12).padStart(2, "0")}:{String(minute).padStart(2, "0")} {ampm}
               </Text>
             </TouchableOpacity>
@@ -270,18 +271,18 @@ export function TimePicker({ value, onChange, placeholder = "Select time" }: Tim
 }
 
 const styles = StyleSheet.create({
-  trigger: {
+  trigger: {minHeight: 50, 
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
   triggerText: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -316,7 +317,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sheetTitle: {
-    fontSize: 17,
+    fontSize: 23,
   },
   timeDisplay: {
     flexDirection: "row",
@@ -342,9 +343,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   sectionLabel: {
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
+    fontSize: 14,
+    textTransform: 'none',
+    letterSpacing: 0,
     marginBottom: -4,
   },
   grid: {
@@ -352,7 +353,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
-  gridCell: {
+  gridCell: {justifyContent: 'center', minHeight: 44, 
     width: "22%",
     paddingVertical: 9,
     borderRadius: 10,
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   confirmBtnText: {
-    color: "#FFFFFF",
-    fontSize: 15,
+    color: ui.color.ink,
+    fontSize: 16,
   },
 });

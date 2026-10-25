@@ -368,6 +368,14 @@ try {
     const s=await session(null,false,'search');
     await s.page.getByText('Search for a route',{exact:true}).waitFor();
     await s.page.screenshot({path:path.join(output,'search-home.png'),fullPage:true});
+    await s.page.setViewportSize({width:320,height:568});
+    await s.page.evaluate(()=>{for(const el of document.querySelectorAll('div[dir="auto"],input')){const computed=getComputedStyle(el);if(computed.fontSize){el.dataset.originalUiFont=el.style.fontSize;el.style.fontSize=(parseFloat(computed.fontSize)*1.4)+'px';}}});
+    await s.page.getByText('Search Routes',{exact:true}).scrollIntoViewIfNeeded();
+    const searchBounds=await s.page.getByText('Search Routes',{exact:true}).boundingBox();assert(searchBounds&&searchBounds.y>=0&&searchBounds.y+searchBounds.height<568,'Search action remains reachable with larger text');
+    assert.equal(await s.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No horizontal page overflow on narrow Search');
+    await s.page.screenshot({path:path.join(output,'search-small-large-text.png'),fullPage:true});
+    await s.page.evaluate(()=>{for(const el of document.querySelectorAll('[data-original-ui-font]')){el.style.fontSize=el.dataset.originalUiFont;delete el.dataset.originalUiFont;}});
+    await s.page.setViewportSize({width:390,height:844});
     await s.page.getByText('Search Routes',{exact:true}).click();
     const card=s.page.getByRole('button',{name:'View route: Harare to Bulawayo, UI fixture bus',exact:true});await card.waitFor();
     await s.page.screenshot({path:path.join(output,'search-results.png'),fullPage:true});
@@ -545,7 +553,6 @@ try {
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-  for(const name of ['dated-fare-reports.png','dated-fare-details.png','dated-fare-hidden.png','dated-fare-pending.png','public-search.png','public-route-detail.png','public-fare-review.png','public-stale-target.png','public-blocks.png','my-routes.png','own-route-followup.png','empty-search.png','empty-search-form.png','search-error.png','contribution-menu.png','minimum-form.png','saved-result.png','retry-result.png','terms-preserved.png','journey-review.png','focused-fare.png','focused-fare-compact.png','search-home.png','search-results.png','route-details.png','profile.png','guest-profile.png','departures.png','full-route-form.png']) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
 } catch(error) {
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
