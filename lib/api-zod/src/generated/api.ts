@@ -8,6 +8,240 @@
 import * as zod from "zod";
 
 /**
+ * Paid experiences, quotes and advertised fares remain scoped reports, not a current ticket price or canonical service. Current-time assessment/evidence and both route/fare contributor safety gates apply. Opaque presentation IDs never expose observation, receipt, source or author identity. Unready/date-held evidence is signalled without an amount. Refresh when a live cursor is no longer available.
+ * @summary Read assessed dated fare reports for one visible route
+ */
+export const ListV2FareReportsParams = zod.object({
+  subjectId: zod.coerce.string().uuid(),
+});
+
+export const ListV2FareReportsQueryParams = zod.object({
+  cursor: zod.coerce.string().uuid().optional(),
+});
+
+export const listV2FareReportsHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const listV2FareReportsHeaderXMabhaziAccountMax = 200;
+
+export const ListV2FareReportsHeader = zod.object({
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(listV2FareReportsHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(listV2FareReportsHeaderXMabhaziAccountMax)
+    .optional()
+    .describe(
+      "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
+    ),
+});
+
+export const listV2FareReportsResponseItemsItemAmountMax = 13;
+
+export const listV2FareReportsResponseItemsItemAmountRegExp = new RegExp(
+  "^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$",
+);
+export const listV2FareReportsResponseItemsItemCurrencyRegExp = new RegExp(
+  "^[A-Z]{3}$",
+);
+export const listV2FareReportsResponseItemsItemScopeSegmentOriginCityIdMax = 999999999;
+
+export const listV2FareReportsResponseItemsItemScopeSegmentDestinationCityIdMax = 999999999;
+
+export const listV2FareReportsResponseItemsItemScopeServiceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemScopeQuotationDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemScopeSourceDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemScopeEffectiveFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemScopeEffectiveToRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemScopePassengerLabelMax = 120;
+
+export const listV2FareReportsResponseItemsItemScopeTicketLabelMax = 120;
+
+export const listV2FareReportsResponseItemsItemScopePaymentMethodMax = 120;
+
+export const listV2FareReportsResponseItemsItemObservedDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemOldestEvidenceDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsItemNewestEvidenceDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const listV2FareReportsResponseItemsMax = 20;
+
+export const ListV2FareReportsResponse = zod.object({
+  subjectId: zod.string().uuid(),
+  items: zod
+    .array(
+      zod.object({
+        id: zod.string().uuid(),
+        kind: zod.enum(["paid", "quoted", "advertised"]),
+        amount: zod
+          .string()
+          .max(listV2FareReportsResponseItemsItemAmountMax)
+          .regex(listV2FareReportsResponseItemsItemAmountRegExp),
+        currency: zod
+          .string()
+          .regex(listV2FareReportsResponseItemsItemCurrencyRegExp),
+        scope: zod.object({
+          schemaVersion: zod.enum(["1.0"]),
+          segment: zod.object({
+            kind: zod.enum(["city_pair"]),
+            originCityId: zod
+              .number()
+              .min(1)
+              .max(
+                listV2FareReportsResponseItemsItemScopeSegmentOriginCityIdMax,
+              ),
+            destinationCityId: zod
+              .number()
+              .min(1)
+              .max(
+                listV2FareReportsResponseItemsItemScopeSegmentDestinationCityIdMax,
+              ),
+          }),
+          serviceDate: zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemScopeServiceDateRegExp)
+            .optional(),
+          quotationDate: zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemScopeQuotationDateRegExp)
+            .optional(),
+          sourceDate: zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemScopeSourceDateRegExp)
+            .optional(),
+          effectiveFrom: zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemScopeEffectiveFromRegExp)
+            .optional(),
+          effectiveTo: zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemScopeEffectiveToRegExp)
+            .optional(),
+          passengerCategory: zod.enum([
+            "adult",
+            "child",
+            "concession",
+            "other",
+            "unknown",
+          ]),
+          passengerLabel: zod
+            .string()
+            .min(1)
+            .max(listV2FareReportsResponseItemsItemScopePassengerLabelMax)
+            .optional(),
+          ticketBasis: zod.enum(["one_way", "return", "other", "unknown"]),
+          ticketLabel: zod
+            .string()
+            .min(1)
+            .max(listV2FareReportsResponseItemsItemScopeTicketLabelMax)
+            .optional(),
+          paymentMethod: zod
+            .string()
+            .min(1)
+            .max(listV2FareReportsResponseItemsItemScopePaymentMethodMax)
+            .optional(),
+          luggageIncluded: zod.boolean().optional(),
+          timeBasis: zod
+            .enum(["unspecified", "scheduled", "actual"])
+            .optional(),
+        }),
+        basis: zod.enum([
+          "travelled",
+          "saw_operating",
+          "observed_sign",
+          "operator_statement",
+          "heard_from_other",
+          "unprovided",
+          "legacy_import",
+        ]),
+        observedDate: zod.union([
+          zod
+            .string()
+            .regex(listV2FareReportsResponseItemsItemObservedDateOneRegExp),
+          zod.null(),
+        ]),
+        receivedAt: zod.coerce.date(),
+        oldestEvidenceDate: zod.union([
+          zod
+            .string()
+            .regex(
+              listV2FareReportsResponseItemsItemOldestEvidenceDateOneRegExp,
+            ),
+          zod.null(),
+        ]),
+        newestEvidenceDate: zod.union([
+          zod
+            .string()
+            .regex(
+              listV2FareReportsResponseItemsItemNewestEvidenceDateOneRegExp,
+            ),
+          zod.null(),
+        ]),
+        status: zod.enum(["reported", "needs_review"]),
+        freshness: zod.enum(["current", "recheck_due", "unknown"]),
+        temporalClass: zod.enum(["historical", "ongoing"]),
+        canBlock: zod.boolean(),
+      }),
+    )
+    .max(listV2FareReportsResponseItemsMax),
+  hasPendingReports: zod.boolean(),
+  hasHiddenResults: zod.boolean(),
+  nextCursor: zod.string().uuid().optional(),
+});
+
+/**
+ * Authenticated safety exception without contribution Terms; resolves the opaque report reference privately and rechecks route, observation, assessment and contributor visibility. No private author ID is returned.
+ * @summary Report a fare or hide its anonymous contributor
+ */
+export const FareV2SafetyParams = zod.object({
+  subjectId: zod.coerce.string().uuid(),
+  fareId: zod.coerce.string().uuid(),
+});
+
+export const fareV2SafetyHeaderXMabhaziAccountMax = 256;
+
+export const fareV2SafetyHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const FareV2SafetyHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(fareV2SafetyHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(fareV2SafetyHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+});
+
+export const FareV2SafetyBody = zod.object({
+  action: zod.enum(["report", "block"]),
+  reason: zod
+    .enum(["spam", "inaccurate", "offensive", "unsafe", "other"])
+    .optional(),
+});
+
+export const FareV2SafetyResponse = zod.object({
+  status: zod.enum(["reported", "blocked", "unblocked"]),
+});
+
+/**
  * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
  * @summary Save a typed actual-journey report without inferring a timetable
  */
@@ -988,6 +1222,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   schemaVersion: zod.enum(["1.0"]),
   minimumLeadEnabled: zod.boolean(),
   actualJourneyEnabled: zod.boolean().optional(),
+  fareReportsEnabled: zod.boolean().optional(),
 });
 
 /**

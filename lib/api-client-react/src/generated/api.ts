@@ -38,6 +38,7 @@ import type {
   LegalSummary,
   ListCitiesParams,
   ListV2CitiesParams,
+  ListV2FareReportsParams,
   ListV2OwnRoutesParams,
   LogoutSuccess,
   MobileTokenExchangeRequest,
@@ -63,6 +64,7 @@ import type {
   V2MinimumLeadRequest,
   V2OwnRouteEnvelope,
   V2OwnRoutes,
+  V2PublicFarePage,
   V2PublicSearch,
   V2PublicSubjectEnvelope,
   V2ReceiptLookup,
@@ -79,6 +81,219 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Paid experiences, quotes and advertised fares remain scoped reports, not a current ticket price or canonical service. Current-time assessment/evidence and both route/fare contributor safety gates apply. Opaque presentation IDs never expose observation, receipt, source or author identity. Unready/date-held evidence is signalled without an amount. Refresh when a live cursor is no longer available.
+ * @summary Read assessed dated fare reports for one visible route
+ */
+export const getListV2FareReportsUrl = (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/subjects/${subjectId}/fares?${stringifiedParams}`
+    : `/api/v2/subjects/${subjectId}/fares`;
+};
+
+export const listV2FareReports = async (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: RequestInit,
+): Promise<V2PublicFarePage> => {
+  return customFetch<V2PublicFarePage>(
+    getListV2FareReportsUrl(subjectId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2FareReportsQueryKey = (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+) => {
+  return [
+    `/api/v2/subjects/${subjectId}/fares`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2FareReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2FareReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2FareReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListV2FareReportsQueryKey(subjectId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2FareReports>>
+  > = ({ signal }) =>
+    listV2FareReports(subjectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2FareReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2FareReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2FareReports>>
+>;
+export type ListV2FareReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read assessed dated fare reports for one visible route
+ */
+
+export function useListV2FareReports<
+  TData = Awaited<ReturnType<typeof listV2FareReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2FareReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2FareReportsQueryOptions(
+    subjectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated safety exception without contribution Terms; resolves the opaque report reference privately and rechecks route, observation, assessment and contributor visibility. No private author ID is returned.
+ * @summary Report a fare or hide its anonymous contributor
+ */
+export const getFareV2SafetyUrl = (subjectId: string, fareId: string) => {
+  return `/api/v2/subjects/${subjectId}/fares/${fareId}/safety`;
+};
+
+export const fareV2Safety = async (
+  subjectId: string,
+  fareId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getFareV2SafetyUrl(subjectId, fareId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteSafetyAction),
+    },
+  );
+};
+
+export const getFareV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    TError,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof fareV2Safety>>,
+  TError,
+  { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["fareV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, fareId, data } = props ?? {};
+
+    return fareV2Safety(subjectId, fareId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FareV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof fareV2Safety>>
+>;
+export type FareV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type FareV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a fare or hide its anonymous contributor
+ */
+export const useFareV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    TError,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof fareV2Safety>>,
+  TError,
+  { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getFareV2SafetyMutationOptions(options));
+};
 
 /**
  * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.

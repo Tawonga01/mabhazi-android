@@ -478,6 +478,7 @@ export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
+  fareReportsEnabled?: boolean;
 }
 
 export interface V2City {
@@ -1062,6 +1063,84 @@ export interface V2PublicClockReport {
   basis: V2PublicClockReportBasis;
 }
 
+export type V2PublicFareReportKind =
+  (typeof V2PublicFareReportKind)[keyof typeof V2PublicFareReportKind];
+
+export const V2PublicFareReportKind = {
+  paid: "paid",
+  quoted: "quoted",
+  advertised: "advertised",
+} as const;
+
+export type V2PublicFareReportBasis =
+  (typeof V2PublicFareReportBasis)[keyof typeof V2PublicFareReportBasis];
+
+export const V2PublicFareReportBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+  legacy_import: "legacy_import",
+} as const;
+
+export type V2PublicFareReportStatus =
+  (typeof V2PublicFareReportStatus)[keyof typeof V2PublicFareReportStatus];
+
+export const V2PublicFareReportStatus = {
+  reported: "reported",
+  needs_review: "needs_review",
+} as const;
+
+export type V2PublicFareReportFreshness =
+  (typeof V2PublicFareReportFreshness)[keyof typeof V2PublicFareReportFreshness];
+
+export const V2PublicFareReportFreshness = {
+  current: "current",
+  recheck_due: "recheck_due",
+  unknown: "unknown",
+} as const;
+
+export type V2PublicFareReportTemporalClass =
+  (typeof V2PublicFareReportTemporalClass)[keyof typeof V2PublicFareReportTemporalClass];
+
+export const V2PublicFareReportTemporalClass = {
+  historical: "historical",
+  ongoing: "ongoing",
+} as const;
+
+export interface V2PublicFareReport {
+  id: string;
+  kind: V2PublicFareReportKind;
+  /**
+   * @maxLength 13
+   * @pattern ^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$
+   */
+  amount: string;
+  /** @pattern ^[A-Z]{3}$ */
+  currency: string;
+  scope: V2ActualFareScope;
+  basis: V2PublicFareReportBasis;
+  observedDate: string | null;
+  receivedAt: string;
+  oldestEvidenceDate: string | null;
+  newestEvidenceDate: string | null;
+  status: V2PublicFareReportStatus;
+  freshness: V2PublicFareReportFreshness;
+  temporalClass: V2PublicFareReportTemporalClass;
+  canBlock: boolean;
+}
+
+export interface V2PublicFarePage {
+  subjectId: string;
+  /** @maxItems 20 */
+  items: V2PublicFareReport[];
+  hasPendingReports: boolean;
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
 export type V2PublicLeadKind =
   (typeof V2PublicLeadKind)[keyof typeof V2PublicLeadKind];
 
@@ -1225,6 +1304,10 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListV2FareReportsParams = {
+  cursor?: string;
+};
 
 export type SearchV2RoutesParams = {
   /**

@@ -319,6 +319,23 @@ before(async () => {
   await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_preview_hash_changed'));await db.query('ROLLBACK');
   await db.query('BEGIN');await db.query(assessmentFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
   await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_function_fence_changed'));await db.query('ROLLBACK');
+  // The exact Preview0032 wrapper must upgrade populated evidence without rewriting it.
+  const fareApply=await readFile(new URL('../scripts/preview-apply-0032.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_public_fare_refs(id uuid)');
+  await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes('fare_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const fareOriginal=(await db.query('SELECT * FROM v2_observations WHERE original_subject_id=$1 ORDER BY id',[currencyRepairSubject])).rows;
+  await db.query(fareApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0032_public_fare_reports.sql\n';
+  const fareRefs=(await db.query('SELECT * FROM v2_public_fare_refs ORDER BY id')).rows;assert.ok(fareRefs.length>=2);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations WHERE original_subject_id=$1 ORDER BY id',[currencyRepairSubject])).rows,fareOriginal);
+  await db.query(fareApply);assert.deepEqual((await db.query('SELECT * FROM v2_public_fare_refs ORDER BY id')).rows,fareRefs);
+  for(const [change,expected]of[
+    ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0032_public_fare_reports.sql'",'fare_preview_hash_changed'],
+    ["GRANT EXECUTE ON FUNCTION v2_api_fare_report_action(varchar,uuid,uuid,text,text,varchar[]) TO PUBLIC",'fare_function_fence_changed'],
+    ['ALTER TABLE v2_public_fare_refs DISABLE ROW LEVEL SECURITY','fare_rls_changed'],
+    ['ALTER TABLE v2_observations DISABLE TRIGGER v2_fare_reference_created','fare_trigger_changed'],
+    ['DELETE FROM v2_public_fare_refs','fare_reference_coverage_changed'],
+    ['GRANT INSERT ON v2_public_fare_refs TO mabhazi_api','fare_relation_fence_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);

@@ -8,6 +8,7 @@ import { saveMinimumLead } from '../lib/minimumLead';
 import { parseActualJourney, saveActualJourney } from '../lib/actualJourney';
 import ownRoutes from './ownRoutesV2';
 import publicRoutes from './publicRoutesV2';
+import fareReports,{fareReportsEnabled} from './fareReportsV2';
 import routeSafety, { parseBlockedIds } from './routeSafetyV2';
 
 const router: IRouter = Router();
@@ -39,13 +40,14 @@ async function actualEnabled() {
 }
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 router.get('/capabilities', async (_req, res) => {
-  let ready = false, actualReady=false;
-  try { ready = await enabled(); actualReady=ready && await actualEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
-  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady });
+  let ready = false, actualReady=false, fareReady=false;
+  try { ready = await enabled(); actualReady=ready && await actualEnabled(); fareReady=actualReady && await fareReportsEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
+  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady });
 });
 // History and receipt recovery remain readable when new intake is paused.
 router.use('/my-routes', ownRoutes);
 router.use(publicRoutes);
+router.use(fareReports);
 router.use(routeSafety);
 router.use(async (req, res, next) => {
   // Pausing new intake must not prevent an account checking a committed receipt.

@@ -131,7 +131,7 @@ export function BlockedContributorsManager({
             </ScrollView>
           )}
 
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Account route-report blocks" style={[styles.unblock,{borderColor:colors.border}]} onPress={()=>{onClose();requestAnimationFrame(()=>capture.open({kind:'public_blocks'}));}}><Text style={[styles.unblockText,{color:colors.primary}]}>Route-report blocks on your account</Text></TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Account contributor blocks" style={[styles.unblock,{borderColor:colors.border}]} onPress={()=>{onClose();requestAnimationFrame(()=>capture.open({kind:'public_blocks'}));}}><Text style={[styles.unblockText,{color:colors.primary}]}>Hidden contributors on your account</Text></TouchableOpacity>
           <TouchableOpacity
             style={[styles.done, { backgroundColor: colors.primary }]}
             onPress={onClose}

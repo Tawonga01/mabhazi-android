@@ -6,4 +6,6 @@ export const v2RouteReportBlocksTable=pgTable('v2_route_report_blocks',{
 export const v2PublicLeadHidesTable=pgTable('v2_public_lead_hides',{
  subjectId:uuid('subject_id').primaryKey(),reportId:integer('report_id').notNull(),hiddenAt:timestamp('hidden_at',{withTimezone:true}).notNull().defaultNow(),
 });
-export const publicRouteContextTables=[v2RouteReportBlocksTable,v2PublicLeadHidesTable];
+export const v2PublicFareRefsTable=pgTable('v2_public_fare_refs',{id:uuid('id').primaryKey().defaultRandom(),observationId:uuid('observation_id').notNull().unique()});
+export const v2PublicFareHidesTable=pgTable('v2_public_fare_hides',{fareRef:uuid('fare_ref').primaryKey(),reportId:integer('report_id').notNull(),hiddenAt:timestamp('hidden_at',{withTimezone:true}).notNull().defaultNow()});
+export const publicRouteContextTables=[v2RouteReportBlocksTable,v2PublicLeadHidesTable,v2PublicFareRefsTable,v2PublicFareHidesTable];

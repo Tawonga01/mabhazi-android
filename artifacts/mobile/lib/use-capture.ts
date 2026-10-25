@@ -6,9 +6,10 @@ import { recoverOrSubmit, type PendingLead } from './minimum-lead-model';
 import type { SecureDraftRecord } from './secure-draft-store';
 import { useTermsAcceptance } from '@/components/TermsAcceptance';
 
-export async function boundedRequest<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+export async function boundedRequest<T>(request: (signal: AbortSignal) => Promise<T>, parent?:AbortSignal): Promise<T> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
-  try { return await request(controller.signal); } finally { clearTimeout(timer); }
+  const abort=()=>controller.abort();parent?.addEventListener('abort',abort,{once:true});if(parent?.aborted)controller.abort();
+  try { return await request(controller.signal); } finally { clearTimeout(timer);parent?.removeEventListener('abort',abort); }
 }
 interface CaptureStore<D, R> {
   read(owner: string | null): Promise<SecureDraftRecord<D, R> | null>;
