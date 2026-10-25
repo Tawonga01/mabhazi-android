@@ -204,3 +204,89 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
   'otherPendingStages',(SELECT count(*) FROM public.v2_jobs WHERE state='pending'
    AND NOT ((kind='assess' AND policy_version='evidence/1') OR (kind='normalise' AND policy_version='intake/1') OR (kind='associate' AND policy_version IN('association/1','pattern-association/1','actual-association/1')))));
 $$;
+
+
+-- Legacy invalidation producers retain their own operation policies. Any later
+-- generation change on an already assessed subject also needs current evidence
+-- recomputation, without waiting for a manual enqueue or consuming unknown work.
+CREATE FUNCTION public.v2_worker_assessment_input_changed() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.lifecycle='active' AND (NEW.input_generation<>OLD.input_generation OR NEW.lifecycle<>OLD.lifecycle)
+  AND EXISTS(SELECT 1 FROM public.v2_field_assessments WHERE subject_id=NEW.id) THEN
+  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+   SELECT 'assess',NEW.id,NEW.input_generation,(SELECT version FROM public.v2_evidence_policy_state WHERE id),NEW.id
+   WHERE NOT EXISTS(SELECT 1 FROM public.v2_jobs j WHERE j.subject_id=NEW.id AND j.kind='assess' AND j.requested_generation=NEW.input_generation
+    AND j.policy_version=(SELECT version FROM public.v2_evidence_policy_state WHERE id) AND j.state IN('pending','leased')) ON CONFLICT DO NOTHING;
+ END IF;
+ RETURN NEW;
+END;$$;
+CREATE TRIGGER v2_worker_assessment_input_changed AFTER UPDATE ON public.v2_subjects FOR EACH ROW EXECUTE FUNCTION public.v2_worker_assessment_input_changed();
+REVOKE ALL ON FUNCTION public.v2_worker_assessment_input_changed() FROM PUBLIC,mabhazi_api;
+DO $wake_permissions$ DECLARE r text;BEGIN
+ FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION public.v2_worker_assessment_input_changed() FROM %I',r);END IF;
+ END LOOP;
+END;$wake_permissions$;
+
+-- Currency is part of a fare proposition. One-account repetition suppression
+-- must not discard another currency; this repairs the existing documented rule.
+DO $prior_evaluator$ DECLARE body text;secure boolean;settings text[];BEGIN
+ SELECT prosrc,prosecdef,proconfig INTO body,secure,settings FROM pg_proc WHERE oid='public.v2_evaluate_assessment_excluding(uuid,text,jsonb,timestamptz,text,uuid[])'::regprocedure;
+ IF encode(sha256(convert_to(replace(body,chr(13)||chr(10),chr(10)),'UTF8')),'hex')<>'4957b956e325dc822cb45a7187feb65c621116bb65934bb090ff6dec5dab78c6' OR secure IS DISTINCT FROM false OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog','TimeZone=UTC']::text[] THEN RAISE EXCEPTION 'assessment_prior_evaluator_changed';END IF;
+END;$prior_evaluator$;
+CREATE OR REPLACE FUNCTION public.v2_evaluate_assessment_excluding(subject uuid,field text,scope jsonb,as_of timestamptz,policy text,excluded uuid[]) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path=pg_catalog SET timezone='UTC' AS $$
+ WITH rows AS MATERIALIZED (
+   SELECT observation_id,owner_id,value,evidence_date,freshness,temporal_class,complete_scope,basis_eligible,known_source,source_groups,
+     admissible AND NOT(observation_id=ANY(excluded)) admissible,
+     CASE WHEN observation_id=ANY(excluded) THEN 'review_excluded' ELSE reason END reason,next_change,state_revision,target_revision
+   FROM public.v2_assessment_rows(subject,field,scope,as_of,policy)),
+ ranked AS (
+   SELECT *,row_number() OVER(PARTITION BY owner_id,source_groups,CASE WHEN field LIKE 'fare.%' THEN value->>'currency' ELSE '' END ORDER BY admissible DESC,
+     (complete_scope AND freshness='current') DESC,evidence_date DESC NULLS LAST,observation_id DESC) rn FROM rows
+ ), eligible AS (SELECT * FROM ranked WHERE admissible AND rn=1),
+ witnesses AS (
+   SELECT a.value,a.observation_id first_id,b.observation_id second_id,
+     row_number() OVER(PARTITION BY a.value ORDER BY a.evidence_date,a.observation_id,b.evidence_date,b.observation_id) rank
+   FROM eligible a JOIN eligible b ON a.value=b.value AND a.owner_id<>b.owner_id
+     AND (a.evidence_date,a.observation_id)<(b.evidence_date,b.observation_id)
+     AND NOT a.source_groups && b.source_groups
+   WHERE a.known_source AND b.known_source AND a.complete_scope AND b.complete_scope AND a.basis_eligible AND b.basis_eligible
+     AND a.freshness='current' AND b.freshness='current' AND a.temporal_class='ongoing' AND b.temporal_class='ongoing'
+ ), candidates AS (
+   SELECT e.value,count(DISTINCT e.owner_id) contributors,
+     CASE WHEN w.first_id IS NOT NULL THEN 'corroborated' ELSE 'reported' END support,
+     CASE WHEN bool_or(e.freshness='current') THEN 'current' WHEN bool_or(e.freshness='recheck_due') THEN 'recheck_due' ELSE 'unknown' END freshness,
+     min(e.temporal_class) temporal_class,min(e.evidence_date) oldest_date,max(e.evidence_date) newest_date,
+     w.first_id,w.second_id,bool_or(e.complete_scope AND e.freshness='current' AND e.basis_eligible) conflict_eligible
+   FROM eligible e LEFT JOIN witnesses w ON w.value=e.value AND w.rank=1 GROUP BY e.value,w.first_id,w.second_id
+ )
+ SELECT jsonb_build_object('policyVersion',policy,'assessedAt',as_of,
+   'candidates',COALESCE((SELECT jsonb_agg(jsonb_build_object('value',value,'support',support,'contributors',contributors,
+     'freshness',freshness,'temporalClass',temporal_class,'oldestDate',oldest_date,'newestDate',newest_date,
+     'witnesses',CASE WHEN first_id IS NULL THEN '[]'::jsonb ELSE to_jsonb(ARRAY[first_id,second_id]) END) ORDER BY value::text) FROM candidates),'[]'::jsonb),
+   'dispute',CASE WHEN EXISTS(SELECT 1 FROM candidates WHERE conflict_eligible GROUP BY CASE
+       WHEN field LIKE 'fare.%' THEN value->>'currency' WHEN field='timetable.sign_presence' THEN (value->'place')::text ELSE '' END
+       HAVING count(*)>1) THEN 'open' ELSE 'none' END,
+   'needsContext',COALESCE((SELECT bool_or(admissible AND NOT complete_scope) FROM ranked),false),
+   'nextChangeAt',(SELECT min(next_change) FROM rows),
+   'inputs',COALESCE((SELECT jsonb_agg(jsonb_build_object('observationId',observation_id,'stateRevision',state_revision,
+     'targetRevision',target_revision,'evidenceDate',evidence_date,'freshness',freshness,'temporalClass',temporal_class,
+     'completeScope',complete_scope,'basisEligible',basis_eligible,'knownSource',known_source,'sourceGroups',source_groups,
+     'admissible',admissible AND rn=1,'reason',CASE WHEN admissible AND rn>1 THEN 'repeated_account_source' ELSE reason END)
+     ORDER BY observation_id) FROM ranked),'[]'::jsonb));
+$$;
+-- Advance generations only for cached fare scopes which could have collapsed
+-- one account's different currencies. Original observations/history survive.
+DO $currency_recheck$ DECLARE changed uuid;BEGIN
+ FOR changed IN SELECT DISTINCT a.subject_id FROM public.v2_current_assessments ca
+  JOIN public.v2_field_assessments a ON a.id=ca.assessment_id JOIN public.v2_subjects s ON s.id=a.subject_id AND s.lifecycle='active'
+  WHERE a.field_key LIKE 'fare.%' AND EXISTS(SELECT 1 FROM public.v2_observations o JOIN public.v2_contributions c ON c.id=o.contribution_id
+   WHERE public.v2_observation_subject(o.id)=a.subject_id AND o.field_key=a.field_key AND o.scope_key=a.scope_key
+   GROUP BY c.user_id HAVING count(DISTINCT o.value->>'currency')>1) LOOP
+  UPDATE public.v2_subjects SET revision=revision+1,input_generation=input_generation+1 WHERE id=changed;
+  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+   SELECT 'assess',id,input_generation,(SELECT version FROM public.v2_evidence_policy_state WHERE id),id FROM public.v2_subjects WHERE id=changed ON CONFLICT DO NOTHING;
+ END LOOP;
+END;$currency_recheck$;

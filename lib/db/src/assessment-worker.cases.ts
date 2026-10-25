@@ -50,7 +50,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  test('assessment worker: same-account repeats cannot manufacture fare corroboration',async()=>{
   const r=await fresh(),s=await scope();for(let i=0;i<3;i++)await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s);
   await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',s);
-  assert.equal(f.value.amount,'25');assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,1);assert.equal(f.freshness,'unknown');
+  assert.equal(f.value.amount,'25');assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,1);assert.equal(f.freshness,'current');
   assert.ok(!JSON.stringify(f).includes('witnesses'));assert.equal(f.publication,'provisional');
  });
  test('assessment worker: one field update preserves the fare evidence date instead of refreshing it',async()=>{
@@ -70,10 +70,11 @@ export function registerAssessmentWorkerTests(context:()=>Context){
   await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',a);assert.equal(f.dispute,'none');assert.equal(f.value,null);assert.equal(f.candidates.length,2);assert.equal((await read(r.subjectId,'fare.quoted',b)).value.amount,'10');
  });
  test('assessment worker: paid fare stays historical and does not select a current route price',async()=>{
+  const beforeOther=(await q("SELECT count(*) n FROM v2_current_fields WHERE field_key LIKE 'fare.%'")).rows[0].n;
   const id=(await q("INSERT INTO v2_subjects(kind) VALUES('actual_journey') RETURNING id")).rows[0].id;await q('INSERT INTO v2_actual_journeys(subject_id) VALUES($1)',[id]);
   const s=await scope({timeBasis:'actual',quotationDate:undefined,serviceDate:'2020-01-01'});await add(id,'fare.paid',{amount:'0.00',currency:'USD'},s,context().user,'travelled','2020-01-01');
   await enqueue(id);assert.equal(await finish(await claim()),'done');const f=await read(id,'fare.paid',s);assert.equal(f.value.amount,'0');assert.equal(f.freshness,'unknown');assert.equal(f.candidates[0].temporalClass,'historical');assert.equal(f.support,'reported');
-  assert.equal((await q('SELECT count(*) n FROM v2_current_fields WHERE subject_id<>$1 AND field_key LIKE \'fare.%\'',[id])).rows[0].n,'0');
+  assert.equal((await q('SELECT count(*) n FROM v2_current_fields WHERE subject_id<>$1 AND field_key LIKE \'fare.%\'',[id])).rows[0].n,beforeOther);
  });
  test('assessment worker: large scope sets continue without exhausting the failure budget',async()=>{
   const r=await fresh();for(let i=0;i<21;i++)await add(r.subjectId,'fare.quoted',{amount:String(i)+'.00',currency:'USD'},await scope({passengerCategory:'other',passengerLabel:'Category '+i}));
@@ -104,7 +105,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  });
  test('assessment worker: withdrawal invalidates reads immediately and recomputes without the old fare',async()=>{
   const r=await fresh(),s=await scope();const o=await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s);await enqueue(r.subjectId);await finish(await claim());
-  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,o,randomUUID()]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.value,null);assert.deepEqual(f.candidates,[]);
+  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().user,o,randomUUID()]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await finish(await claim());const f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.value,null);assert.deepEqual(f.candidates,[]);
  });
  test('assessment worker: account erasure redacts copied results and fences the old lease',async()=>{
   const r=await fresh();await enqueue(r.subjectId);await finish(await claim());await enqueue(r.subjectId);const w=await claim();await q('SET LOCAL ROLE mabhazi_api');await q('DELETE FROM users WHERE id=$1',[context().user]);await q('RESET ROLE');
@@ -131,12 +132,12 @@ export function registerAssessmentWorkerTests(context:()=>Context){
   assert.equal((await q("SELECT EXISTS(SELECT 1 FROM pg_proc p,LATERAL aclexplode(p.proacl) acl WHERE p.oid='public.v2_worker_drain_assess(integer)'::regprocedure AND acl.grantee=0 AND acl.privilege_type='EXECUTE') allowed")).rows[0].allowed,false);
  });
  test('assessment worker: shared documents do not corroborate, while independent dated source footprints can',async()=>{
-  const r=await fresh(),s=await scope(),d=await today();const shared=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().user,d])).rows[0].id;
+  const r=await fresh(),s=await scope(),d=await today();const shared=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date,visibility) VALUES($1,'document',$2,'public_metadata') RETURNING id",[context().user,d])).rows[0].id;
   await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign',d,shared);await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,shared);
   await enqueue(r.subjectId);await finish(await claim());let f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,2);
   const independent=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().other,d])).rows[0].id;await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,independent);
   await enqueue(r.subjectId);await finish(await claim());f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'corroborated');assert.equal(f.publication,'provisional');assert.equal(f.candidates[0].contributors,2);
-  await q('DELETE FROM v2_sources WHERE id=$1',[independent]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await enqueue(r.subjectId);await finish(await claim());assert.equal((await read(r.subjectId,'fare.quoted',s)).support,'reported');
+  await q('DELETE FROM v2_sources WHERE id=$1',[independent]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await finish(await claim());assert.equal((await read(r.subjectId,'fare.quoted',s)).support,'reported');
  });
  test('assessment worker: elapsed validity is refused on read and its overdue durable job recomputes',async()=>{
   const r=await fresh(),s=await scope({quotationDate:'2020-01-01'});await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign','2020-01-01');
@@ -145,6 +146,13 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  });
  test('assessment worker: invalid drain bounds reject without consuming jobs',async()=>{
   const r=await fresh();await enqueue(r.subjectId);for(const limit of [null,0,21])await denied(()=>q('SELECT v2_worker_drain_assess($1)',[limit]),'23514');assert.equal((await counts(r.subjectId)).assessments,'0');
+ });
+ for(const isolation of ['READ COMMITTED','REPEATABLE READ'])test('assessment worker: a concurrent generation change fences effects at '+isolation,{timeout:15000},async()=>{
+  const r=await fresh();await enqueue(r.subjectId);const w=await claim();await q('COMMIT');const writer=new pg.Client({connectionString:context().connectionString}),worker=new pg.Client({connectionString:context().connectionString});await Promise.all([writer.connect(),worker.connect()]);
+  try{await writer.query('BEGIN');await worker.query('BEGIN ISOLATION LEVEL '+isolation);await worker.query("SET LOCAL statement_timeout='5s'");await worker.query('SELECT count(*) FROM v2_subjects');await writer.query('UPDATE v2_transport_guard SET toggle=NOT toggle WHERE id');await writer.query('UPDATE v2_subjects SET revision=revision+1,input_generation=input_generation+1 WHERE id=$1',[r.subjectId]);
+   const pending=worker.query('SELECT v2_worker_finish_assess($1,$2) r',[w.id,w.lease_token]).then(v=>({r:v.rows[0].r,code:null}),e=>({r:null,code:e.code}));await writer.query('COMMIT');const result=await pending;
+   if(isolation==='READ COMMITTED'){assert.equal(result.r,'superseded');await worker.query('COMMIT');}else{assert.equal(result.code,'40001');await worker.query('ROLLBACK');}assert.equal((await counts(r.subjectId)).assessments,'0');
+  }finally{await writer.query('ROLLBACK').catch(()=>{});await worker.query('ROLLBACK').catch(()=>{});await Promise.all([writer.end(),worker.end()]);await q('BEGIN');}
  });
  test('assessment worker: separate connections cannot claim the same committed job',{timeout:15000},async()=>{
   const r=await fresh(),job=await enqueue(r.subjectId);await q('COMMIT');

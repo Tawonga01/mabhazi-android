@@ -1,5 +1,5 @@
 -- Mabhazi Preview ocwlqhlfavvuncfmzuqh only; action-time permission required.
--- Source0031 SHA256 f7d28f7057b51b8ebf5f8ea3542475621d7604b8f5a3cb978eca2af6e956ba0d. No new table or credential, evidence policy or publication changes.
+-- Source0031 SHA256 ae4a5a5017046775147eaf562c90f234e23c47f28e90f11edd81ff94f7c60000. No new table or credential, evidence policy or publication changes.
 BEGIN;
 SET LOCAL statement_timeout='30s';SET LOCAL lock_timeout='5s';
 SELECT pg_advisory_xact_lock(19092026,1);
@@ -42,9 +42,9 @@ BEGIN
  ) expected(name,checksum) LEFT JOIN mabhazi_migrations.applied actual USING(name) WHERE actual.checksum IS DISTINCT FROM expected.checksum)
  OR (SELECT count(*) FROM mabhazi_migrations.applied) NOT IN(31,32) THEN RAISE EXCEPTION 'assessment_preview_baseline_changed';END IF;
  SELECT checksum INTO previous FROM mabhazi_migrations.applied WHERE name='0031_assessment_worker.sql';
- IF previous IS NOT NULL AND previous<>'f7d28f7057b51b8ebf5f8ea3542475621d7604b8f5a3cb978eca2af6e956ba0d' THEN RAISE EXCEPTION 'assessment_preview_hash_changed';END IF;
- SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO before_functions FROM pg_proc proc_snapshot WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_worker_assessment_scopes','v2_worker_assessment_scope_ready','v2_worker_claim_assess','v2_worker_heartbeat_assess','v2_worker_fail_assess','v2_worker_finish_assess','v2_worker_drain_assess','v2_worker_retry_assess','v2_worker_health');
- SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations),(SELECT count(*) FROM public.v2_jobs),(SELECT count(*) FROM public.v2_field_assessments),(SELECT count(*) FROM public.v2_field_decisions)) INTO before_data;
+ IF previous IS NOT NULL AND previous<>'ae4a5a5017046775147eaf562c90f234e23c47f28e90f11edd81ff94f7c60000' THEN RAISE EXCEPTION 'assessment_preview_hash_changed';END IF;
+ SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO before_functions FROM pg_proc proc_snapshot WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_worker_assessment_scopes','v2_worker_assessment_scope_ready','v2_worker_claim_assess','v2_worker_heartbeat_assess','v2_worker_fail_assess','v2_worker_finish_assess','v2_worker_drain_assess','v2_worker_retry_assess','v2_worker_health','v2_worker_assessment_input_changed','v2_evaluate_assessment_excluding');
+ SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations),(SELECT count(*) FROM public.v2_field_assessments),(SELECT count(*) FROM public.v2_field_decisions)) INTO before_data;
  IF previous IS NULL THEN
   IF (SELECT count(*) FROM mabhazi_migrations.applied)<>31 OR EXISTS(SELECT 1 FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN('v2_worker_assessment_scopes','v2_worker_assessment_scope_ready','v2_worker_claim_assess','v2_worker_heartbeat_assess','v2_worker_fail_assess','v2_worker_finish_assess','v2_worker_drain_assess','v2_worker_retry_assess')) THEN RAISE EXCEPTION 'assessment_partial_or_unrecorded';END IF;
   EXECUTE $source_assessment_0031$
@@ -255,11 +255,98 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
    AND NOT ((kind='assess' AND policy_version='evidence/1') OR (kind='normalise' AND policy_version='intake/1') OR (kind='associate' AND policy_version IN('association/1','pattern-association/1','actual-association/1')))));
 $$;
 
+
+-- Legacy invalidation producers retain their own operation policies. Any later
+-- generation change on an already assessed subject also needs current evidence
+-- recomputation, without waiting for a manual enqueue or consuming unknown work.
+CREATE FUNCTION public.v2_worker_assessment_input_changed() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.lifecycle='active' AND (NEW.input_generation<>OLD.input_generation OR NEW.lifecycle<>OLD.lifecycle)
+  AND EXISTS(SELECT 1 FROM public.v2_field_assessments WHERE subject_id=NEW.id) THEN
+  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+   SELECT 'assess',NEW.id,NEW.input_generation,(SELECT version FROM public.v2_evidence_policy_state WHERE id),NEW.id
+   WHERE NOT EXISTS(SELECT 1 FROM public.v2_jobs j WHERE j.subject_id=NEW.id AND j.kind='assess' AND j.requested_generation=NEW.input_generation
+    AND j.policy_version=(SELECT version FROM public.v2_evidence_policy_state WHERE id) AND j.state IN('pending','leased')) ON CONFLICT DO NOTHING;
+ END IF;
+ RETURN NEW;
+END;$$;
+CREATE TRIGGER v2_worker_assessment_input_changed AFTER UPDATE ON public.v2_subjects FOR EACH ROW EXECUTE FUNCTION public.v2_worker_assessment_input_changed();
+REVOKE ALL ON FUNCTION public.v2_worker_assessment_input_changed() FROM PUBLIC,mabhazi_api;
+DO $wake_permissions$ DECLARE r text;BEGIN
+ FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION public.v2_worker_assessment_input_changed() FROM %I',r);END IF;
+ END LOOP;
+END;$wake_permissions$;
+
+-- Currency is part of a fare proposition. One-account repetition suppression
+-- must not discard another currency; this repairs the existing documented rule.
+DO $prior_evaluator$ DECLARE body text;secure boolean;settings text[];BEGIN
+ SELECT prosrc,prosecdef,proconfig INTO body,secure,settings FROM pg_proc WHERE oid='public.v2_evaluate_assessment_excluding(uuid,text,jsonb,timestamptz,text,uuid[])'::regprocedure;
+ IF encode(sha256(convert_to(replace(body,chr(13)||chr(10),chr(10)),'UTF8')),'hex')<>'4957b956e325dc822cb45a7187feb65c621116bb65934bb090ff6dec5dab78c6' OR secure IS DISTINCT FROM false OR settings IS DISTINCT FROM ARRAY['search_path=pg_catalog','TimeZone=UTC']::text[] THEN RAISE EXCEPTION 'assessment_prior_evaluator_changed';END IF;
+END;$prior_evaluator$;
+CREATE OR REPLACE FUNCTION public.v2_evaluate_assessment_excluding(subject uuid,field text,scope jsonb,as_of timestamptz,policy text,excluded uuid[]) RETURNS jsonb
+LANGUAGE sql STABLE SET search_path=pg_catalog SET timezone='UTC' AS $$
+ WITH rows AS MATERIALIZED (
+   SELECT observation_id,owner_id,value,evidence_date,freshness,temporal_class,complete_scope,basis_eligible,known_source,source_groups,
+     admissible AND NOT(observation_id=ANY(excluded)) admissible,
+     CASE WHEN observation_id=ANY(excluded) THEN 'review_excluded' ELSE reason END reason,next_change,state_revision,target_revision
+   FROM public.v2_assessment_rows(subject,field,scope,as_of,policy)),
+ ranked AS (
+   SELECT *,row_number() OVER(PARTITION BY owner_id,source_groups,CASE WHEN field LIKE 'fare.%' THEN value->>'currency' ELSE '' END ORDER BY admissible DESC,
+     (complete_scope AND freshness='current') DESC,evidence_date DESC NULLS LAST,observation_id DESC) rn FROM rows
+ ), eligible AS (SELECT * FROM ranked WHERE admissible AND rn=1),
+ witnesses AS (
+   SELECT a.value,a.observation_id first_id,b.observation_id second_id,
+     row_number() OVER(PARTITION BY a.value ORDER BY a.evidence_date,a.observation_id,b.evidence_date,b.observation_id) rank
+   FROM eligible a JOIN eligible b ON a.value=b.value AND a.owner_id<>b.owner_id
+     AND (a.evidence_date,a.observation_id)<(b.evidence_date,b.observation_id)
+     AND NOT a.source_groups && b.source_groups
+   WHERE a.known_source AND b.known_source AND a.complete_scope AND b.complete_scope AND a.basis_eligible AND b.basis_eligible
+     AND a.freshness='current' AND b.freshness='current' AND a.temporal_class='ongoing' AND b.temporal_class='ongoing'
+ ), candidates AS (
+   SELECT e.value,count(DISTINCT e.owner_id) contributors,
+     CASE WHEN w.first_id IS NOT NULL THEN 'corroborated' ELSE 'reported' END support,
+     CASE WHEN bool_or(e.freshness='current') THEN 'current' WHEN bool_or(e.freshness='recheck_due') THEN 'recheck_due' ELSE 'unknown' END freshness,
+     min(e.temporal_class) temporal_class,min(e.evidence_date) oldest_date,max(e.evidence_date) newest_date,
+     w.first_id,w.second_id,bool_or(e.complete_scope AND e.freshness='current' AND e.basis_eligible) conflict_eligible
+   FROM eligible e LEFT JOIN witnesses w ON w.value=e.value AND w.rank=1 GROUP BY e.value,w.first_id,w.second_id
+ )
+ SELECT jsonb_build_object('policyVersion',policy,'assessedAt',as_of,
+   'candidates',COALESCE((SELECT jsonb_agg(jsonb_build_object('value',value,'support',support,'contributors',contributors,
+     'freshness',freshness,'temporalClass',temporal_class,'oldestDate',oldest_date,'newestDate',newest_date,
+     'witnesses',CASE WHEN first_id IS NULL THEN '[]'::jsonb ELSE to_jsonb(ARRAY[first_id,second_id]) END) ORDER BY value::text) FROM candidates),'[]'::jsonb),
+   'dispute',CASE WHEN EXISTS(SELECT 1 FROM candidates WHERE conflict_eligible GROUP BY CASE
+       WHEN field LIKE 'fare.%' THEN value->>'currency' WHEN field='timetable.sign_presence' THEN (value->'place')::text ELSE '' END
+       HAVING count(*)>1) THEN 'open' ELSE 'none' END,
+   'needsContext',COALESCE((SELECT bool_or(admissible AND NOT complete_scope) FROM ranked),false),
+   'nextChangeAt',(SELECT min(next_change) FROM rows),
+   'inputs',COALESCE((SELECT jsonb_agg(jsonb_build_object('observationId',observation_id,'stateRevision',state_revision,
+     'targetRevision',target_revision,'evidenceDate',evidence_date,'freshness',freshness,'temporalClass',temporal_class,
+     'completeScope',complete_scope,'basisEligible',basis_eligible,'knownSource',known_source,'sourceGroups',source_groups,
+     'admissible',admissible AND rn=1,'reason',CASE WHEN admissible AND rn>1 THEN 'repeated_account_source' ELSE reason END)
+     ORDER BY observation_id) FROM ranked),'[]'::jsonb));
+$$;
+-- Advance generations only for cached fare scopes which could have collapsed
+-- one account's different currencies. Original observations/history survive.
+DO $currency_recheck$ DECLARE changed uuid;BEGIN
+ FOR changed IN SELECT DISTINCT a.subject_id FROM public.v2_current_assessments ca
+  JOIN public.v2_field_assessments a ON a.id=ca.assessment_id JOIN public.v2_subjects s ON s.id=a.subject_id AND s.lifecycle='active'
+  WHERE a.field_key LIKE 'fare.%' AND EXISTS(SELECT 1 FROM public.v2_observations o JOIN public.v2_contributions c ON c.id=o.contribution_id
+   WHERE public.v2_observation_subject(o.id)=a.subject_id AND o.field_key=a.field_key AND o.scope_key=a.scope_key
+   GROUP BY c.user_id HAVING count(DISTINCT o.value->>'currency')>1) LOOP
+  UPDATE public.v2_subjects SET revision=revision+1,input_generation=input_generation+1 WHERE id=changed;
+  INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+   SELECT 'assess',id,input_generation,(SELECT version FROM public.v2_evidence_policy_state WHERE id),id FROM public.v2_subjects WHERE id=changed ON CONFLICT DO NOTHING;
+ END LOOP;
+END;$currency_recheck$;
+
 $source_assessment_0031$;
-  INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES('0031_assessment_worker.sql','f7d28f7057b51b8ebf5f8ea3542475621d7604b8f5a3cb978eca2af6e956ba0d');
+  INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES('0031_assessment_worker.sql','ae4a5a5017046775147eaf562c90f234e23c47f28e90f11edd81ff94f7c60000');
  END IF;
  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.v2_worker_status'::regclass AND conname='v2_worker_status_runner_key_check' AND contype='c' AND convalidated AND regexp_replace(pg_get_constraintdef(oid),'[[:space:]()]|::text','','g')=$expected$CHECKrunner_key=ANYARRAY['normalise/1','association/1','pattern-association/1','actual-association/1','assessment-worker/1']$expected$) THEN RAISE EXCEPTION 'assessment_status_constraint_changed';END IF;
- FOR f IN SELECT * FROM jsonb_to_recordset($function_specs$[{"name":"v2_worker_assessment_scopes","signature":"public.v2_worker_assessment_scopes(uuid)","hash":"ad330fae0a76d5c666bc331c8f1ed1e263741580682077f591fc52399f14d0e3","definer":false,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"record","backend":false},{"name":"v2_worker_assessment_scope_ready","signature":"public.v2_worker_assessment_scope_ready(uuid,text,text)","hash":"455b52932b17ea41bf6c2145a72db4fff4c93bbbbfce388d21ea7525928a7733","definer":false,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"boolean","backend":false},{"name":"v2_worker_claim_assess","signature":"public.v2_worker_claim_assess()","hash":"41bf9f6ca6b203666ce185370cebfe0d267759bf1cec9c37ed7e2f71d96fcd63","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"public.v2_jobs","backend":true},{"name":"v2_worker_heartbeat_assess","signature":"public.v2_worker_heartbeat_assess(uuid,uuid)","hash":"d1248e1aa66da7d65572c74c99656002179df70d5d1ac467b72eda4c916ce5dc","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":true},{"name":"v2_worker_fail_assess","signature":"public.v2_worker_fail_assess(uuid,uuid,text)","hash":"e8b8e9224d40224c7298f4afa2bf65911b2f906ff4fad6198df35354d7c83e9a","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":true},{"name":"v2_worker_finish_assess","signature":"public.v2_worker_finish_assess(uuid,uuid)","hash":"2fab004e479daa92d28b096c7ecb5bd14a320c2d7a1106eb73dd5431bef2f128","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog","TimeZone=UTC"],"volatility":"v","result":"text","backend":true},{"name":"v2_worker_drain_assess","signature":"public.v2_worker_drain_assess(integer)","hash":"5d351919325b5e88f4fbf88d26e1e9541ec50c8163059e635261ca111dc04044","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"jsonb","backend":true},{"name":"v2_worker_retry_assess","signature":"public.v2_worker_retry_assess(uuid)","hash":"21e4d58dc94fd82cc113696820233a7909a45bcd646ed36fd023c5ebe8eb9fc2","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":false},{"name":"v2_worker_health","signature":"public.v2_worker_health()","hash":"ae199a642f16f43a2dc9b0c967b0e2e5c3ba134c1f57de607c72a1c79062565a","definer":true,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"jsonb","backend":true}]$function_specs$::jsonb) AS x(name text,signature text,hash text,definer boolean,lang text,config text[],volatility text,result text,backend boolean) LOOP
+ IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.v2_subjects'::regclass AND tgname='v2_worker_assessment_input_changed' AND tgfoid='public.v2_worker_assessment_input_changed()'::regprocedure AND tgtype=17 AND tgenabled='O' AND NOT tgisinternal AND tgnargs=0 AND tgqual IS NULL AND tgattr=''::int2vector) THEN RAISE EXCEPTION 'assessment_input_trigger_changed';END IF;
+ FOR f IN SELECT * FROM jsonb_to_recordset($function_specs$[{"name":"v2_worker_assessment_scopes","signature":"public.v2_worker_assessment_scopes(uuid)","hash":"ad330fae0a76d5c666bc331c8f1ed1e263741580682077f591fc52399f14d0e3","definer":false,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"record","backend":false},{"name":"v2_worker_assessment_scope_ready","signature":"public.v2_worker_assessment_scope_ready(uuid,text,text)","hash":"455b52932b17ea41bf6c2145a72db4fff4c93bbbbfce388d21ea7525928a7733","definer":false,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"boolean","backend":false},{"name":"v2_worker_claim_assess","signature":"public.v2_worker_claim_assess()","hash":"41bf9f6ca6b203666ce185370cebfe0d267759bf1cec9c37ed7e2f71d96fcd63","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"public.v2_jobs","backend":true},{"name":"v2_worker_heartbeat_assess","signature":"public.v2_worker_heartbeat_assess(uuid,uuid)","hash":"d1248e1aa66da7d65572c74c99656002179df70d5d1ac467b72eda4c916ce5dc","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":true},{"name":"v2_worker_fail_assess","signature":"public.v2_worker_fail_assess(uuid,uuid,text)","hash":"e8b8e9224d40224c7298f4afa2bf65911b2f906ff4fad6198df35354d7c83e9a","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":true},{"name":"v2_worker_finish_assess","signature":"public.v2_worker_finish_assess(uuid,uuid)","hash":"2fab004e479daa92d28b096c7ecb5bd14a320c2d7a1106eb73dd5431bef2f128","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog","TimeZone=UTC"],"volatility":"v","result":"text","backend":true},{"name":"v2_worker_drain_assess","signature":"public.v2_worker_drain_assess(integer)","hash":"5d351919325b5e88f4fbf88d26e1e9541ec50c8163059e635261ca111dc04044","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"jsonb","backend":true},{"name":"v2_worker_retry_assess","signature":"public.v2_worker_retry_assess(uuid)","hash":"21e4d58dc94fd82cc113696820233a7909a45bcd646ed36fd023c5ebe8eb9fc2","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"boolean","backend":false},{"name":"v2_worker_health","signature":"public.v2_worker_health()","hash":"ae199a642f16f43a2dc9b0c967b0e2e5c3ba134c1f57de607c72a1c79062565a","definer":true,"lang":"sql","config":["search_path=pg_catalog"],"volatility":"s","result":"jsonb","backend":true},{"name":"v2_worker_assessment_input_changed","signature":"public.v2_worker_assessment_input_changed()","hash":"ae68956352906d5a50214729f51ff97d2c27287b3aa617d50051792c90b8961e","definer":true,"lang":"plpgsql","config":["search_path=pg_catalog"],"volatility":"v","result":"trigger","backend":false},{"name":"v2_evaluate_assessment_excluding","signature":"public.v2_evaluate_assessment_excluding(uuid,text,jsonb,timestamptz,text,uuid[])","hash":"b87b96dcb2795d1b744771026337b34121eef9253a3653698d5bf24cab0752b0","definer":false,"lang":"sql","config":["search_path=pg_catalog","TimeZone=UTC"],"volatility":"s","result":"jsonb","backend":false}]$function_specs$::jsonb) AS x(name text,signature text,hash text,definer boolean,lang text,config text[],volatility text,result text,backend boolean) LOOP
   SELECT * INTO p FROM pg_proc WHERE oid=to_regprocedure(f.signature);
   IF p.oid IS NULL OR p.prosecdef IS DISTINCT FROM f.definer OR p.proconfig IS DISTINCT FROM f.config
    OR p.prolang<>(SELECT oid FROM pg_language WHERE lanname=f.lang) OR p.provolatile::text<>f.volatility OR p.prorettype<>to_regtype(f.result)
@@ -268,8 +355,8 @@ $source_assessment_0031$;
    OR EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) WHERE grantee=0 AND privilege_type='EXECUTE')
    OR EXISTS(SELECT 1 FROM pg_roles role WHERE role.rolname IN('anon','authenticated') AND has_function_privilege(role.oid,p.oid,'EXECUTE')) THEN RAISE EXCEPTION 'assessment_function_fence_changed: %',f.signature;END IF;
  END LOOP;
- SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO after_functions FROM pg_proc proc_snapshot WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_worker_assessment_scopes','v2_worker_assessment_scope_ready','v2_worker_claim_assess','v2_worker_heartbeat_assess','v2_worker_fail_assess','v2_worker_finish_assess','v2_worker_drain_assess','v2_worker_retry_assess','v2_worker_health');
- SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations),(SELECT count(*) FROM public.v2_jobs),(SELECT count(*) FROM public.v2_field_assessments),(SELECT count(*) FROM public.v2_field_decisions)) INTO after_data;
+ SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO after_functions FROM pg_proc proc_snapshot WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_worker_assessment_scopes','v2_worker_assessment_scope_ready','v2_worker_claim_assess','v2_worker_heartbeat_assess','v2_worker_fail_assess','v2_worker_finish_assess','v2_worker_drain_assess','v2_worker_retry_assess','v2_worker_health','v2_worker_assessment_input_changed','v2_evaluate_assessment_excluding');
+ SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations),(SELECT count(*) FROM public.v2_field_assessments),(SELECT count(*) FROM public.v2_field_decisions)) INTO after_data;
  IF after_functions IS DISTINCT FROM before_functions OR after_data IS DISTINCT FROM before_data THEN RAISE EXCEPTION 'assessment_existing_state_changed';END IF;
  IF (SELECT count(*) FROM mabhazi_migrations.applied)<>32 THEN RAISE EXCEPTION 'assessment_ledger_changed';END IF;
 END;$preview_assessment_0031$;

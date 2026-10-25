@@ -4,7 +4,7 @@ BEGIN;SET LOCAL statement_timeout='30s';SET LOCAL lock_timeout='5s';
 SELECT pg_advisory_xact_lock(19092026,1);
 UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
 DO $schedule_assessment$ DECLARE existing record;BEGIN
- IF NOT EXISTS(SELECT 1 FROM mabhazi_migrations.applied WHERE name='0031_assessment_worker.sql' AND checksum='f7d28f7057b51b8ebf5f8ea3542475621d7604b8f5a3cb978eca2af6e956ba0d') THEN RAISE EXCEPTION 'assessment_preview_not_verified';END IF;
+ IF NOT EXISTS(SELECT 1 FROM mabhazi_migrations.applied WHERE name='0031_assessment_worker.sql' AND checksum='ae4a5a5017046775147eaf562c90f234e23c47f28e90f11edd81ff94f7c60000') THEN RAISE EXCEPTION 'assessment_preview_not_verified';END IF;
  IF (SELECT count(*) FROM cron.job WHERE active AND schedule='* * * * *' AND
  ((jobname='mabhazi-preview-normalise-v1' AND command=$normal$SET statement_timeout='20s'; SET lock_timeout='5s'; SELECT public.v2_worker_drain_normalise(20);$normal$)
  OR (jobname='mabhazi-preview-associate-v1' AND command=$associate$SET statement_timeout='20s'; SET lock_timeout='5s'; SELECT public.v2_worker_drain_associate(20);$associate$)))<>2 THEN RAISE EXCEPTION 'assessment_existing_schedule_changed';END IF;
