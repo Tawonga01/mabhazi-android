@@ -87,7 +87,7 @@ const LEVEL_BG: Record<Level, string> = {
   green: "#DCFCE7", yellow: "#FEF9C3", red: "#FEE2E2", gray: "#F1F5F9",
 };
 const LEVEL_COLOR: Record<Level, string> = {
-  green: "#16A34A", yellow: "#CA8A04", red: "#DC2626", gray: "#64748B",
+  green: "#166534", yellow: "#855600", red: "#B4233B", gray: "#617186",
 };
 
 function getConfidenceLevel(
@@ -591,7 +591,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                             </View>
                           )}
                           {data.priceYesterday != null && data.priceToday === data.priceYesterday && (
-                            <Text style={[ss.fareStable, { color: "#16A34A", fontFamily: ui.type.regular }]}>
+                            <Text style={[ss.fareStable, { color: "#166534", fontFamily: ui.type.regular }]}>
                               Same as yesterday
                             </Text>
                           )}
@@ -709,8 +709,8 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                     {confirmedLocally ? (
                       <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                        <Feather name="check-circle" size={15} color="#16A34A" />
-                        <Text style={[ss.successText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
+                        <Feather name="check-circle" size={15} color="#166534" />
+                        <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
                           Confirmation saved.
                         </Text>
                       </View>
@@ -855,8 +855,8 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                         {correctionSubmitted ? (
                           <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                            <Feather name="check-circle" size={15} color="#16A34A" />
-                            <Text style={[ss.successText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
+                            <Feather name="check-circle" size={15} color="#166534" />
+                            <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
                       Correction saved.
                             </Text>
                           </View>
@@ -970,8 +970,8 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                       {submitted && (
                         <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                          <Feather name="check-circle" size={15} color="#16A34A" />
-                          <Text style={[ss.successText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
+                          <Feather name="check-circle" size={15} color="#166534" />
+                          <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
                             Report submitted — thank you!
                           </Text>
                         </View>

@@ -598,8 +598,8 @@ export default function ProfileScreen() {
 
               {/* Success flash */}
               <Animated.View style={[styles.successBanner, { opacity: successOpacity, backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                <Feather name="check-circle" size={13} color="#16A34A" />
-                <Text style={[styles.successText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
+                <Feather name="check-circle" size={13} color="#166534" />
+                <Text style={[styles.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
                   Name updated.
                 </Text>
               </Animated.View>
@@ -724,7 +724,7 @@ export default function ProfileScreen() {
             {deleteState === "success" ? (
               <>
                 <View style={[styles.deleteIcon, { backgroundColor: "#DCFCE7" }]}>
-                  <Feather name="check-circle" size={30} color="#16A34A" />
+                  <Feather name="check-circle" size={30} color="#166534" />
                 </View>
                 <Text style={[styles.deleteTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                   Account deleted
