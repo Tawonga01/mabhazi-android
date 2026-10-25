@@ -41,8 +41,8 @@ BEGIN
  OR (SELECT count(*) FROM mabhazi_migrations.applied) NOT IN(30,31) THEN RAISE EXCEPTION 'public_context_preview_baseline_changed';END IF;
  SELECT checksum INTO previous FROM mabhazi_migrations.applied WHERE name='0030_public_route_context.sql';
  IF previous IS NOT NULL AND previous<>'b973924494921a729824029d4d80bbd1ebd2570d7b68d1a87af897bb10e5aa36' THEN RAISE EXCEPTION 'public_context_preview_hash_changed';END IF;
- SELECT jsonb_agg(to_jsonb(p) ORDER BY p.oid) INTO before_functions FROM pg_proc p
- WHERE p.pronamespace='public'::regnamespace AND p.proname NOT IN('v2_api_submit_public_actual_journey','v2_api_route_report_action','v2_api_unblock_route_report_author','v2_api_hide_reported_lead');
+ SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO before_functions FROM pg_proc proc_snapshot
+ WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_api_submit_public_actual_journey','v2_api_route_report_action','v2_api_unblock_route_report_author','v2_api_hide_reported_lead');
  SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations)) INTO before_data;
  IF previous IS NULL THEN
   IF (SELECT count(*) FROM mabhazi_migrations.applied)<>30
@@ -274,8 +274,8 @@ $expected_context_view$;
   END IF;
  END LOOP;
  IF has_function_privilege('mabhazi_api','public.v2_submit_actual_journey(varchar,text,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'public_context_constructor_exposed';END IF;
- SELECT jsonb_agg(to_jsonb(p) ORDER BY p.oid) INTO after_functions FROM pg_proc p
- WHERE p.pronamespace='public'::regnamespace AND p.proname NOT IN('v2_api_submit_public_actual_journey','v2_api_route_report_action','v2_api_unblock_route_report_author','v2_api_hide_reported_lead');
+ SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO after_functions FROM pg_proc proc_snapshot
+ WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_api_submit_public_actual_journey','v2_api_route_report_action','v2_api_unblock_route_report_author','v2_api_hide_reported_lead');
  SELECT jsonb_build_array((SELECT count(*) FROM public.v2_contributions),(SELECT count(*) FROM public.v2_receipts),(SELECT count(*) FROM public.v2_observations)) INTO after_data;
  IF after_functions IS DISTINCT FROM before_functions OR after_data IS DISTINCT FROM before_data THEN RAISE EXCEPTION 'public_context_existing_state_changed';END IF;
  IF (SELECT count(*) FROM mabhazi_migrations.applied)<>31 THEN RAISE EXCEPTION 'public_context_ledger_changed';END IF;
