@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {test} from 'node:test';
+import {test,before} from 'node:test';
 import type pg from 'pg';
 import type {infer as Infer} from 'zod';
 import {ListV2FareReportsResponse,GetV2SubjectResponse,ListV2RouteBlocksResponse,SubmitV2ActualJourneyResponse} from '@workspace/api-zod';
@@ -8,6 +8,8 @@ type HttpPayload=Infer<typeof ListV2FareReportsResponse>&Infer<typeof GetV2Subje
 type Context={admin:pg.Client;accounts:string[];tokens:string[];cities:number[];base:string};
 export function registerFareReportTests(context:()=>Context){
  const q=(sql:string,args:unknown[]=[])=>context().admin.query(sql,args);
+ let safetyAccount:number;
+ before(async()=>{safetyAccount=context().accounts.length;const actor=randomUUID(),token=randomBytes(32).toString('hex');context().accounts.push(actor);context().tokens.push(token);await q('INSERT INTO users(id) VALUES($1)',[actor]);await q("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);});
  async function http(path:string,body?:unknown,account:number|null=null,extra:Record<string,string>={},method=body===undefined?'GET':'POST'){
   const response=await fetch(context().base+path,{method,headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(account===null?{}:{Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]}),...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json() as HttpPayload,headers:response.headers};
  }
@@ -22,8 +24,12 @@ export function registerFareReportTests(context:()=>Context){
  }
  async function assess(...ids:string[]){
   await q("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE state='pending' AND NOT(subject_id=ANY($1::uuid[]))",[ids]);
-  await q('SELECT v2_worker_drain_normalise(20)');await q('SELECT v2_worker_drain_associate(20)');
-  const run=(await q('SELECT v2_worker_drain_assess(20) r')).rows[0].r;assert.equal(run.failedAttempts,0);
+  // Consumer ticks are bounded; stale generations may need several real ticks.
+  for(let tick=0;tick<20;tick++){
+   for(const kind of ['normalise','associate','assess']){const r=(await q('SELECT v2_worker_drain_'+kind+'(20) r')).rows[0].r;assert.equal(r.failedAttempts,0,JSON.stringify(r));}
+   const due=(await q("SELECT count(*) n FROM v2_jobs WHERE subject_id=ANY($1::uuid[]) AND kind IN('normalise','associate','assess') AND state='pending' AND available_at<=clock_timestamp()",[ids])).rows[0].n;if(due==='0')return;
+  }
+  assert.fail('Selected fixture jobs did not settle within20 bounded ticks');
  }
  const get=(route:string,account:number|null=null,extra:Record<string,string>={},cursor?:string)=>http('/v2/subjects/'+route+'/fares'+(cursor?'?cursor='+cursor:''),undefined,account,extra);
  async function ready(options:Parameters<typeof submit>[1]={}){const l=await lead(),a=await submit(l.subjectId,options);await assess(l.subjectId,a.subjectId);return {l,a,page:ListV2FareReportsResponse.parse((await get(l.subjectId)).value)};}
@@ -37,14 +43,14 @@ export function registerFareReportTests(context:()=>Context){
  });
  test('fare reports: currency, price type, date, passenger and ticket conditions never collapse',async()=>{
   const l=await lead(),items=[];for(const opts of [{amount:'0',currency:'USD'},{amount:'25',currency:'ZAR'},{kind:'quoted'},{kind:'advertised'},{scope:{passengerCategory:'child'}},{scope:{ticketBasis:'return'}}])items.push(await submit(l.subjectId,opts));await assess(l.subjectId,...items.map(r=>r.subjectId));
-  const page=ListV2FareReportsResponse.parse((await get(l.subjectId)).value);assert.equal(page.items.length,6);assert.ok(page.items.some(r=>r.amount==='0'&&r.currency==='USD'));assert.deepEqual(new Set(page.items.map(r=>r.kind)),new Set(['paid','quoted','advertised']));assert.ok(page.items.some(r=>r.scope.ticketBasis==='return'));assert.ok(page.items.some(r=>r.scope.passengerCategory==='child'));
+  const page=ListV2FareReportsResponse.parse((await get(l.subjectId)).value);assert.equal(page.items.length,6,JSON.stringify((await q('SELECT field_key,scope,evidence_included,field_read FROM v2_fare_report_context WHERE route_subject_id=$1',[l.subjectId])).rows));assert.ok(page.items.some(r=>r.amount==='0'&&r.currency==='USD'));assert.deepEqual(new Set(page.items.map(r=>r.kind)),new Set(['paid','quoted','advertised']));assert.ok(page.items.some(r=>r.scope.ticketBasis==='return'));assert.ok(page.items.some(r=>r.scope.passengerCategory==='child'));
  });
  test('fare reports: one account repeating the exact scoped report has one latest presentation, originals remain',async()=>{
   const l=await lead(),a=await submit(l.subjectId),b=await submit(l.subjectId,{amount:'30'});await assess(l.subjectId,a.subjectId,b.subjectId);const page=ListV2FareReportsResponse.parse((await get(l.subjectId)).value);assert.equal(page.items.length,1);assert.equal(page.items[0]!.amount,'30');assert.equal((await q("SELECT count(*) n FROM v2_observations WHERE original_subject_id=ANY($1::uuid[]) AND field_key='fare.paid'",[[a.subjectId,b.subjectId]])).rows[0].n,'2');
  });
  test('fare reports: route identity is exact across same corridor, company, clock and direction',async()=>{
   const {l,page}=await ready(),other=await lead('Different company'),later=await lead('Fare boundary bus','14:00'),reverse=await lead('Fare boundary bus','07:00',true);
-  for(const r of [other,later,reverse]){const result=await get(r.subjectId);assert.equal(result.status,200);assert.equal(result.value.items.length,0);assert.equal((await http('/v2/subjects/'+r.subjectId+'/fares/'+page.items[0]!.id+'/safety',{action:'report',reason:'inaccurate'},2)).status,404);}assert.equal((await get(l.subjectId)).value.items.length,1);
+  for(const r of [other,later,reverse]){const result=await get(r.subjectId);assert.equal(result.status,200);assert.equal(result.value.items.length,0);assert.equal((await http('/v2/subjects/'+r.subjectId+'/fares/'+page.items[0]!.id+'/safety',{action:'report',reason:'inaccurate'},safetyAccount)).status,404);}assert.equal((await get(l.subjectId)).value.items.length,1);
  });
  test('fare reports: different explicit segment and known different company remain independent evidence',async()=>{
   const l=await lead(),a=await submit(l.subjectId,{scope:{segment:{kind:'city_pair',originCityId:context().cities[1],destinationCityId:context().cities[0]}}}),b=await submit(l.subjectId,{company:'Other known operator'});await assess(l.subjectId,a.subjectId,b.subjectId);assert.equal((await get(l.subjectId)).value.items.length,0);
@@ -55,7 +61,7 @@ export function registerFareReportTests(context:()=>Context){
  });
  test('fare reports: withdrawal and contribution erasure cannot revive cached amounts',async()=>{
   const {l,a,page}=await ready(),o=(await q("SELECT id FROM v2_observations WHERE original_subject_id=$1 AND field_key='fare.paid'",[a.subjectId])).rows[0].id;
-  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().accounts[1],o,randomUUID()]);assert.equal((await get(l.subjectId)).value.items.length,0);assert.equal((await http('/v2/subjects/'+l.subjectId+'/fares/'+page.items[0]!.id+'/safety',{action:'report',reason:'spam'},2)).status,404);
+  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().accounts[1],o,randomUUID()]);assert.equal((await get(l.subjectId)).value.items.length,0);assert.equal((await http('/v2/subjects/'+l.subjectId+'/fares/'+page.items[0]!.id+'/safety',{action:'report',reason:'spam'},safetyAccount)).status,404);
   const b=await submit(l.subjectId);await assess(l.subjectId,b.subjectId);await q('DELETE FROM v2_contributions WHERE id=$1',[b.contributionId]);assert.equal((await get(l.subjectId)).value.items.length,0);
  });
  test('fare reports: changed source evidence invalidates the current read until reassessed without claiming independent confirmation',async()=>{
@@ -68,19 +74,19 @@ export function registerFareReportTests(context:()=>Context){
  test('fare reports: both authors’ device and account blocks apply, with private unblock and no Terms gate',async()=>{
   const {l,page}=await ready(),id=page.items[0]!.id;
   const device=await get(l.subjectId,null,{'X-Mabhazi-Blocked-Contributors':JSON.stringify([context().accounts[1]])});assert.equal(device.value.items.length,0);assert.equal(device.value.hasHiddenResults,true);assert.equal((await get(l.subjectId,null,{'X-Mabhazi-Blocked-Contributors':JSON.stringify([context().accounts[0]])})).status,404);
-  const path='/v2/subjects/'+l.subjectId+'/fares/'+id+'/safety';assert.equal((await http(path,{action:'block'},2)).status,200);assert.equal((await http(path,{action:'block'},2)).status,200);const blocked=await get(l.subjectId,2);assert.equal(blocked.value.items.length,0);assert.equal(blocked.value.hasHiddenResults,true);assert.equal((await get(l.subjectId,0)).value.items.length,1);
-  const list=await http('/v2/blocked-route-reporters',undefined,2);assert.ok(!JSON.stringify(list.value).includes(context().accounts[1]));const ref=list.value.blocks[0].id;
-  assert.equal((await http('/v2/blocked-route-reporters/'+ref,undefined,2,{},'DELETE')).status,200);assert.equal((await get(l.subjectId,2)).value.items.length,1);assert.equal((await http(path,{action:'block'},1)).status,422);
+  const path='/v2/subjects/'+l.subjectId+'/fares/'+id+'/safety';assert.equal((await http(path,{action:'block'},safetyAccount)).status,200);assert.equal((await http(path,{action:'block'},safetyAccount)).status,200);const blocked=await get(l.subjectId,safetyAccount);assert.equal(blocked.value.items.length,0);assert.equal(blocked.value.hasHiddenResults,true);assert.equal((await get(l.subjectId,0)).value.items.length,1);
+  const list=await http('/v2/blocked-route-reporters',undefined,safetyAccount);assert.ok(!JSON.stringify(list.value).includes(context().accounts[1]));const ref=list.value.blocks[0].id;
+  assert.equal((await http('/v2/blocked-route-reporters/'+ref,undefined,safetyAccount,{},'DELETE')).status,200);assert.equal((await get(l.subjectId,safetyAccount)).value.items.length,1);assert.equal((await http(path,{action:'block'},1)).status,422);
  });
  test('fare reports: report deduplicates, authenticated admin hides only that fare and preserves originals',async()=>{
-  const {l,a,page}=await ready(),id=page.items[0]!.id,path='/v2/subjects/'+l.subjectId+'/fares/'+id+'/safety';for(let i=0;i<2;i++)assert.equal((await http(path,{action:'report',reason:'inaccurate'},2)).status,200);
-  const rows=(await q("SELECT id FROM abuse_reports WHERE target_type='fare_report' AND target_id=$1 AND reporter_id=$2",[id,context().accounts[2]])).rows;assert.equal(rows.length,1);
-  assert.equal((await http('/admin/abuse-reports/'+rows[0].id,{action:'remove_content'},2,{},'PATCH')).status,401);
-  const hidden=await http('/admin/abuse-reports/'+rows[0].id,{action:'remove_content',notes:'Synthetic fare moderation'},2,{'X-Admin-Secret':process.env.ADMIN_SECRET!},'PATCH');assert.equal(hidden.status,200,JSON.stringify(hidden.value));assert.equal((await get(l.subjectId)).value.items.length,0);assert.equal((await http('/v2/subjects/'+l.subjectId)).status,200);assert.equal((await q('SELECT count(*) n FROM v2_observations WHERE contribution_id=$1',[a.contributionId])).rows[0].n,'1');assert.equal((await q('SELECT count(*) n FROM v2_public_fare_hides WHERE fare_ref=$1',[id])).rows[0].n,'1');
+  const {l,a,page}=await ready(),id=page.items[0]!.id,path='/v2/subjects/'+l.subjectId+'/fares/'+id+'/safety';for(let i=0;i<2;i++)assert.equal((await http(path,{action:'report',reason:'inaccurate'},safetyAccount)).status,200);
+  const rows=(await q("SELECT id FROM abuse_reports WHERE target_type='fare_report' AND target_id=$1 AND reporter_id=$2",[id,context().accounts[safetyAccount]])).rows;assert.equal(rows.length,1);
+  assert.equal((await http('/admin/abuse-reports/'+rows[0].id,{action:'remove_content'},safetyAccount,{},'PATCH')).status,401);
+  const hidden=await http('/admin/abuse-reports/'+rows[0].id,{action:'remove_content',notes:'Synthetic fare moderation'},safetyAccount,{'X-Admin-Secret':process.env.ADMIN_SECRET!},'PATCH');assert.equal(hidden.status,200,JSON.stringify(hidden.value));assert.equal((await get(l.subjectId)).value.items.length,0);assert.equal((await http('/v2/subjects/'+l.subjectId)).status,200);assert.equal((await q('SELECT count(*) n FROM v2_observations WHERE contribution_id=$1',[a.contributionId])).rows[0].n,'1');assert.equal((await q('SELECT count(*) n FROM v2_public_fare_hides WHERE fare_ref=$1',[id])).rows[0].n,'1');
  });
  test('fare reports: malformed context/account/origin/query and unauthorised safety fail closed',async()=>{
-  const {l,page}=await ready(),path='/v2/subjects/'+l.subjectId+'/fares/'+page.items[0]!.id+'/safety';assert.equal((await http(path,{action:'block'})).status,401);assert.equal((await http(path,{action:'block'},2,{'X-Mabhazi-Account':context().accounts[0]})).status,409);assert.equal((await http(path,{action:'block'},2,{Origin:'https://untrusted.invalid'})).status,403);assert.equal((await http(path,{action:'report'},2)).status,422);
-  assert.equal((await get(l.subjectId,null,{'X-Mabhazi-Account':context().accounts[0]})).status,401);assert.equal((await get(l.subjectId,2,{'X-Mabhazi-Blocked-Contributors':'{}'})).status,400);for(const query of ['?cursor[]=x','?extra=true','?cursor=bad'])assert.equal((await http('/v2/subjects/'+l.subjectId+'/fares'+query)).status,400);assert.equal((await get(randomUUID())).status,404);
+  const {l,page}=await ready(),path='/v2/subjects/'+l.subjectId+'/fares/'+page.items[0]!.id+'/safety';assert.equal((await http(path,{action:'block'})).status,401);assert.equal((await http(path,{action:'block'},safetyAccount,{'X-Mabhazi-Account':context().accounts[0]})).status,409);assert.equal((await http(path,{action:'block'},safetyAccount,{Origin:'https://untrusted.invalid'})).status,403);assert.equal((await http(path,{action:'report'},safetyAccount)).status,422);
+  assert.equal((await get(l.subjectId,null,{'X-Mabhazi-Account':context().accounts[0]})).status,401);assert.equal((await get(l.subjectId,safetyAccount,{'X-Mabhazi-Blocked-Contributors':'{}'})).status,400);for(const query of ['?cursor[]=x','?extra=true','?cursor=bad'])assert.equal((await http('/v2/subjects/'+l.subjectId+'/fares'+query)).status,400);assert.equal((await get(randomUUID())).status,404);
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;try{assert.equal((await get(l.subjectId)).status,503);}finally{process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';}
  });
  test('fare reports: bounded pages use opaque live cursors and a removed cursor forces refresh',async()=>{
