@@ -9,7 +9,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  const finish=async(w:Record<string,unknown>)=>(await q('SELECT v2_worker_finish_assess($1,$2) r',[w.id,w.lease_token])).rows[0].r;
  const counts=async(id:string)=>(await q(`SELECT (SELECT count(*) FROM v2_field_assessments WHERE subject_id=$1) assessments,
   (SELECT count(*) FROM v2_field_decisions WHERE subject_id=$1) decisions,(SELECT revision FROM v2_subjects WHERE id=$1) revision`,[id])).rows[0];
- const today=async()=>(await q("SELECT to_char(statement_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD') d")).rows[0].d as string;
+ const today=async()=>(await q("SELECT to_char((statement_timestamp()-interval '1 day') AT TIME ZONE 'UTC','YYYY-MM-DD') d")).rows[0].d as string;
  async function fresh(){
   await q("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=clock_timestamp() WHERE id=$1",[context().user]);
   const body={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:context().origin,destinationCityId:context().destination,departureTime:'07:00',operator:{name:'Assessment test operator'}}},observations:[]};
@@ -50,7 +50,7 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  test('assessment worker: same-account repeats cannot manufacture fare corroboration',async()=>{
   const r=await fresh(),s=await scope();for(let i=0;i<3;i++)await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s);
   await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',s);
-  assert.equal(f.value.amount,'25.00');assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,1);assert.equal(f.freshness,'unknown');
+  assert.equal(f.value.amount,'25');assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,1);assert.equal(f.freshness,'unknown');
   assert.ok(!JSON.stringify(f).includes('witnesses'));assert.equal(f.publication,'provisional');
  });
  test('assessment worker: one field update preserves the fare evidence date instead of refreshing it',async()=>{
@@ -67,12 +67,12 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  test('assessment worker: different currency, passenger or date contexts remain separate',async()=>{
   const r=await fresh(),a=await scope(),b=await scope({passengerCategory:'child'}),c=await scope({quotationDate:'2020-01-01'});
   await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},a);await add(r.subjectId,'fare.quoted',{amount:'20.00',currency:'ZAR'},a);await add(r.subjectId,'fare.quoted',{amount:'10.00',currency:'USD'},b);await add(r.subjectId,'fare.quoted',{amount:'5.00',currency:'USD'},c);
-  await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',a);assert.equal(f.dispute,'none');assert.equal(f.value,null);assert.equal(f.candidates.length,2);assert.equal((await read(r.subjectId,'fare.quoted',b)).value.amount,'10.00');
+  await enqueue(r.subjectId);await finish(await claim());const f=await read(r.subjectId,'fare.quoted',a);assert.equal(f.dispute,'none');assert.equal(f.value,null);assert.equal(f.candidates.length,2);assert.equal((await read(r.subjectId,'fare.quoted',b)).value.amount,'10');
  });
  test('assessment worker: paid fare stays historical and does not select a current route price',async()=>{
   const id=(await q("INSERT INTO v2_subjects(kind) VALUES('actual_journey') RETURNING id")).rows[0].id;await q('INSERT INTO v2_actual_journeys(subject_id) VALUES($1)',[id]);
   const s=await scope({timeBasis:'actual',quotationDate:undefined,serviceDate:'2020-01-01'});await add(id,'fare.paid',{amount:'0.00',currency:'USD'},s,context().user,'travelled','2020-01-01');
-  await enqueue(id);assert.equal(await finish(await claim()),'done');const f=await read(id,'fare.paid',s);assert.equal(f.value.amount,'0.00');assert.equal(f.freshness,'unknown');assert.equal(f.candidates[0].temporalClass,'historical');assert.equal(f.support,'reported');
+  await enqueue(id);assert.equal(await finish(await claim()),'done');const f=await read(id,'fare.paid',s);assert.equal(f.value.amount,'0');assert.equal(f.freshness,'unknown');assert.equal(f.candidates[0].temporalClass,'historical');assert.equal(f.support,'reported');
   assert.equal((await q('SELECT count(*) n FROM v2_current_fields WHERE subject_id<>$1 AND field_key LIKE \'fare.%\'',[id])).rows[0].n,'0');
  });
  test('assessment worker: large scope sets continue without exhausting the failure budget',async()=>{
@@ -129,6 +129,22 @@ export function registerAssessmentWorkerTests(context:()=>Context){
    const p=(await q("SELECT has_function_privilege($1,'public.v2_worker_drain_assess(integer)','EXECUTE') allowed",[role])).rows[0];assert.equal(p.allowed,false);
   }
   assert.equal((await q("SELECT EXISTS(SELECT 1 FROM pg_proc p,LATERAL aclexplode(p.proacl) acl WHERE p.oid='public.v2_worker_drain_assess(integer)'::regprocedure AND acl.grantee=0 AND acl.privilege_type='EXECUTE') allowed")).rows[0].allowed,false);
+ });
+ test('assessment worker: shared documents do not corroborate, while independent dated source footprints can',async()=>{
+  const r=await fresh(),s=await scope(),d=await today();const shared=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().user,d])).rows[0].id;
+  await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign',d,shared);await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,shared);
+  await enqueue(r.subjectId);await finish(await claim());let f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'reported');assert.equal(f.candidates[0].contributors,2);
+  const independent=(await q("INSERT INTO v2_sources(owner_user_id,kind,source_date) VALUES($1,'document',$2) RETURNING id",[context().other,d])).rows[0].id;await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().other,'observed_sign',d,independent);
+  await enqueue(r.subjectId);await finish(await claim());f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.support,'corroborated');assert.equal(f.publication,'provisional');assert.equal(f.candidates[0].contributors,2);
+  await q('DELETE FROM v2_sources WHERE id=$1',[independent]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');await enqueue(r.subjectId);await finish(await claim());assert.equal((await read(r.subjectId,'fare.quoted',s)).support,'reported');
+ });
+ test('assessment worker: elapsed validity is refused on read and its overdue durable job recomputes',async()=>{
+  const r=await fresh(),s=await scope({quotationDate:'2020-01-01'});await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s,context().user,'observed_sign','2020-01-01');
+  const a=(await q("SELECT v2_assess_field($1,'fare.quoted',v2_assessment_hash($2),$2,s.revision,s.input_generation,g.revision,'2020-01-02T12:00:00Z',gen_random_uuid()) id FROM v2_subjects s CROSS JOIN v2_source_graph g WHERE s.id=$1",[r.subjectId,s])).rows[0].id;await q('SELECT v2_process_field_assessment($1)',[a]);assert.equal((await read(r.subjectId,'fare.quoted',s)).status,'recheck_required');
+  await q("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE kind='assess' AND state='pending' AND subject_id<>$1",[r.subjectId]);const w=await claim();assert.ok(w);assert.equal(await finish(w),'done');const f=await read(r.subjectId,'fare.quoted',s);assert.equal(f.status,'assessed');assert.equal(f.freshness,'recheck_due');assert.equal(f.candidates[0].newestDate,'2020-01-01');
+ });
+ test('assessment worker: invalid drain bounds reject without consuming jobs',async()=>{
+  const r=await fresh();await enqueue(r.subjectId);for(const limit of [null,0,21])await denied(()=>q('SELECT v2_worker_drain_assess($1)',[limit]),'23514');assert.equal((await counts(r.subjectId)).assessments,'0');
  });
  test('assessment worker: separate connections cannot claim the same committed job',{timeout:15000},async()=>{
   const r=await fresh(),job=await enqueue(r.subjectId);await q('COMMIT');

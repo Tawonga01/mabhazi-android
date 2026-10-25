@@ -295,6 +295,17 @@ before(async () => {
   await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_preview_hash_changed'));await db.query('ROLLBACK');
   await db.query('BEGIN');await db.query(contextFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
   await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_function_fence_changed'));await db.query('ROLLBACK');
+  // Exercise exact populated0030 →0031 hosted-editor guard, replay and rollback fences.
+  const assessmentApply=await readFile(new URL('../scripts/preview-apply-0031.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query("CREATE FUNCTION public.v2_worker_claim_assess() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_partial_or_unrecorded'));await db.query('ROLLBACK');
+  await db.query(assessmentApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0031_assessment_worker.sql\n';
+  const assessmentFingerprint=(await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d;
+  await db.query(assessmentApply);assert.equal((await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d,assessmentFingerprint);
+  await db.query('BEGIN');await db.query("UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0031_assessment_worker.sql'");
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_preview_hash_changed'));await db.query('ROLLBACK');
+  await db.query('BEGIN');await db.query(assessmentFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_function_fence_changed'));await db.query('ROLLBACK');
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);

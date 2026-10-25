@@ -1,5 +1,12 @@
 -- Leased execution of the existing evidence/1 evaluator and field interpretation.
 -- No evidence thresholds, public projection, canonical identity or timetable gate changes.
+DO $prior_status$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.v2_worker_status'::regclass AND conname='v2_worker_status_runner_key_check' AND contype='c' AND convalidated
+ AND regexp_replace(pg_get_constraintdef(oid),'[[:space:]()]|::text','','g')=$expected$CHECKrunner_key=ANYARRAY['normalise/1','association/1','pattern-association/1','actual-association/1']$expected$) THEN RAISE EXCEPTION 'assessment_prior_status_changed';END IF;
+END;$prior_status$;
+ALTER TABLE public.v2_worker_status DROP CONSTRAINT v2_worker_status_runner_key_check;
+ALTER TABLE public.v2_worker_status ADD CONSTRAINT v2_worker_status_runner_key_check CHECK(runner_key IN('normalise/1','association/1','pattern-association/1','actual-association/1','assessment-worker/1'));
+
 CREATE FUNCTION public.v2_worker_assessment_scopes(subject uuid)
 RETURNS TABLE(field_key text,scope_key text,scope jsonb)
 LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
@@ -75,7 +82,7 @@ END;$$;
 CREATE FUNCTION public.v2_worker_finish_assess(job uuid,token uuid) RETURNS text
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog SET timezone='UTC' AS $$
 DECLARE work public.v2_jobs;subject public.v2_subjects;item record;a public.v2_field_assessments;
- active_policy text;graph bigint;digest text;decision uuid;
+ active_policy text;graph bigint;digest text;decision uuid;assessment_id uuid;
 BEGIN
  UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
  SELECT * INTO work FROM public.v2_jobs WHERE id=job FOR UPDATE;
@@ -104,8 +111,9 @@ BEGIN
    AND a0.assessed_at<=statement_timestamp() AND (a0.valid_until IS NULL OR a0.valid_until>statement_timestamp());
   IF NOT FOUND THEN
    SELECT * INTO subject FROM public.v2_subjects WHERE id=work.subject_id;
-   SELECT * INTO a FROM public.v2_field_assessments WHERE id=public.v2_assess_field(subject.id,item.field_key,item.scope_key,item.scope,
+   assessment_id:=public.v2_assess_field(subject.id,item.field_key,item.scope_key,item.scope,
     subject.revision,subject.input_generation,graph,statement_timestamp(),gen_random_uuid());
+   SELECT * INTO a FROM public.v2_field_assessments WHERE id=assessment_id;
   END IF;
   decision:=public.v2_process_field_assessment(a.id);
  END LOOP;
