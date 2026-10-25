@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,randomBytes} from 'node:crypto';
 import {test} from 'node:test';
 import type pg from 'pg';
-import {ListV2FareReportsResponse} from '@workspace/api-zod';
+import type {infer as Infer} from 'zod';
+import {ListV2FareReportsResponse,GetV2SubjectResponse,ListV2RouteBlocksResponse,SubmitV2ActualJourneyResponse} from '@workspace/api-zod';
+type HttpPayload=Infer<typeof ListV2FareReportsResponse>&Infer<typeof GetV2SubjectResponse>&Infer<typeof ListV2RouteBlocksResponse>&Infer<typeof SubmitV2ActualJourneyResponse>;
 type Context={admin:pg.Client;accounts:string[];tokens:string[];cities:number[];base:string};
 export function registerFareReportTests(context:()=>Context){
  const q=(sql:string,args:unknown[]=[])=>context().admin.query(sql,args);
  async function http(path:string,body?:unknown,account:number|null=null,extra:Record<string,string>={},method=body===undefined?'GET':'POST'){
-  const response=await fetch(context().base+path,{method,headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(account===null?{}:{Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]}),...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json(),headers:response.headers};
+  const response=await fetch(context().base+path,{method,headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(account===null?{}:{Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]}),...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json() as HttpPayload,headers:response.headers};
  }
  const date=async()=>(await q("SELECT to_char((statement_timestamp()-interval '2 days') AT TIME ZONE 'UTC','YYYY-MM-DD') d")).rows[0].d as string;
  async function lead(name='Fare boundary bus',time='07:00',reverse=false){
@@ -86,6 +88,11 @@ export function registerFareReportTests(context:()=>Context){
   // Each bounded tick claims at most20 actuals; a second tick drains the remainder.
   const first=ListV2FareReportsResponse.parse((await get(l.subjectId)).value);assert.equal(first.items.length,20);assert.ok(first.nextCursor);const next=ListV2FareReportsResponse.parse((await get(l.subjectId,null,{},first.nextCursor)).value);assert.equal(next.items.length,2);assert.equal(next.nextCursor,undefined);assert.equal(new Set([...first.items,...next.items].map(r=>r.id)).size,22);
   const obs=(await q('SELECT observation_id FROM v2_public_fare_refs WHERE id=$1',[first.nextCursor])).rows[0].observation_id;await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[context().accounts[1],obs,randomUUID()]);assert.equal((await get(l.subjectId,null,{},first.nextCursor)).status,400);
+ });
+ test('fare reports: account erasure removes a different fare author without removing the route report',async()=>{
+  const account=context().accounts.length,actor=randomUUID(),token=randomBytes(32).toString('hex');context().accounts.push(actor);context().tokens.push(token);
+  await q("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[actor]);await q("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);
+  const {l,page}=await ready({owner:account});assert.equal(page.items.length,1);await q('DELETE FROM users WHERE id=$1',[actor]);assert.equal((await get(l.subjectId)).value.items.length,0);assert.equal((await http('/v2/subjects/'+l.subjectId)).status,200);
  });
  test('fare reports: backend is read-only, hosted clients and raw trigger helpers stay denied',async()=>{
   const db=context().admin;await q('SET ROLE mabhazi_api');try{await assert.rejects(q('INSERT INTO v2_public_fare_refs(observation_id) VALUES(gen_random_uuid())'),e=>(e as {code:string}).code==='42501');assert.equal((await q("SELECT has_function_privilege(current_user,'v2_fare_reference_created()','EXECUTE') p")).rows[0].p,false);}finally{await q('RESET ROLE');}

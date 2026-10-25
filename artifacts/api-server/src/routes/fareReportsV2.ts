@@ -49,7 +49,7 @@ router.get('/subjects/:subjectId/fares',async(req,res)=>{
    [params.data.subjectId,res.locals.fareBlocked,req.isAuthenticated()?req.user.id:null,query.data.cursor??null]);
   const value=result.rows[0];if(!value?.available){res.status(404).json({code:'SUBJECT_UNAVAILABLE',error:'This route is unavailable.'});return;}
   if(!value.cursor_valid){res.status(400).json({code:'INVALID_CURSOR',error:'Fare reports changed. Refresh this route.'});return;}
-  const items=(value.items as Record<string,unknown>[]).slice(0,20).map(item=>({...item,scope:safeScope(item.scope as Record<string,unknown>)}));
+  const items=(value.items as Record<string,unknown>[]).slice(0,20).map(item=>({...item,id:item.id,scope:safeScope(item.scope as Record<string,unknown>)}));
   res.json(ListV2FareReportsResponse.parse({subjectId:params.data.subjectId,items,hasPendingReports:value.pending,hasHiddenResults:value.hidden,
    ...((value.items as unknown[]).length>20?{nextCursor:items.at(-1)?.id}:{})}));
  }catch{res.status(503).json({code:'TEMPORARILY_UNAVAILABLE',error:'Fare reports could not load. Try again.'});}

@@ -1,5 +1,5 @@
 -- Mabhazi Preview ocwlqhlfavvuncfmzuqh only; fresh action-time approval required.
--- Source0032 SHA256 603dcd64a70e46705d160c020ac9f54233cf841ceb6fff084d42d3784c7e0d08. Two private tables, one private view and two fenced API functions.
+-- Source0032 SHA256 b8b9d1d0d8136d9c477c3890bdfd52b93be1f81c2fce208978eeb2e05fb15f47. Two private tables, one private view and two fenced API functions.
 BEGIN;
 SET LOCAL statement_timeout='30s';SET LOCAL lock_timeout='5s';
 SELECT pg_advisory_xact_lock(19092026,1);
@@ -43,7 +43,7 @@ BEGIN
  ) expected(name,checksum) LEFT JOIN mabhazi_migrations.applied actual USING(name) WHERE actual.checksum IS DISTINCT FROM expected.checksum)
  OR (SELECT count(*) FROM mabhazi_migrations.applied) NOT IN(32,33) THEN RAISE EXCEPTION 'fare_preview_baseline_changed';END IF;
  SELECT checksum INTO previous FROM mabhazi_migrations.applied WHERE name='0032_public_fare_reports.sql';
- IF previous IS NOT NULL AND previous<>'603dcd64a70e46705d160c020ac9f54233cf841ceb6fff084d42d3784c7e0d08' THEN RAISE EXCEPTION 'fare_preview_hash_changed';END IF;
+ IF previous IS NOT NULL AND previous<>'b8b9d1d0d8136d9c477c3890bdfd52b93be1f81c2fce208978eeb2e05fb15f47' THEN RAISE EXCEPTION 'fare_preview_hash_changed';END IF;
  SELECT jsonb_agg(to_jsonb(proc_snapshot) ORDER BY proc_snapshot.oid) INTO before_functions FROM pg_proc proc_snapshot WHERE proc_snapshot.pronamespace='public'::regnamespace AND proc_snapshot.proname NOT IN('v2_fare_reference_created','v2_fare_reference_immutable','v2_api_fare_report_action','v2_api_hide_reported_fare');
  SELECT jsonb_build_array((SELECT md5(COALESCE(jsonb_agg(to_jsonb(c) ORDER BY id)::text,'')) FROM public.v2_contributions c),(SELECT md5(COALESCE(jsonb_agg(to_jsonb(c) ORDER BY user_id,client_submission_id)::text,'')) FROM public.v2_receipts c),(SELECT md5(COALESCE(jsonb_agg(to_jsonb(c) ORDER BY id)::text,'')) FROM public.v2_observations c)) INTO before_data;
  IF previous IS NULL THEN
@@ -106,7 +106,7 @@ WHERE o.field_key IN('fare.paid','fare.quoted','fare.advertised')
  -- A known different reported company is not silently attached to this lead.
  AND NOT EXISTS(SELECT 1 FROM public.v2_observations company JOIN public.v2_observation_states cs ON cs.observation_id=company.id AND cs.status='active'
   WHERE company.original_subject_id=a.subject_id AND company.field_key='operator.reported'
-   AND (company.operator_ref IS NOT NULL OR public.v2_operator_search_key(company.value->>'name') IS DISTINCT FROM public.v2_operator_search_key(p.operator_report->>'value')));
+   AND (company.operator_ref IS NOT NULL OR lower(regexp_replace(btrim(company.value->>'name'),'[[:space:]]+',' ','g')) IS DISTINCT FROM lower(regexp_replace(btrim(p.operator_report->>'value'),'[[:space:]]+',' ','g'))));
 
 CREATE FUNCTION public.v2_api_fare_report_action(actor varchar,subject uuid,fare uuid,action text,reason text,blocked varchar[]) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
@@ -168,7 +168,7 @@ END;$$;
 GRANT EXECUTE ON FUNCTION public.v2_api_fare_report_action(varchar,uuid,uuid,text,text,varchar[]),public.v2_api_hide_reported_fare(integer,text) TO mabhazi_api;
 
 $source_fares_0032$;
-  INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES('0032_public_fare_reports.sql','603dcd64a70e46705d160c020ac9f54233cf841ceb6fff084d42d3784c7e0d08');
+  INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES('0032_public_fare_reports.sql','b8b9d1d0d8136d9c477c3890bdfd52b93be1f81c2fce208978eeb2e05fb15f47');
  END IF;
  EXECUTE $expected_fare_view$CREATE TEMP VIEW fares_0032_expected AS
 SELECT ref.id AS fare_ref,p.subject_id AS route_subject_id,p.author_user_id AS route_author_id,c.user_id AS fare_author_id,
@@ -197,7 +197,7 @@ WHERE o.field_key IN('fare.paid','fare.quoted','fare.advertised')
  -- A known different reported company is not silently attached to this lead.
  AND NOT EXISTS(SELECT 1 FROM public.v2_observations company JOIN public.v2_observation_states cs ON cs.observation_id=company.id AND cs.status='active'
   WHERE company.original_subject_id=a.subject_id AND company.field_key='operator.reported'
-   AND (company.operator_ref IS NOT NULL OR public.v2_operator_search_key(company.value->>'name') IS DISTINCT FROM public.v2_operator_search_key(p.operator_report->>'value')));$expected_fare_view$;
+   AND (company.operator_ref IS NOT NULL OR lower(regexp_replace(btrim(company.value->>'name'),'[[:space:]]+',' ','g')) IS DISTINCT FROM lower(regexp_replace(btrim(p.operator_report->>'value'),'[[:space:]]+',' ','g'))));$expected_fare_view$;
  IF replace(pg_get_viewdef('public.v2_fare_report_context'::regclass,true),E'\r\n',E'\n') IS DISTINCT FROM replace(pg_get_viewdef('pg_temp.fares_0032_expected'::regclass,true),E'\r\n',E'\n') THEN RAISE EXCEPTION 'fare_view_changed';END IF;
  DROP VIEW pg_temp.fares_0032_expected;
  FOR f IN SELECT value FROM jsonb_array_elements($function_specs$[{"name":"v2_fare_reference_created","signature":"public.v2_fare_reference_created()","hash":"7e074aa90ca43f3001523b608868e70f1c40b7ecf12baa87db79debca34d2c8e","definer":true,"backend":false,"result":"trigger"},{"name":"v2_fare_reference_immutable","signature":"public.v2_fare_reference_immutable()","hash":"33929b216d62e745f12f1b88aa6bbc52e8f02db9290cd7063233c343e5e4313b","definer":false,"backend":false,"result":"trigger"},{"name":"v2_api_fare_report_action","signature":"public.v2_api_fare_report_action(varchar,uuid,uuid,text,text,varchar[])","hash":"550cdf8c23cee9b5b0a60191a4f921391b986cfa68e6d2bd10a6734d15e8c593","definer":true,"backend":true,"result":"jsonb"},{"name":"v2_api_hide_reported_fare","signature":"public.v2_api_hide_reported_fare(integer,text)","hash":"44bf5042f8da9bd94756e092cbbd24b5947c6a66d4f128c68a3f00d40e85839e","definer":true,"backend":true,"result":"boolean"}]$function_specs$::jsonb) LOOP

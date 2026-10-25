@@ -54,7 +54,7 @@ WHERE o.field_key IN('fare.paid','fare.quoted','fare.advertised')
  -- A known different reported company is not silently attached to this lead.
  AND NOT EXISTS(SELECT 1 FROM public.v2_observations company JOIN public.v2_observation_states cs ON cs.observation_id=company.id AND cs.status='active'
   WHERE company.original_subject_id=a.subject_id AND company.field_key='operator.reported'
-   AND (company.operator_ref IS NOT NULL OR public.v2_operator_search_key(company.value->>'name') IS DISTINCT FROM public.v2_operator_search_key(p.operator_report->>'value')));
+   AND (company.operator_ref IS NOT NULL OR lower(regexp_replace(btrim(company.value->>'name'),'[[:space:]]+',' ','g')) IS DISTINCT FROM lower(regexp_replace(btrim(p.operator_report->>'value'),'[[:space:]]+',' ','g'))));
 
 CREATE FUNCTION public.v2_api_fare_report_action(actor varchar,subject uuid,fare uuid,action text,reason text,blocked varchar[]) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$

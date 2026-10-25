@@ -11,4 +11,5 @@ export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
+  fareReportsEnabled?: boolean;
 }
