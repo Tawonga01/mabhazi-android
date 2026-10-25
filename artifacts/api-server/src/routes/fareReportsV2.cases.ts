@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
-import {test,before} from 'node:test';
+import {test} from 'node:test';
 import type pg from 'pg';
 import type {infer as Infer} from 'zod';
 import {ListV2FareReportsResponse,GetV2SubjectResponse,ListV2RouteBlocksResponse,SubmitV2ActualJourneyResponse} from '@workspace/api-zod';
@@ -8,9 +8,14 @@ type HttpPayload=Infer<typeof ListV2FareReportsResponse>&Infer<typeof GetV2Subje
 type Context={admin:pg.Client;accounts:string[];tokens:string[];cities:number[];base:string};
 export function registerFareReportTests(context:()=>Context){
  const q=(sql:string,args:unknown[]=[])=>context().admin.query(sql,args);
- let safetyAccount:number;
- before(async()=>{safetyAccount=context().accounts.length;const actor=randomUUID(),token=randomBytes(32).toString('hex');context().accounts.push(actor);context().tokens.push(token);await q('INSERT INTO users(id) VALUES($1)',[actor]);await q("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);});
+ let safetyAccount=-1;
+ // Initialise only when this suite reaches its first HTTP request. Global test
+ // before hooks can overlap the parent's loop over its account array.
+ let safetySetup:Promise<void>|undefined;
+ function ensureSafetyActor(){return safetySetup??=(async()=>{const actor=randomUUID(),token=randomBytes(32).toString('hex');await q('INSERT INTO users(id) VALUES($1)',[actor]);await q("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:actor},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);safetyAccount=context().accounts.length;context().accounts.push(actor);context().tokens.push(token);})();}
+
  async function http(path:string,body?:unknown,account:number|null=null,extra:Record<string,string>={},method=body===undefined?'GET':'POST'){
+  await ensureSafetyActor();
   const response=await fetch(context().base+path,{method,headers:{...(body===undefined?{}:{'Content-Type':'application/json'}),...(account===null?{}:{Authorization:'Bearer '+context().tokens[account],'X-Mabhazi-Account':context().accounts[account]}),...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json() as HttpPayload,headers:response.headers};
  }
  const date=async()=>(await q("SELECT to_char((statement_timestamp()-interval '2 days') AT TIME ZONE 'UTC','YYYY-MM-DD') d")).rows[0].d as string;
