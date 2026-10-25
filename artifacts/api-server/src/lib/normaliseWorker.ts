@@ -16,7 +16,10 @@ export async function drainAssociation(database: WorkerPool, limit=20): Promise<
 export async function drainAssessment(database: WorkerPool, limit=20): Promise<AssociationTickResult> {
   return await drainStage(database,limit,'assess') as AssociationTickResult;
 }
-const stageSQL = {normalise:'SELECT public.v2_worker_drain_normalise($1) result',associate:'SELECT public.v2_worker_drain_associate($1) result',assess:'SELECT public.v2_worker_drain_assess($1) result'} as const;
+export async function drainTasks(database: WorkerPool, limit=20): Promise<AssociationTickResult> {
+  return await drainStage(database,limit,'tasks') as AssociationTickResult;
+}
+const stageSQL = {normalise:'SELECT public.v2_worker_drain_normalise($1) result',associate:'SELECT public.v2_worker_drain_associate($1) result',assess:'SELECT public.v2_worker_drain_assess($1) result',tasks:'SELECT public.v2_worker_drain_tasks($1) result'} as const;
 async function drainStage(database: WorkerPool, limit:number, stage:keyof typeof stageSQL): Promise<TickResult> {
   if (!Number.isInteger(limit) || limit<1 || limit>20) throw new Error('WORKER_BATCH_INVALID');
   const client=await database.connect();

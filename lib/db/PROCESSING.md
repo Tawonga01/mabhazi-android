@@ -68,3 +68,8 @@ Canonical field publication, safe public fare DTO/display, relevant-user task ex
 0031 also repairs same-account/source fare deduplication so different currencies remain distinct propositions, as required by the existing evidence contract. It changes no threshold. Affected pre-existing cached fare scopes advance generations and queue reassessment; originals and historical decisions survive. Exact populated upgrade exercises a previously collapsed two-currency assessment and refuses its stale projection after migration.
 
 A private subject-generation trigger wakes current-policy evidence processing after withdrawal, source/target/review changes or erasure on already-assessed subjects. It does not consume legacy operation-policy jobs or unsupported future evidence policies; those remain visible as other pending work. Withdrawal/source-removal tests exercise automatic wakeup without a helper enqueue. No new reports or support are invented.
+
+
+## Task refresh worker — migration0033
+
+`refresh_tasks/prompts/1` is now a source-defined leased stage with ten-item continuation, safe retry/backoff, owner-only failed-job recovery and separate `tasks` health. The Preview worker CLI supports `tasks` through the same transaction/timeout/commit adapter. It derives questions only; reservations, explicit knowledge, suppression, API/UI and retention remain separate. Other operation policies remain visible and untouched. Time-bound assessment completions issue distinct refresh intents; future evidence changes schedule a successor. No live schedule or hosted deployment follows automatically from this source change.

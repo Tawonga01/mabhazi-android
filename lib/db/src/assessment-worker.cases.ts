@@ -45,7 +45,8 @@ export function registerAssessmentWorkerTests(context:()=>Context){
  test('assessment worker: duplicate jobs reuse current assessments, decisions and subject revision',async()=>{
   const r=await fresh();await enqueue(r.subjectId);await finish(await claim());const before=await counts(r.subjectId);
   await enqueue(r.subjectId);await finish(await claim());assert.deepEqual(await counts(r.subjectId),before);
-  assert.equal((await q("SELECT count(*) n FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks'",[r.subjectId])).rows[0].n,'1');
+  // A later evidence-time boundary can require new tasks at the same generation.
+  assert.equal((await q("SELECT count(*) n FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks'",[r.subjectId])).rows[0].n,'2');
  });
  test('assessment worker: same-account repeats cannot manufacture fare corroboration',async()=>{
   const r=await fresh(),s=await scope();for(let i=0;i<3;i++)await add(r.subjectId,'fare.quoted',{amount:'25.00',currency:'USD'},s);

@@ -1,5 +1,9 @@
 # Prompt/task storage — prompts/1
 
+Migration0033 adds a bounded leased `refresh_tasks/prompts/1` consumer. It derives actor-free questions from existing typed scopes and unscoped structural gaps, with real-clock current/stale/conflict checks. It creates no invitations, route facts, accounts or travel declarations. It never invents missing fare context. Existing account/context/ownership eligibility and suppression still apply at reservation and submission.
+
+Per-job effect digests allow ten-item continuation without copying scope values into worker state; observation erasure clears these digests. Task IDs remain stable while needed; expired generations and satisfied/obsolete tasks are never retargeted. Future evidence changes schedule an idempotent refresh, and separate assessment completions now wake separate refresh intents even at the same input generation. Backend receives only fenced execution functions. Task constructors, invitation/preferences writers, retention and failed-job retry remain owner-only. This source addition needs explicit hosted application/activation; it adds no prompt API or mobile pop-up. Historical storage-only notes below describe the0013 boundary.
+
 Migration0013 is an internal storage foundation. It does not add a public endpoint, an automatic task generator, a running refresher/retention worker or mobile prompts. Later API integration must bind the authenticated account, validate declared context for the displayed subject/scope, enforce Terms on contribution, and expose only a safe mapped response. No writer or account-parameter read is executable by the backend/client roles yet; all ten tables are RLS protected, backend SELECT only. Never grant these impersonation-capable functions directly to mobile roles.
 
 ## Registry, task inputs and identity

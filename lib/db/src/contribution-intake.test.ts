@@ -1,3 +1,4 @@
+import { registerPromptWorkerTests } from './prompt-worker.cases';
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
@@ -724,3 +725,5 @@ registerPatternAssociationTests(() => ({ db, connectionString, user, other, orig
 registerIdentityLookupTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
+
+registerPromptWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

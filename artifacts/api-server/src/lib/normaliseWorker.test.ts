@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { drainNormalise, drainAssociation, drainAssessment } from './normaliseWorker';
+import { drainNormalise, drainAssociation, drainAssessment, drainTasks } from './normaliseWorker';
 test('worker adapter: an unconfirmed COMMIT never returns success and always releases the connection',async()=>{
   const calls:string[]=[];let released=false;
   const pool={connect:async()=>({query:async(sql:string)=>{calls.push(sql);if(sql==='COMMIT')throw new Error('connection lost');return {rows:[{result:{done:1,superseded:0,failedAttempts:0}}]};},release:()=>{released=true;}})};
@@ -28,5 +28,13 @@ test('assessment adapter: scoped continuation, timeouts and ambiguous commits re
  const pool={connect:async()=>({query:async(sql:string)=>{calls.push(sql);if(mode==='timeout'&&sql.startsWith('SELECT'))throw new Error('timeout');if(mode==='commit'&&sql==='COMMIT')throw new Error('lost acknowledgement');return{rows:[{result:{done:0,superseded:0,failedAttempts:0,...(mode==='invalid'?{}:{continued:1})}}]};},release:()=>{released=true;}})};
  if(mode==='success')assert.equal((await drainAssessment(pool,1)).continued,1);else await assert.rejects(()=>drainAssessment(pool,1));
  assert.ok(calls.includes('SELECT public.v2_worker_drain_assess($1) result'));assert.equal(calls.at(-1),mode==='success'?'COMMIT':'ROLLBACK');assert.equal(released,true);
+ }
+});
+
+test('task refresh adapter: scoped continuation, timeouts and ambiguous commits remain fenced',async()=>{
+ for(const mode of ['success','timeout','commit','invalid']){const calls:string[]=[];let released=false;
+ const pool={connect:async()=>({query:async(sql:string)=>{calls.push(sql);if(mode==='timeout'&&sql.startsWith('SELECT'))throw new Error('timeout');if(mode==='commit'&&sql==='COMMIT')throw new Error('lost acknowledgement');return{rows:[{result:{done:0,superseded:0,failedAttempts:0,...(mode==='invalid'?{}:{continued:1})}}]};},release:()=>{released=true;}})};
+ if(mode==='success')assert.equal((await drainTasks(pool,1)).continued,1);else await assert.rejects(()=>drainTasks(pool,1));
+ assert.ok(calls.includes('SELECT public.v2_worker_drain_tasks($1) result'));assert.equal(calls.at(-1),mode==='success'?'COMMIT':'ROLLBACK');assert.equal(released,true);
  }
 });
