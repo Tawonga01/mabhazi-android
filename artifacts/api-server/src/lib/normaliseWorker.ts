@@ -8,22 +8,26 @@ export type AssociationTickResult = TickResult & { continued: number };
 
 /** One bounded SQL tick. Completion is reported only after its transaction commits. */
 export async function drainNormalise(database: WorkerPool, limit=20): Promise<TickResult> {
-  return drainStage(database,limit,false);
+  return drainStage(database,limit,'normalise');
 }
 export async function drainAssociation(database: WorkerPool, limit=20): Promise<AssociationTickResult> {
-  return await drainStage(database,limit,true) as AssociationTickResult;
+  return await drainStage(database,limit,'associate') as AssociationTickResult;
 }
-async function drainStage(database: WorkerPool, limit:number, association:boolean): Promise<TickResult> {
+export async function drainAssessment(database: WorkerPool, limit=20): Promise<AssociationTickResult> {
+  return await drainStage(database,limit,'assess') as AssociationTickResult;
+}
+const stageSQL = {normalise:'SELECT public.v2_worker_drain_normalise($1) result',associate:'SELECT public.v2_worker_drain_associate($1) result',assess:'SELECT public.v2_worker_drain_assess($1) result'} as const;
+async function drainStage(database: WorkerPool, limit:number, stage:keyof typeof stageSQL): Promise<TickResult> {
   if (!Number.isInteger(limit) || limit<1 || limit>20) throw new Error('WORKER_BATCH_INVALID');
   const client=await database.connect();
   try {
     await client.query('BEGIN');
     await client.query("SET LOCAL statement_timeout='20s'");
     await client.query("SET LOCAL lock_timeout='5s'");
-    const {rows}=await client.query(association ? 'SELECT public.v2_worker_drain_associate($1) result' : 'SELECT public.v2_worker_drain_normalise($1) result',[limit]);
+    const {rows}=await client.query(stageSQL[stage],[limit]);
     const result=rows[0]?.result as TickResult | undefined;
     if (!result || ![result.done,result.superseded,result.failedAttempts].every(v=>Number.isInteger(v) && v>=0 && v<=limit)) throw new Error('WORKER_RESULT_INVALID');
-    if (association && (!Number.isInteger((result as AssociationTickResult).continued) || (result as AssociationTickResult).continued<0 || (result as AssociationTickResult).continued>limit)) throw new Error('WORKER_RESULT_INVALID');
+    if (stage!=='normalise' && (!Number.isInteger((result as AssociationTickResult).continued) || (result as AssociationTickResult).continued<0 || (result as AssociationTickResult).continued>limit)) throw new Error('WORKER_RESULT_INVALID');
     await client.query('COMMIT');
     return result;
   } catch(error) {

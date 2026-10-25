@@ -8,6 +8,7 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import pg from "pg";
 import { processingTables } from "./schema/processing";
+import { registerAssessmentWorkerTests } from './assessment-worker.cases';
 import { registerProcessingTests } from "./processing.cases";
 import { registerLeadAssociationTests } from "./lead-association.cases";
 import { registerPatternAssociationTests } from "./pattern-association.cases";
@@ -674,6 +675,7 @@ registerServiceRunTests(() => ({ db, connectionString, user, other, origin, dest
 
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
+registerAssessmentWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
