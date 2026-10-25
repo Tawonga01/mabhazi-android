@@ -334,7 +334,8 @@ before(async () => {
     ['ALTER TABLE v2_public_fare_refs DISABLE ROW LEVEL SECURITY','fare_rls_changed'],
     ['ALTER TABLE v2_observations DISABLE TRIGGER v2_fare_reference_created','fare_trigger_changed'],
     ['DELETE FROM v2_public_fare_refs','fare_reference_coverage_changed'],
-    ['GRANT INSERT ON v2_public_fare_refs TO mabhazi_api','fare_relation_fence_changed']
+    ['GRANT INSERT ON v2_public_fare_refs TO mabhazi_api','fare_relation_fence_changed'],
+    ['ALTER TABLE v2_public_fare_refs DROP CONSTRAINT v2_public_fare_refs_observation_id_fkey','fare_foreign_key_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);

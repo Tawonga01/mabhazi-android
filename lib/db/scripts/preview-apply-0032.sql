@@ -219,15 +219,19 @@ WHERE o.field_key IN('fare.paid','fare.quoted','fare.advertised')
     OR NOT EXISTS(SELECT 1 FROM pg_policy WHERE polrelid=p.oid AND polname='backend_read' AND polcmd='r' AND polroles=ARRAY[(SELECT oid FROM pg_roles WHERE rolname='mabhazi_api')] AND pg_get_expr(polqual,polrelid)='true') THEN RAISE EXCEPTION 'fare_rls_changed: %',t;END IF;
   END IF;
  END LOOP;
- CREATE TEMP TABLE fare_refs_expected(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),observation_id uuid NOT NULL UNIQUE REFERENCES public.v2_observations(id) ON DELETE CASCADE);
- CREATE TEMP TABLE fare_hides_expected(fare_ref uuid PRIMARY KEY REFERENCES public.v2_public_fare_refs(id) ON DELETE CASCADE,report_id integer NOT NULL REFERENCES public.abuse_reports(id),hidden_at timestamptz NOT NULL DEFAULT now());
+ CREATE TEMP TABLE fare_refs_expected(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),observation_id uuid NOT NULL UNIQUE);
+ CREATE TEMP TABLE fare_hides_expected(fare_ref uuid PRIMARY KEY,report_id integer NOT NULL,hidden_at timestamptz NOT NULL DEFAULT now());
  FOREACH t IN ARRAY ARRAY['v2_public_fare_refs','v2_public_fare_hides'] LOOP
   SELECT jsonb_build_array((SELECT jsonb_agg(jsonb_build_array(attname,format_type(atttypid,atttypmod),attnotnull,pg_get_expr(d.adbin,d.adrelid)) ORDER BY attnum) FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid=('public.'||t)::regclass AND attnum>0 AND NOT attisdropped),
-   (SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY pg_get_constraintdef(oid)) FROM pg_constraint WHERE conrelid=('public.'||t)::regclass AND convalidated)) INTO actual_shape;
+   (SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY pg_get_constraintdef(oid)) FROM pg_constraint WHERE conrelid=('public.'||t)::regclass AND convalidated AND contype<>'f')) INTO actual_shape;
   SELECT jsonb_build_array((SELECT jsonb_agg(jsonb_build_array(attname,format_type(atttypid,atttypmod),attnotnull,pg_get_expr(d.adbin,d.adrelid)) ORDER BY attnum) FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum WHERE a.attrelid=(CASE t WHEN 'v2_public_fare_refs' THEN 'pg_temp.fare_refs_expected' ELSE 'pg_temp.fare_hides_expected' END)::regclass AND attnum>0 AND NOT attisdropped),
-   (SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY pg_get_constraintdef(oid)) FROM pg_constraint WHERE conrelid=(CASE t WHEN 'v2_public_fare_refs' THEN 'pg_temp.fare_refs_expected' ELSE 'pg_temp.fare_hides_expected' END)::regclass AND convalidated)) INTO expected_shape;
+   (SELECT jsonb_agg(pg_get_constraintdef(oid) ORDER BY pg_get_constraintdef(oid)) FROM pg_constraint WHERE conrelid=(CASE t WHEN 'v2_public_fare_refs' THEN 'pg_temp.fare_refs_expected' ELSE 'pg_temp.fare_hides_expected' END)::regclass AND convalidated AND contype<>'f')) INTO expected_shape;
   IF actual_shape IS DISTINCT FROM expected_shape THEN RAISE EXCEPTION 'fare_table_shape_changed: %',t;END IF;
  END LOOP;
+ IF (SELECT count(*) FROM pg_constraint WHERE conrelid='public.v2_public_fare_refs'::regclass)<>3 OR (SELECT count(*) FROM pg_constraint WHERE conrelid='public.v2_public_fare_hides'::regclass)<>3
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.v2_public_fare_refs'::regclass AND contype='f' AND conkey=ARRAY[2]::smallint[] AND confrelid='public.v2_observations'::regclass AND confkey=ARRAY[1]::smallint[] AND confdeltype='c' AND confupdtype='a' AND confmatchtype='s' AND convalidated AND NOT condeferrable)
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.v2_public_fare_hides'::regclass AND contype='f' AND conkey=ARRAY[1]::smallint[] AND confrelid='public.v2_public_fare_refs'::regclass AND confkey=ARRAY[1]::smallint[] AND confdeltype='c' AND confupdtype='a' AND confmatchtype='s' AND convalidated AND NOT condeferrable)
+ OR NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conrelid='public.v2_public_fare_hides'::regclass AND contype='f' AND conkey=ARRAY[2]::smallint[] AND confrelid='public.abuse_reports'::regclass AND confkey=ARRAY[1]::smallint[] AND confdeltype='a' AND confupdtype='a' AND confmatchtype='s' AND convalidated AND NOT condeferrable) THEN RAISE EXCEPTION 'fare_foreign_key_changed';END IF;
  DROP TABLE pg_temp.fare_refs_expected,pg_temp.fare_hides_expected;
  IF NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.v2_observations'::regclass AND tgname='v2_fare_reference_created' AND tgenabled='O' AND tgtype=5 AND tgfoid='public.v2_fare_reference_created()'::regprocedure)
  OR NOT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.v2_public_fare_refs'::regclass AND tgname='v2_fare_reference_immutable' AND tgenabled='O' AND tgtype=19 AND tgfoid='public.v2_fare_reference_immutable()'::regprocedure)
