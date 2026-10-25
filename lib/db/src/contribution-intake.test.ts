@@ -298,12 +298,14 @@ before(async () => {
   // Exercise exact populated0030 →0031 hosted-editor guard, replay and rollback fences.
   // Preserve a real pre0031 cached fare assessment which collapsed one owner's currencies.
   const currencyRepairSubject=randomUUID(),currencyRepairUser=randomUUID(),currencyRepairContribution=randomUUID();
+  await db.query('BEGIN');
   await db.query('INSERT INTO users(id) VALUES($1)',[currencyRepairUser]);await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'actual_journey')",[currencyRepairSubject]);await db.query('INSERT INTO v2_actual_journeys(subject_id) VALUES($1)',[currencyRepairSubject]);
   await db.query("INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,$2,gen_random_uuid(),'1.0','route_detail',repeat('a',64),'{}',$3)",[currencyRepairContribution,currencyRepairUser,currencyRepairSubject]);
   const currencyRepairScope={schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:upgradeCities[0],destinationCityId:upgradeCities[1]},passengerCategory:'unknown',ticketBasis:'unknown'};
   for(const currency of ['USD','ZAR']){const value={amount:'25.00',currency};await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'fare.quoted',$3,$4,v2_assessment_hash($4),v2_assessment_hash($3))",[currencyRepairContribution,currencyRepairSubject,value,currencyRepairScope]);}
   const currencyRepairAssessment=(await db.query("SELECT v2_assess_field($1,'fare.quoted',v2_assessment_hash($2),$2,s.revision,s.input_generation,g.revision,statement_timestamp(),gen_random_uuid()) id FROM v2_subjects s CROSS JOIN v2_source_graph g WHERE s.id=$1",[currencyRepairSubject,currencyRepairScope])).rows[0].id;
   await db.query('SELECT v2_process_field_assessment($1)',[currencyRepairAssessment]);assert.equal((await db.query("SELECT v2_read_field($1,'fare.quoted',v2_assessment_hash($2)) r",[currencyRepairSubject,currencyRepairScope])).rows[0].r.candidates.length,1);
+  await db.query('COMMIT');
   const assessmentApply=await readFile(new URL('../scripts/preview-apply-0031.sql',import.meta.url),'utf8');
   await db.query('BEGIN');await db.query("CREATE FUNCTION public.v2_worker_claim_assess() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
   await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_partial_or_unrecorded'));await db.query('ROLLBACK');
