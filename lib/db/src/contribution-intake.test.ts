@@ -1,3 +1,4 @@
+import {registerPickupQuestionTests} from './pickup-question.cases';
 import { registerRouteObservationTests } from './route-observations.cases';
 import { registerPromptWorkerTests } from './prompt-worker.cases';
 import assert from "node:assert/strict";
@@ -396,6 +397,23 @@ before(async () => {
    ['ALTER TABLE v2_place_report_refs DROP CONSTRAINT v2_place_report_refs_observation_id_fkey','place_table_shape_changed'],
    ['CREATE OR REPLACE VIEW v2_place_report_context AS SELECT c.*,false AS altered FROM v2_place_report_context c','place_view_changed']
   ]){await db.query('BEGIN');if(!change!.includes('false AS altered')){await db.query(change!);await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}else{await db.query('ALTER VIEW v2_place_report_context RENAME COLUMN city TO wrong_city');await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}await db.query('ROLLBACK');}
+
+  // Exact populated0035 ->0036 guarded manual-question API upgrade and drift rejection.
+  const pickupApply=await readFile(new URL('../scripts/preview-apply-0036.sql',import.meta.url),'utf8');
+  const pickupOriginal=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows;
+  const pickupPromptOriginal=await promptSnapshot();
+  await db.query('BEGIN');await db.query('CREATE TABLE v2_pickup_answer_requests(id uuid)');await assert.rejects(()=>db.query(pickupApply),/pickup_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(pickupApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0036_pickup_question_api.sql\n';
+  await db.query(pickupApply);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,pickupOriginal);
+  assert.deepEqual(await promptSnapshot(),pickupPromptOriginal);
+  for(const [change,message]of [
+    ["GRANT EXECUTE ON FUNCTION v2_api_pickup_question_read(varchar,uuid,varchar[]) TO PUBLIC",'pickup_function_fence_changed'],
+    ["GRANT INSERT ON v2_pickup_answer_requests TO mabhazi_api",'pickup_table_fence_changed'],
+    ["ALTER TABLE v2_pickup_answer_requests DISABLE TRIGGER v2_pickup_answer_request_immutable",'pickup_trigger_changed'],
+    ["ALTER TABLE v2_pickup_answer_requests DROP CONSTRAINT v2_pickup_answer_requests_observation_id_fkey",'pickup_table_shape_changed'],
+    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0036_pickup_question_api.sql'",'pickup_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(pickupApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
@@ -787,3 +805,5 @@ registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origi
 registerPromptWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerRouteObservationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerPickupQuestionTests(() => ({db,user,other,origin,destination}));

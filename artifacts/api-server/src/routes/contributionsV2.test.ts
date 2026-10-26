@@ -1,3 +1,4 @@
+import {registerPickupQuestionApiTests} from './pickupQuestionsV2.cases';
 import {registerPlaceReportTests} from './placeReportsV2.cases';
 import { registerRouteObservationApiTests } from './routeObservations.cases';
 import assert from 'node:assert/strict';
@@ -53,7 +54,7 @@ async function request(path: string, input?: unknown, account: number | null = 0
 }
 test('minimum API: capability defaults off and does not write legacy or v2', async () => {
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
-  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false,fareReportsEnabled:false,routeObservationsEnabled:false,placeReportsEnabled:false});
+  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false,fareReportsEnabled:false,routeObservationsEnabled:false,placeReportsEnabled:false,pickupQuestionsEnabled:false});
   assert.equal((await request('/v2/contributions',body())).status,503);
   process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';
   assert.equal((await request('/v2/capabilities')).value.minimumLeadEnabled,true);
@@ -241,3 +242,5 @@ registerFareReportTests(()=>({admin,cities,accounts,tokens,base}));
 registerRouteObservationApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
 
 registerPlaceReportTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
+
+registerPickupQuestionApiTests(()=>({admin,cities,accounts,tokens,request,leadBody:body}));

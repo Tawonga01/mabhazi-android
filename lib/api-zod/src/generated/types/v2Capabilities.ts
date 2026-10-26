@@ -14,4 +14,5 @@ export interface V2Capabilities {
   fareReportsEnabled?: boolean;
   routeObservationsEnabled?: boolean;
   placeReportsEnabled?: boolean;
+  pickupQuestionsEnabled?: boolean;
 }

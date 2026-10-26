@@ -467,6 +467,114 @@ export interface ProposedAssociationsEnvelope {
   proposals: ProposedAssociation[];
 }
 
+export type V2PickupQuestionReservationEntrySurface =
+  (typeof V2PickupQuestionReservationEntrySurface)[keyof typeof V2PickupQuestionReservationEntrySurface];
+
+export const V2PickupQuestionReservationEntrySurface = {
+  search_result: "search_result",
+  route_detail: "route_detail",
+  own_contribution: "own_contribution",
+  contribute_tab: "contribute_tab",
+} as const;
+
+export type V2PickupQuestionReservationDeclaredContextItem =
+  (typeof V2PickupQuestionReservationDeclaredContextItem)[keyof typeof V2PickupQuestionReservationDeclaredContextItem];
+
+export const V2PickupQuestionReservationDeclaredContextItem = {
+  knows_route: "knows_route",
+  at_stop: "at_stop",
+  travelled: "travelled",
+} as const;
+
+export interface V2PickupQuestionReservation {
+  clientRequestId: string;
+  subjectId: string;
+  entrySurface: V2PickupQuestionReservationEntrySurface;
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  declaredContext: V2PickupQuestionReservationDeclaredContextItem[];
+}
+
+export interface V2City {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  id: number;
+  name: string;
+  placeType: string;
+}
+
+export interface V2RouteContributionContext {
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+  origin: V2City;
+  destination: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  operatorName: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  departureTime: string;
+}
+
+export type V2PickupQuestionState =
+  | {
+      status:
+        | "none"
+        | "unavailable"
+        | "expired"
+        | "reconfirm_identity"
+        | "obsolete"
+        | "suppressed"
+        | "skip"
+        | "dismiss"
+        | "unknown"
+        | "answered";
+    }
+  | {
+      status: "offered" | "opened";
+      invitationId: string;
+      questionKey: "pickup_place";
+      formSchemaId: "boarding-pickup/1";
+      expiresAt: string;
+      route: V2RouteContributionContext;
+    };
+
+export type V2PickupQuestionEventRequestOutcome =
+  (typeof V2PickupQuestionEventRequestOutcome)[keyof typeof V2PickupQuestionEventRequestOutcome];
+
+export const V2PickupQuestionEventRequestOutcome = {
+  shown: "shown",
+  opened: "opened",
+  skip: "skip",
+  dismiss: "dismiss",
+  unknown: "unknown",
+} as const;
+
+export interface V2PickupQuestionEventRequest {
+  clientEventId: string;
+  outcome: V2PickupQuestionEventRequestOutcome;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone: string;
+}
+
+export interface V2PickupQuestionEventResult {
+  eventId: string;
+}
+
 export type V2CapabilitiesSchemaVersion =
   (typeof V2CapabilitiesSchemaVersion)[keyof typeof V2CapabilitiesSchemaVersion];
 
@@ -481,16 +589,7 @@ export interface V2Capabilities {
   fareReportsEnabled?: boolean;
   routeObservationsEnabled?: boolean;
   placeReportsEnabled?: boolean;
-}
-
-export interface V2City {
-  /**
-   * @minimum 1
-   * @maximum 999999999
-   */
-  id: number;
-  name: string;
-  placeType: string;
+  pickupQuestionsEnabled?: boolean;
 }
 
 export interface V2Cities {
@@ -1281,26 +1380,6 @@ export interface V2OwnRoutes {
 
 export interface V2OwnRouteEnvelope {
   route: V2OwnRoute;
-}
-
-export interface V2RouteContributionContext {
-  subjectId: string;
-  /**
-   * @minimum 1
-   * @maximum 9007199254740991
-   */
-  revision: number;
-  /** @pattern ^[0-9a-f]{64}$ */
-  identityKey: string;
-  origin: V2City;
-  destination: V2City;
-  /**
-   * @minLength 1
-   * @maxLength 120
-   */
-  operatorName: string;
-  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
-  departureTime: string;
 }
 
 export type V2RouteObservationTargetExisting = {

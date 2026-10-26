@@ -8,6 +8,402 @@
 import * as zod from "zod";
 
 /**
+ * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.
+ * @summary Start an optional manual pickup question for a displayed route
+ */
+export const reserveV2PickupQuestionHeaderXMabhaziAccountMax = 256;
+
+export const reserveV2PickupQuestionHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const ReserveV2PickupQuestionHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(reserveV2PickupQuestionHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(reserveV2PickupQuestionHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const reserveV2PickupQuestionBodyDeclaredContextMax = 3;
+
+export const ReserveV2PickupQuestionBody = zod.object({
+  clientRequestId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  entrySurface: zod.enum([
+    "search_result",
+    "route_detail",
+    "own_contribution",
+    "contribute_tab",
+  ]),
+  declaredContext: zod
+    .array(zod.enum(["knows_route", "at_stop", "travelled"]))
+    .min(1)
+    .max(reserveV2PickupQuestionBodyDeclaredContextMax),
+});
+
+export const reserveV2PickupQuestionResponseTwoRouteRevisionMax = 9007199254740991;
+
+export const reserveV2PickupQuestionResponseTwoRouteIdentityKeyRegExp =
+  new RegExp("^[0-9a-f]{64}$");
+export const reserveV2PickupQuestionResponseTwoRouteOriginIdMax = 999999999;
+
+export const reserveV2PickupQuestionResponseTwoRouteDestinationIdMax = 999999999;
+
+export const reserveV2PickupQuestionResponseTwoRouteOperatorNameMax = 120;
+
+export const reserveV2PickupQuestionResponseTwoRouteDepartureTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+export const ReserveV2PickupQuestionResponse = zod.union([
+  zod.object({
+    status: zod.enum([
+      "none",
+      "unavailable",
+      "expired",
+      "reconfirm_identity",
+      "obsolete",
+      "suppressed",
+      "skip",
+      "dismiss",
+      "unknown",
+      "answered",
+    ]),
+  }),
+  zod.object({
+    status: zod.enum(["offered", "opened"]),
+    invitationId: zod.string().uuid(),
+    questionKey: zod.enum(["pickup_place"]),
+    formSchemaId: zod.enum(["boarding-pickup/1"]),
+    expiresAt: zod.coerce.date(),
+    route: zod.object({
+      subjectId: zod.string().uuid(),
+      revision: zod
+        .number()
+        .min(1)
+        .max(reserveV2PickupQuestionResponseTwoRouteRevisionMax),
+      identityKey: zod
+        .string()
+        .regex(reserveV2PickupQuestionResponseTwoRouteIdentityKeyRegExp),
+      origin: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(reserveV2PickupQuestionResponseTwoRouteOriginIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      destination: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(reserveV2PickupQuestionResponseTwoRouteDestinationIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      operatorName: zod
+        .string()
+        .min(1)
+        .max(reserveV2PickupQuestionResponseTwoRouteOperatorNameMax),
+      departureTime: zod
+        .string()
+        .regex(reserveV2PickupQuestionResponseTwoRouteDepartureTimeRegExp),
+    }),
+  }),
+]);
+
+/**
+ * Account/visibility/identity checked. Terminal or unavailable states expose no route/private task content. Use alongside the normal private contribution receipt after an uncertain answer response.
+ * @summary Read the current safe state of an owned supported pickup question
+ */
+export const GetV2PickupQuestionParams = zod.object({
+  invitationId: zod.coerce.string().uuid(),
+});
+
+export const getV2PickupQuestionHeaderXMabhaziAccountMax = 256;
+
+export const getV2PickupQuestionHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const GetV2PickupQuestionHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2PickupQuestionHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(getV2PickupQuestionHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const getV2PickupQuestionResponseTwoRouteRevisionMax = 9007199254740991;
+
+export const getV2PickupQuestionResponseTwoRouteIdentityKeyRegExp = new RegExp(
+  "^[0-9a-f]{64}$",
+);
+export const getV2PickupQuestionResponseTwoRouteOriginIdMax = 999999999;
+
+export const getV2PickupQuestionResponseTwoRouteDestinationIdMax = 999999999;
+
+export const getV2PickupQuestionResponseTwoRouteOperatorNameMax = 120;
+
+export const getV2PickupQuestionResponseTwoRouteDepartureTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+export const GetV2PickupQuestionResponse = zod.union([
+  zod.object({
+    status: zod.enum([
+      "none",
+      "unavailable",
+      "expired",
+      "reconfirm_identity",
+      "obsolete",
+      "suppressed",
+      "skip",
+      "dismiss",
+      "unknown",
+      "answered",
+    ]),
+  }),
+  zod.object({
+    status: zod.enum(["offered", "opened"]),
+    invitationId: zod.string().uuid(),
+    questionKey: zod.enum(["pickup_place"]),
+    formSchemaId: zod.enum(["boarding-pickup/1"]),
+    expiresAt: zod.coerce.date(),
+    route: zod.object({
+      subjectId: zod.string().uuid(),
+      revision: zod
+        .number()
+        .min(1)
+        .max(getV2PickupQuestionResponseTwoRouteRevisionMax),
+      identityKey: zod
+        .string()
+        .regex(getV2PickupQuestionResponseTwoRouteIdentityKeyRegExp),
+      origin: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(getV2PickupQuestionResponseTwoRouteOriginIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      destination: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(getV2PickupQuestionResponseTwoRouteDestinationIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      operatorName: zod
+        .string()
+        .min(1)
+        .max(getV2PickupQuestionResponseTwoRouteOperatorNameMax),
+      departureTime: zod
+        .string()
+        .regex(getV2PickupQuestionResponseTwoRouteDepartureTimeRegExp),
+    }),
+  }),
+]);
+
+/**
+ * Feedback creates no route fact. Current Terms are not required for these controls. Server time, IANA timezone and existing prompts/1 suppression rules apply. Clients cannot record answered.
+ * @summary Record explicit shown/opened/skip/dismiss/unknown feedback
+ */
+export const RecordV2PickupQuestionEventParams = zod.object({
+  invitationId: zod.coerce.string().uuid(),
+});
+
+export const recordV2PickupQuestionEventHeaderXMabhaziAccountMax = 256;
+
+export const recordV2PickupQuestionEventHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const RecordV2PickupQuestionEventHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(recordV2PickupQuestionEventHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(recordV2PickupQuestionEventHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const recordV2PickupQuestionEventBodyTimezoneMax = 100;
+
+export const RecordV2PickupQuestionEventBody = zod.object({
+  clientEventId: zod.string().uuid(),
+  outcome: zod.enum(["shown", "opened", "skip", "dismiss", "unknown"]),
+  timezone: zod.string().min(1).max(recordV2PickupQuestionEventBodyTimezoneMax),
+});
+
+export const RecordV2PickupQuestionEventResponse = zod.object({
+  eventId: zod.string().uuid(),
+});
+
+/**
+ * Uses the existing strict route-place body. The account, route identity, explicit invitation and matching pickup field/scope are checked before and after intake in one transaction. Compatible late independent answers remain valid. An independent old receipt or another invitation cannot be relinked. Current Terms apply. Use receipt lookup and safe question read on commit ambiguity; never generate a new submission key automatically.
+ * @summary Atomically save a typed pickup report and its question answer
+ */
+export const SubmitV2PickupQuestionAnswerParams = zod.object({
+  invitationId: zod.coerce.string().uuid(),
+});
+
+export const submitV2PickupQuestionAnswerHeaderXMabhaziAccountMax = 256;
+
+export const submitV2PickupQuestionAnswerHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const SubmitV2PickupQuestionAnswerHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(submitV2PickupQuestionAnswerHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(submitV2PickupQuestionAnswerHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const submitV2PickupQuestionAnswerBodyTargetExistingExpectedRevisionMax = 9007199254740991;
+
+export const submitV2PickupQuestionAnswerBodyTargetExistingIdentityKeyRegExp =
+  new RegExp("^[0-9a-f]{64}$");
+export const submitV2PickupQuestionAnswerBodyObservationsItemValueCityIdMax = 999999999;
+
+export const submitV2PickupQuestionAnswerBodyObservationsItemValueNameMax = 200;
+
+export const submitV2PickupQuestionAnswerBodyObservationsItemValueInstructionsMax = 500;
+
+export const submitV2PickupQuestionAnswerBodyObservationsItemObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2PickupQuestionAnswerBodyObservationsItemSourcesMax = 10;
+
+export const submitV2PickupQuestionAnswerBodyObservationsMax = 2;
+
+export const SubmitV2PickupQuestionAnswerBody = zod.object({
+  schemaVersion: zod.enum(["1.0"]),
+  clientSubmissionId: zod.string().uuid(),
+  entrySurface: zod.enum([
+    "contribute_tab",
+    "search_result",
+    "route_detail",
+    "own_contribution",
+  ]),
+  target: zod.object({
+    existing: zod.object({
+      subjectId: zod.string().uuid(),
+      expectedRevision: zod
+        .number()
+        .min(1)
+        .max(submitV2PickupQuestionAnswerBodyTargetExistingExpectedRevisionMax),
+      identityKey: zod
+        .string()
+        .regex(submitV2PickupQuestionAnswerBodyTargetExistingIdentityKeyRegExp),
+    }),
+  }),
+  observations: zod
+    .array(
+      zod.object({
+        fieldKey: zod.enum(["boarding.pickup", "alighting.dropoff"]),
+        value: zod.object({
+          cityId: zod
+            .number()
+            .min(1)
+            .max(
+              submitV2PickupQuestionAnswerBodyObservationsItemValueCityIdMax,
+            ),
+          name: zod
+            .string()
+            .min(1)
+            .max(submitV2PickupQuestionAnswerBodyObservationsItemValueNameMax),
+          instructions: zod
+            .string()
+            .max(
+              submitV2PickupQuestionAnswerBodyObservationsItemValueInstructionsMax,
+            )
+            .optional(),
+        }),
+        scope: zod.object({}),
+        knowledgeBasis: zod
+          .enum([
+            "travelled",
+            "saw_operating",
+            "observed_sign",
+            "operator_statement",
+            "heard_from_other",
+            "unprovided",
+          ])
+          .optional(),
+        observedDate: zod
+          .string()
+          .regex(
+            submitV2PickupQuestionAnswerBodyObservationsItemObservedDateRegExp,
+          )
+          .optional(),
+        sources: zod
+          .array(zod.string().uuid())
+          .max(submitV2PickupQuestionAnswerBodyObservationsItemSourcesMax)
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(submitV2PickupQuestionAnswerBodyObservationsMax),
+});
+
+export const SubmitV2PickupQuestionAnswerResponse = zod.object({
+  contributionId: zod.string().uuid(),
+  clientSubmissionId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  saveStatus: zod.enum(["saved"]),
+  processingStatus: zod.enum(["queued"]),
+  associationStatus: zod.enum(["unresolved"]),
+  publicationStatus: zod.enum(["pending"]),
+  replayed: zod.boolean(),
+  targetAdvanced: zod.boolean().optional(),
+});
+
+/**
  * Direct route-observations/1 evidence only. Current identity, assessment membership, original state, safety and moderation apply. No canonical boarding instruction, travel, timetable or confidence is inferred. No-store; removed live cursors require refresh.
  * @summary Read assessed endpoint place reports for this exact public route
  */
@@ -1655,6 +2051,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   fareReportsEnabled: zod.boolean().optional(),
   routeObservationsEnabled: zod.boolean().optional(),
   placeReportsEnabled: zod.boolean().optional(),
+  pickupQuestionsEnabled: zod.boolean().optional(),
 });
 
 /**

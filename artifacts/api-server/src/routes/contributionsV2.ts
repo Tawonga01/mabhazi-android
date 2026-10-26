@@ -1,3 +1,4 @@
+import pickupQuestions, {pickupQuestionsEnabled} from './pickupQuestionsV2';
 import placeReports, {placeReportsEnabled} from './placeReportsV2';
 import routeObservations, { routeObservationsEnabled } from './routeObservationsV2';
 import { Router, type IRouter, type Response } from 'express';
@@ -42,9 +43,9 @@ async function actualEnabled() {
 }
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 router.get('/capabilities', async (_req, res) => {
-  let ready = false, actualReady=false, fareReady=false, routeReady=false, placeReadReady=false;
-  try { ready = await enabled(); actualReady=ready && await actualEnabled(); fareReady=actualReady && await fareReportsEnabled(); routeReady=ready && await routeObservationsEnabled(); placeReadReady=ready && await placeReportsEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
-  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady,routeObservationsEnabled:routeReady,placeReportsEnabled:placeReadReady });
+  let ready = false, actualReady=false, fareReady=false, routeReady=false, placeReadReady=false, pickupReady=false;
+  try { ready = await enabled(); actualReady=ready && await actualEnabled(); fareReady=actualReady && await fareReportsEnabled(); routeReady=ready && await routeObservationsEnabled(); placeReadReady=ready && await placeReportsEnabled(); pickupReady=ready && await pickupQuestionsEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
+  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady,routeObservationsEnabled:routeReady,placeReportsEnabled:placeReadReady,pickupQuestionsEnabled:pickupReady });
 });
 // History and receipt recovery remain readable when new intake is paused.
 router.use('/my-routes', ownRoutes);
@@ -53,6 +54,7 @@ router.use(fareReports);
 router.use(routeSafety);
 router.use(routeObservations);
 router.use(placeReports);
+router.use(pickupQuestions);
 router.use(async (req, res, next) => {
   // Pausing new intake must not prevent an account checking a committed receipt.
   if (req.method === 'GET' && req.path.startsWith('/receipts/')) { next(); return; }

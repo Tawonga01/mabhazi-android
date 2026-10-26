@@ -66,6 +66,10 @@ import type {
   V2MinimumLeadRequest,
   V2OwnRouteEnvelope,
   V2OwnRoutes,
+  V2PickupQuestionEventRequest,
+  V2PickupQuestionEventResult,
+  V2PickupQuestionReservation,
+  V2PickupQuestionState,
   V2PlaceReportPage,
   V2PublicFarePage,
   V2PublicSearch,
@@ -86,6 +90,376 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.
+ * @summary Start an optional manual pickup question for a displayed route
+ */
+export const getReserveV2PickupQuestionUrl = () => {
+  return `/api/v2/pickup-questions`;
+};
+
+export const reserveV2PickupQuestion = async (
+  v2PickupQuestionReservation: V2PickupQuestionReservation,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(getReserveV2PickupQuestionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PickupQuestionReservation),
+  });
+};
+
+export const getReserveV2PickupQuestionMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    TError,
+    { data: BodyType<V2PickupQuestionReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+  TError,
+  { data: BodyType<V2PickupQuestionReservation> },
+  TContext
+> => {
+  const mutationKey = ["reserveV2PickupQuestion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    { data: BodyType<V2PickupQuestionReservation> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reserveV2PickupQuestion(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReserveV2PickupQuestionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>
+>;
+export type ReserveV2PickupQuestionMutationBody =
+  BodyType<V2PickupQuestionReservation>;
+export type ReserveV2PickupQuestionMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Start an optional manual pickup question for a displayed route
+ */
+export const useReserveV2PickupQuestion = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    TError,
+    { data: BodyType<V2PickupQuestionReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+  TError,
+  { data: BodyType<V2PickupQuestionReservation> },
+  TContext
+> => {
+  return useMutation(getReserveV2PickupQuestionMutationOptions(options));
+};
+
+/**
+ * Account/visibility/identity checked. Terminal or unavailable states expose no route/private task content. Use alongside the normal private contribution receipt after an uncertain answer response.
+ * @summary Read the current safe state of an owned supported pickup question
+ */
+export const getGetV2PickupQuestionUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}`;
+};
+
+export const getV2PickupQuestion = async (
+  invitationId: string,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(
+    getGetV2PickupQuestionUrl(invitationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetV2PickupQuestionQueryKey = (invitationId: string) => {
+  return [`/api/v2/pickup-questions/${invitationId}`] as const;
+};
+
+export const getGetV2PickupQuestionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2PickupQuestion>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  invitationId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2PickupQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2PickupQuestionQueryKey(invitationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2PickupQuestion>>
+  > = ({ signal }) =>
+    getV2PickupQuestion(invitationId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!invitationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PickupQuestion>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2PickupQuestionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2PickupQuestion>>
+>;
+export type GetV2PickupQuestionQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read the current safe state of an owned supported pickup question
+ */
+
+export function useGetV2PickupQuestion<
+  TData = Awaited<ReturnType<typeof getV2PickupQuestion>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  invitationId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2PickupQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2PickupQuestionQueryOptions(
+    invitationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Feedback creates no route fact. Current Terms are not required for these controls. Server time, IANA timezone and existing prompts/1 suppression rules apply. Clients cannot record answered.
+ * @summary Record explicit shown/opened/skip/dismiss/unknown feedback
+ */
+export const getRecordV2PickupQuestionEventUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}/events`;
+};
+
+export const recordV2PickupQuestionEvent = async (
+  invitationId: string,
+  v2PickupQuestionEventRequest: V2PickupQuestionEventRequest,
+  options?: RequestInit,
+): Promise<V2PickupQuestionEventResult> => {
+  return customFetch<V2PickupQuestionEventResult>(
+    getRecordV2PickupQuestionEventUrl(invitationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2PickupQuestionEventRequest),
+    },
+  );
+};
+
+export const getRecordV2PickupQuestionEventMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    TError,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+  TError,
+  { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+  TContext
+> => {
+  const mutationKey = ["recordV2PickupQuestionEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> }
+  > = (props) => {
+    const { invitationId, data } = props ?? {};
+
+    return recordV2PickupQuestionEvent(invitationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordV2PickupQuestionEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>
+>;
+export type RecordV2PickupQuestionEventMutationBody =
+  BodyType<V2PickupQuestionEventRequest>;
+export type RecordV2PickupQuestionEventMutationError =
+  ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Record explicit shown/opened/skip/dismiss/unknown feedback
+ */
+export const useRecordV2PickupQuestionEvent = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    TError,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+  TError,
+  { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+  TContext
+> => {
+  return useMutation(getRecordV2PickupQuestionEventMutationOptions(options));
+};
+
+/**
+ * Uses the existing strict route-place body. The account, route identity, explicit invitation and matching pickup field/scope are checked before and after intake in one transaction. Compatible late independent answers remain valid. An independent old receipt or another invitation cannot be relinked. Current Terms apply. Use receipt lookup and safe question read on commit ambiguity; never generate a new submission key automatically.
+ * @summary Atomically save a typed pickup report and its question answer
+ */
+export const getSubmitV2PickupQuestionAnswerUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}/answers`;
+};
+
+export const submitV2PickupQuestionAnswer = async (
+  invitationId: string,
+  v2RouteObservationRequest: V2RouteObservationRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(
+    getSubmitV2PickupQuestionAnswerUrl(invitationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteObservationRequest),
+    },
+  );
+};
+
+export const getSubmitV2PickupQuestionAnswerMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    TError,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+  TError,
+  { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2PickupQuestionAnswer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> }
+  > = (props) => {
+    const { invitationId, data } = props ?? {};
+
+    return submitV2PickupQuestionAnswer(invitationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2PickupQuestionAnswerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>
+>;
+export type SubmitV2PickupQuestionAnswerMutationBody =
+  BodyType<V2RouteObservationRequest>;
+export type SubmitV2PickupQuestionAnswerMutationError =
+  ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Atomically save a typed pickup report and its question answer
+ */
+export const useSubmitV2PickupQuestionAnswer = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    TError,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+  TError,
+  { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2PickupQuestionAnswerMutationOptions(options));
+};
 
 /**
  * Direct route-observations/1 evidence only. Current identity, assessment membership, original state, safety and moderation apply. No canonical boarding instruction, travel, timetable or confidence is inferred. No-store; removed live cursors require refresh.
