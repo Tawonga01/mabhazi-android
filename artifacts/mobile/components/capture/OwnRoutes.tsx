@@ -1,3 +1,4 @@
+import {fareDate} from './FareReports';
 import {PlaceReports} from './PlaceReports';
 import { ui } from '@/constants/ui';
 import React, { useEffect, useRef, useState } from 'react';
@@ -66,7 +67,7 @@ export function OwnRoutes({ onClose, onFollowUp, onPlaces, onAddRoute }: { onClo
       {routes.map(route => <View key={route.clientSubmissionId} style={{paddingVertical:20,borderBottomWidth:1,borderColor:ui.color.border,gap:8}}>
         <Text style={s.reviewValue}>{route.origin.name} → {route.destination.name}</Text>
         <Text style={s.note}>{route.operator} · {route.departureTime}</Text>
-        <Text style={s.note}>{route.availability === 'active' ? 'Submitted' : 'Unavailable'} · {new Date(route.submittedAt).toLocaleDateString()}</Text>
+        <Text style={s.note}>{route.availability === 'active' ? 'Submitted' : 'Unavailable'} · {fareDate(String(route.submittedAt))}</Text>
         {route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add details" secondary disabled={busy} onPress={() => void select(route.clientSubmissionId)} /> : null}
         {placeReadEnabled && route.availability === 'active' ? <CaptureHelp label="Your saved locations"><PlaceReports subjectId={route.subjectId} ownSubmissionId={route.clientSubmissionId} onBusy={()=>{}} onChanged={()=>void load()}/></CaptureHelp> : null}
         {placesEnabled && route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add pickup / drop-off" secondary disabled={busy} onPress={() => void select(route.clientSubmissionId, true)} /> : null}

@@ -20,6 +20,7 @@ router.use((req,res,next)=>{
  if(!blocked){res.status(400).json({code:'INVALID_SAFETY_CONTEXT',error:'Your hidden contributor settings could not be checked.'});return;}
  res.locals.placeBlocked=blocked;next();
 });
+const endpointRank="CASE field_key WHEN 'boarding.pickup' THEN 0 ELSE 1 END";
 const membership=`c.evidence_included AND c.field_read->>'status' IN('assessed','review_required') AND candidate->'value'=c.original_value`;
 for(const own of [false,true])router.get(own?'/my-routes/:clientSubmissionId/places':'/subjects/:subjectId/places',async(req,res)=>{
  if(own&&(!req.isAuthenticated()||req.get('X-Mabhazi-Account')!==req.user.id)){res.status(req.isAuthenticated()?409:401).json({code:req.isAuthenticated()?'ACCOUNT_CHANGED':'AUTH_REQUIRED',error:'Sign in to see your saved locations.'});return;}
@@ -37,14 +38,14 @@ for(const own of [false,true])router.get(own?'/my-routes/:clientSubmissionId/pla
    admitted AS MATERIALIZED(SELECT c.*,candidate FROM visible c CROSS JOIN LATERAL jsonb_array_elements(${own?`jsonb_build_array(jsonb_build_object('value',c.original_value))`:`COALESCE(c.field_read->'candidates','[]'::jsonb)`}) candidate WHERE ${own?'true':membership}),
    latest AS MATERIALIZED(SELECT DISTINCT ON(place_author_id,field_key) * FROM admitted ORDER BY place_author_id,field_key,submitted_at DESC,place_ref DESC),
    eligible AS MATERIALIZED(SELECT * FROM latest WHERE NOT is_hidden),
-   page AS(SELECT * FROM eligible WHERE $4::uuid IS NULL OR place_ref>$4 ORDER BY place_ref LIMIT 21)
+   page AS(SELECT * FROM eligible WHERE $4::uuid IS NULL OR (${endpointRank},place_ref)>(SELECT ${endpointRank},place_ref FROM eligible WHERE place_ref=$4) ORDER BY ${endpointRank},place_ref LIMIT 21)
    SELECT (SELECT subject_id FROM root LIMIT 1) subject_id,($4::uuid IS NULL OR EXISTS(SELECT 1 FROM eligible WHERE place_ref=$4)) cursor_valid,
     EXISTS(SELECT 1 FROM contexts c WHERE NOT $5 AND (c.place_author_id=ANY($2::varchar[]) OR EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=c.place_author_id))) hidden,
     EXISTS(SELECT 1 FROM visible c WHERE NOT $5 AND NOT c.is_hidden AND (c.field_read->>'status'='recheck_required' OR ((c.field_read->>'nextRecheckAt')::timestamptz>statement_timestamp() AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(c.field_read->'candidates','[]'::jsonb)) candidate WHERE ${membership})))) pending,
     COALESCE((SELECT jsonb_agg(jsonb_build_object('id',place_ref,'kind',CASE field_key WHEN 'boarding.pickup' THEN 'pickup' ELSE 'dropoff' END,
      'city',city,'name',original_value->>'name','instructions',original_value->>'instructions','basis',knowledge_basis,'observedDate',observed_from,'receivedAt',submitted_at,
      'status',CASE WHEN $5 THEN 'saved' WHEN field_read->>'status'='review_required' OR field_read->>'dispute'='open' THEN 'needs_review' ELSE 'reported' END,
-     'freshness',CASE WHEN $5 THEN 'unknown' ELSE candidate->>'freshness' END,'canBlock',NOT $5 AND $3::varchar IS NOT NULL AND $3<>place_author_id) ORDER BY place_ref) FROM page),'[]'::jsonb) items`,
+     'freshness',CASE WHEN $5 THEN 'unknown' ELSE candidate->>'freshness' END,'canBlock',NOT $5 AND $3::varchar IS NOT NULL AND $3<>place_author_id) ORDER BY ${endpointRank},place_ref) FROM page),'[]'::jsonb) items`,
    [own?(params.data as {clientSubmissionId:string}).clientSubmissionId:(params.data as {subjectId:string}).subjectId,res.locals.placeBlocked,req.isAuthenticated()?req.user.id:null,query.data.cursor??null,own]);
   const value=rows[0];if(!value?.subject_id){res.status(404).json({code:'SUBJECT_UNAVAILABLE',error:'This route is unavailable.'});return;}
   if(!value.cursor_valid){res.status(400).json({code:'INVALID_CURSOR',error:'Location reports changed. Refresh this route.'});return;}
