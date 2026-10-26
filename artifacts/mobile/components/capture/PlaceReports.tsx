@@ -34,7 +34,7 @@ export function PlaceReports({subjectId,ownSubmissionId,onBusy,onChanged,disable
   {!own?<Text accessibilityRole="header" style={p.heading}>Pickup &amp; drop-off</Text>:null}
   {query.isPending||refreshing?<View style={p.state}><ActivityIndicator accessibilityLabel="Loading location reports" color="#62758B"/></View>:null}
   {query.isError?<View style={p.state}><Text accessibilityRole="alert" style={s.error}>Location reports could not load.</Text><CaptureButton title="Try location reports again" secondary disabled={locked||query.isFetching} onPress={()=>void query.refetch()}/></View>:null}
-  {first&&!items.length&&!first.hasPendingReports&&!first.hasHiddenResults?<Text style={p.empty}>{own?'No saved locations available.':'No location reports yet.'}</Text>:null}
+  {first&&!items.length&&!first.hasPendingReports&&!first.hasHiddenResults?<Text style={p.empty}>{own?'No saved locations available.':'No location reports available.'}</Text>:null}
   {items.map((place,index)=><View key={place.id} style={index?p.separated:undefined}>
    <Pressable accessibilityRole="button" accessibilityLabel={`Location details · ${place.kind==='pickup'?'Pickup':'Drop-off'} · ${place.name}`} accessibilityState={{expanded:expanded===place.id,disabled:locked}} aria-expanded={expanded===place.id} disabled={locked} onPress={()=>setExpanded(expanded===place.id?null:place.id)} style={p.row}>
     <View style={{flex:1,gap:6}}><Text style={p.endpoint}>{place.kind==='pickup'?'Pickup':'Drop-off'} · {place.city.name}</Text><Text style={p.name}>{place.name}</Text>
@@ -44,7 +44,7 @@ export function PlaceReports({subjectId,ownSubmissionId,onBusy,onChanged,disable
    </Pressable>
    {expanded===place.id?<View style={p.details}>
     <Detail label={own?'Saved':'Report received'} value={fareDate(String(place.receivedAt))}/>
-    <Detail label="Observed" value={fareDate(place.observedDate)}/><Detail label="How they know" value={basis[place.basis]}/>
+    <Detail label="Observed" value={fareDate(place.observedDate)}/><Detail label={own?"How you know":"How they know"} value={basis[place.basis]}/>
     {place.freshness==='recheck_due'?<Text style={p.review}>An update is needed.</Text>:null}
     {owner&&!own?<View style={p.actions}><CaptureButton title="Report this location" secondary disabled={locked} onPress={()=>{setSelected(selected===place.id?null:place.id);setReason('');setMessage('');}}/>
      {selected===place.id?<><Choices<Reason> label="Location report reason" value={reason} options={[[ 'inaccurate','Incorrect details' ],['spam','Spam'],['offensive','Offensive content'],['unsafe','Unsafe content'],['other','Other']]} onChange={setReason}/><CaptureButton title="Send location report" disabled={locked||!reason} onPress={()=>void action(place.id,'report')}/></>:null}

@@ -541,7 +541,7 @@ router.get("/admin/abuse-reports", requireAdmin, async (req: Request, res: Respo
     reports.map(async (report) => {
       let targetPreview: string | null = null;
       if (report.targetType === "place_report") {
-        const place=await db.execute(sql`SELECT (city->>'name')||' · '||field_key||' · '||(original_value->>'name') AS preview FROM public.v2_place_report_refs ref JOIN public.v2_observations o ON o.id=ref.observation_id CROSS JOIN LATERAL public.v2_api_place_report_context(o.original_subject_id) c WHERE c.place_ref=ref.id AND c.place_ref::text=${report.targetId} LIMIT 1`);
+        const place=await db.execute(sql`SELECT (c.city->>'name')||' · '||c.field_key||' · '||(c.original_value->>'name') AS preview FROM public.v2_place_report_refs ref JOIN public.v2_observations o ON o.id=ref.observation_id CROSS JOIN LATERAL public.v2_api_place_report_context(o.original_subject_id) c WHERE c.place_ref=ref.id AND c.place_ref::text=${report.targetId} LIMIT 1`);
         targetPreview=String(place.rows[0]?.preview??'Location report no longer available');
       } else if (report.targetType === "fare_report") {
         const fare=await db.execute(sql`SELECT (origin->>'name')||' → '||(destination->>'name')||' · '||field_key||' '||(original_value->>'currency')||' '||(original_value->>'amount') AS preview FROM public.v2_fare_report_context WHERE fare_ref::text=${report.targetId} LIMIT 1`);

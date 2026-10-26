@@ -75,7 +75,7 @@ BEGIN
    AND NOT c.is_hidden AND c.evidence_included AND c.field_read->>'status' IN('assessed','review_required')
    AND EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(c.field_read->'candidates','[]'::jsonb)) candidate WHERE candidate->'value'=c.original_value)
    AND NOT EXISTS(SELECT 1 FROM public.v2_place_report_context newer WHERE newer.route_subject_id=c.route_subject_id
-    AND newer.place_author_id=c.place_author_id AND newer.field_key=c.field_key AND (newer.submitted_at,newer.place_ref)>(c.submitted_at,c.place_ref));
+    AND newer.place_author_id=c.place_author_id AND newer.field_key=c.field_key AND newer.evidence_included AND newer.field_read->>'status' IN('assessed','review_required') AND EXISTS(SELECT 1 FROM jsonb_array_elements(COALESCE(newer.field_read->'candidates','[]'::jsonb)) admitted WHERE admitted->'value'=newer.original_value) AND (newer.submitted_at,newer.place_ref)>(c.submitted_at,c.place_ref));
  IF NOT FOUND THEN RAISE EXCEPTION 'v2_place_target_unavailable' USING ERRCODE='42501';END IF;
  IF action='block' AND reason IS NULL AND EXISTS(SELECT 1 FROM public.v2_route_report_blocks WHERE blocker_id=actor AND blocked_user_id=context.place_author_id) THEN RETURN '{"status":"blocked"}'::jsonb;END IF;
  IF context.route_author_id=ANY(blocked) OR context.place_author_id=ANY(blocked) OR EXISTS(SELECT 1 FROM public.v2_route_report_blocks WHERE blocker_id=actor AND blocked_user_id IN(context.route_author_id,context.place_author_id)) THEN RAISE EXCEPTION 'v2_place_target_unavailable' USING ERRCODE='42501';END IF;

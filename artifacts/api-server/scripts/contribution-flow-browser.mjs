@@ -58,7 +58,7 @@ try {
   async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     // Drain intercepted background discovery before closing the test context.
-    const closeContext=context.close.bind(context);context.close=async options=>{await context.unrouteAll({behavior:'wait'});await closeContext(options);};
+    let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;await context.unrouteAll({behavior:'wait'});await closeContext(options);};
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
     let postCount = 0; const sent=[];
     await context.route('**/*', async route => {
@@ -71,7 +71,12 @@ try {
         postCount++; sent.push(request.postDataJSON());
         if (loseResponse) { loseResponse = false; await route.abort('failed'); return; }
       }
-      await route.fulfill({response});
+      try{await route.fulfill({response});}catch(error){
+        // A cancelled query or intentional context shutdown can finish its local
+        // fetch after Playwright has handled the browser request. Ignore only
+        // that proven cancellation; live duplicate handlers and all assertions fail.
+        if(!/Route is already handled|Target page, context or browser has been closed/.test(String(error))||(!closing&&!request.failure()&&!request.frame().isDetached()))throw error;
+      }
     });
     const page = await context.newPage();
     page.on('pageerror', error => consoleErrors.push(error.message));
@@ -626,7 +631,7 @@ try {
     const s=await session(2,false,'search');await publicSearch(s);await openPublic(s,'Location display coach','10:15');await s.page.getByRole('button',{name:'Location details · Drop-off · Market exit',exact:true}).click();await s.page.getByRole('button',{name:'Report this location',exact:true}).click();await s.page.getByRole('radio',{name:'Location report reason: Incorrect details',exact:true}).click();await s.page.getByRole('button',{name:'Send location report',exact:true}).click();await s.page.getByText('Location report received.',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Hide this location contributor',exact:true}).click();await s.page.getByText('Some locations are hidden by your settings.',{exact:true}).waitFor();await s.page.getByText('City depot',{exact:true}).waitFor();assert.equal(await s.page.getByText('Market exit',{exact:true}).count(),0);await publicShot(s,'place-reports-hidden.png');assert.equal(s.posts(),0);await s.context.close();results.push('location reporting and contributor hiding work without Terms, suppress only the matching author and keep the different route/pickup author visible');
   }
   {
-    const s=await session(null,false,'search');let failPlaceRead=true;await s.context.route('**/api/v2/subjects/*/places',route=>failPlaceRead?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'TEMPORARILY_UNAVAILABLE',error:'Synthetic location outage'})}):route.fallback());await publicSearch(s);await openPublic(s,'Location display coach','10:15');await s.page.getByText('Location reports could not load.',{exact:true}).waitFor();assert.equal(await s.page.getByText('No location reports yet.',{exact:true}).count(),0);failPlaceRead=false;await s.page.getByRole('button',{name:'Try location reports again',exact:true}).click();await s.page.getByText('City depot',{exact:true}).waitFor();assert.equal(s.posts(),0);await s.context.close();
+    const s=await session(null,false,'search');let failPlaceRead=true;await s.context.route('**/api/v2/subjects/*/places',route=>failPlaceRead?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'TEMPORARILY_UNAVAILABLE',error:'Synthetic location outage'})}):route.fallback());await publicSearch(s);await openPublic(s,'Location display coach','10:15');await s.page.getByText('Location reports could not load.',{exact:true}).waitFor();assert.equal(await s.page.getByText('No location reports available.',{exact:true}).count(),0);failPlaceRead=false;await s.page.getByRole('button',{name:'Try location reports again',exact:true}).click();await s.page.getByText('City depot',{exact:true}).waitFor();assert.equal(s.posts(),0);await s.context.close();
     const old=await session(0,false,'search');await old.context.route('**/api/v2/capabilities',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({schemaVersion:'1.0',minimumLeadEnabled:true,actualJourneyEnabled:true,fareReportsEnabled:true,routeObservationsEnabled:true})}));await publicSearch(old);await openPublic(old,'Location display coach','10:15');assert.equal(await old.page.getByRole('heading',{name:'Pickup & drop-off',exact:true}).count(),0);assert.equal(await old.page.getByRole('button',{name:'Add pickup / drop-off',exact:true}).isEnabled(),true);await old.context.close();results.push('a reader outage has an explicit retry without false empty data; an older backend omits only the new report display and keeps location capture');
   }
 
