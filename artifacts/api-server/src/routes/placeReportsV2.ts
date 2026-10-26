@@ -7,8 +7,8 @@ const router:IRouter=Router();
 export async function placeReportsEnabled(){
  if(process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED!=='true')return false;
  const {rows}=await pool.query(`SELECT CASE WHEN to_regclass('public.v2_place_report_context') IS NULL
-  OR to_regprocedure('public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[])') IS NULL THEN false
-  ELSE has_table_privilege(current_user,'public.v2_place_report_context','SELECT') AND has_function_privilege(current_user,'public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[])','EXECUTE') END enabled`);
+  OR to_regprocedure('public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[])') IS NULL OR to_regprocedure('public.v2_api_place_report_context(uuid)') IS NULL THEN false
+  ELSE has_function_privilege(current_user,'public.v2_api_place_report_context(uuid)','EXECUTE') AND has_function_privilege(current_user,'public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[])','EXECUTE') END enabled`);
  return rows[0]?.enabled===true;
 }
 router.use((req,res,next)=>{
@@ -32,7 +32,7 @@ for(const own of [false,true])router.get(own?'/my-routes/:clientSubmissionId/pla
  `SELECT p.subject_id FROM public.v2_public_lead_reports p WHERE p.subject_id=$1 AND NOT(p.author_user_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=p.author_user_id)`;
  try{
   if(!await placeReportsEnabled()){res.status(503).json({code:'CAPABILITY_UNAVAILABLE',error:'Location reports are not available yet.'});return;}
-  const {rows}=await pool.query(`WITH root AS MATERIALIZED(${root}),contexts AS MATERIALIZED(SELECT c.* FROM public.v2_place_report_context c JOIN root r ON r.subject_id=c.route_subject_id ${own?'WHERE c.place_author_id=$3':''}),
+  const {rows}=await pool.query(`WITH root AS MATERIALIZED(${root}),contexts AS MATERIALIZED(SELECT c.* FROM root r CROSS JOIN LATERAL public.v2_api_place_report_context(r.subject_id) c ${own?'WHERE c.place_author_id=$3':''}),
    visible AS MATERIALIZED(SELECT * FROM contexts c WHERE ${own?'true':`NOT(c.place_author_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=c.place_author_id)`}),
    latest AS MATERIALIZED(SELECT DISTINCT ON(place_author_id,field_key) * FROM visible ORDER BY place_author_id,field_key,submitted_at DESC,place_ref DESC),
    eligible AS MATERIALIZED(SELECT c.*,candidate FROM latest c CROSS JOIN LATERAL jsonb_array_elements(${own?`jsonb_build_array(jsonb_build_object('value',c.original_value))`:`COALESCE(c.field_read->'candidates','[]'::jsonb)`}) candidate WHERE NOT c.is_hidden ${own?'':`AND ${membership}`}),

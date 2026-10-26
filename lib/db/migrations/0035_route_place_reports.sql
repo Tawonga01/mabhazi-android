@@ -53,6 +53,13 @@ WHERE o.field_key IN('boarding.pickup','alighting.dropoff') AND c.payload->>'ope
  AND (o.value->>'cityId')::integer=city.id
  AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs j WHERE j.user_id IN(c.user_id,initial.user_id));
 
+-- View expressions call private identity helpers. The backend gets this bounded
+-- read facade, never execution on the generic helper or direct view access.
+CREATE FUNCTION public.v2_api_place_report_context(subject uuid) RETURNS SETOF public.v2_place_report_context
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+ SELECT * FROM public.v2_place_report_context WHERE route_subject_id=subject;
+$$;
+
 CREATE FUNCTION public.v2_api_place_report_action(actor varchar,subject uuid,place uuid,action text,reason text,blocked varchar[]) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE context public.v2_place_report_context;report integer;
@@ -102,8 +109,7 @@ DO $$DECLARE t text;r text;f record;BEGIN
   EXECUTE format('CREATE POLICY backend_read ON public.%I FOR SELECT TO mabhazi_api USING(true)',t);
  END LOOP;
  REVOKE ALL ON public.v2_place_report_context FROM PUBLIC,mabhazi_api;
- GRANT SELECT ON public.v2_place_report_context TO mabhazi_api;
- FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN('v2_place_reference_created','v2_place_reference_immutable','v2_api_place_report_action','v2_api_hide_reported_place') LOOP
+ FOR f IN SELECT oid::regprocedure signature FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname IN('v2_place_reference_created','v2_place_reference_immutable','v2_api_place_report_context','v2_api_place_report_action','v2_api_hide_reported_place') LOOP
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,mabhazi_api',f.signature);
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r);END IF;END LOOP;
  END LOOP;
@@ -111,4 +117,4 @@ DO $$DECLARE t text;r text;f record;BEGIN
   FOREACH t IN ARRAY ARRAY['v2_place_report_refs','v2_place_report_hides','v2_place_report_context'] LOOP EXECUTE format('REVOKE ALL ON public.%I FROM %I',t,r);END LOOP;
  END IF;END LOOP;
 END;$$;
-GRANT EXECUTE ON FUNCTION public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[]),public.v2_api_hide_reported_place(integer,text) TO mabhazi_api;
+GRANT EXECUTE ON FUNCTION public.v2_api_place_report_context(uuid),public.v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[]),public.v2_api_hide_reported_place(integer,text) TO mabhazi_api;
