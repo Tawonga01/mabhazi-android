@@ -375,6 +375,27 @@ before(async () => {
     ['ALTER FUNCTION v2_api_submit_route_observations(varchar,text,jsonb,varchar[]) SECURITY INVOKER','prompt_function_fence_changed'],
     ['ALTER TABLE v2_subjects DISABLE TRIGGER v2_worker_tasks_input_changed','prompt_worker_trigger_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(placeApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
+  // Exact populated0034 ->0035 reader upgrade; backfill does not rewrite observations.
+  const placeReportUpgradeUser=randomUUID();await db.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[placeReportUpgradeUser]);
+  const placeReportLead=(await db.query("SELECT v2_api_submit_minimum_lead($1,'2026-09-12',$2) r",[placeReportUpgradeUser,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:'09:30',operator:{name:'Reader upgrade coach'}}},observations:[]}])).rows[0].r;
+  const placeReportContext=(await db.query("SELECT v2_api_route_contribution_context($1,$2,'{}') r",[placeReportUpgradeUser,placeReportLead.subjectId])).rows[0].r;
+  const placeReportReceipt=(await db.query("SELECT v2_api_submit_route_observations($1,'2026-09-12',$2,'{}') r",[placeReportUpgradeUser,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'own_contribution',target:{existing:{subjectId:placeReportLead.subjectId,expectedRevision:placeReportContext.revision,identityKey:placeReportContext.identityKey}},observations:[{fieldKey:'boarding.pickup',value:{cityId:upgradeCities[0],name:'Original upgrade rank'},scope:{}}]}])).rows[0].r;
+  const readerApply=await readFile(new URL('../scripts/preview-apply-0035.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE v2_place_report_refs(id uuid)');await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes('place_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const readerEvidence=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,readerTasks=(await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows;
+  await db.query(readerApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0035_route_place_reports.sql\n';
+  const readerRefs=(await db.query('SELECT * FROM v2_place_report_refs ORDER BY id')).rows;assert.equal(readerRefs.length,1);
+  assert.equal((await db.query('SELECT original_value FROM v2_place_report_context WHERE route_subject_id=$1',[placeReportLead.subjectId])).rows[0].original_value.name,'Original upgrade rank');
+  await db.query(readerApply);assert.deepEqual((await db.query('SELECT * FROM v2_place_report_refs ORDER BY id')).rows,readerRefs);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,readerEvidence);assert.deepEqual((await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows,readerTasks);
+  for(const [change,expected]of[
+   ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0035_route_place_reports.sql'",'place_preview_hash_changed'],
+   ['GRANT EXECUTE ON FUNCTION v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[]) TO PUBLIC','place_function_fence_changed'],
+   ['GRANT SELECT ON v2_place_report_context TO authenticated','place_table_fence_changed'],
+   ['ALTER TABLE v2_place_report_refs DISABLE TRIGGER v2_place_reference_immutable','place_trigger_changed'],
+   ['ALTER TABLE v2_place_report_refs DROP CONSTRAINT v2_place_report_refs_observation_id_fkey','place_table_shape_changed'],
+   ['CREATE OR REPLACE VIEW v2_place_report_context AS SELECT c.*,false AS altered FROM v2_place_report_context c','place_view_changed']
+  ]){await db.query('BEGIN');if(!change!.includes('false AS altered')){await db.query(change!);await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}else{await db.query('ALTER VIEW v2_place_report_context RENAME COLUMN city TO wrong_city');await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);

@@ -39,7 +39,9 @@ import type {
   ListCitiesParams,
   ListV2CitiesParams,
   ListV2FareReportsParams,
+  ListV2OwnPlaceReportsParams,
   ListV2OwnRoutesParams,
+  ListV2PlaceReportsParams,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
@@ -64,6 +66,7 @@ import type {
   V2MinimumLeadRequest,
   V2OwnRouteEnvelope,
   V2OwnRoutes,
+  V2PlaceReportPage,
   V2PublicFarePage,
   V2PublicSearch,
   V2PublicSubjectEnvelope,
@@ -83,6 +86,344 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Direct route-observations/1 evidence only. Current identity, assessment membership, original state, safety and moderation apply. No canonical boarding instruction, travel, timetable or confidence is inferred. No-store; removed live cursors require refresh.
+ * @summary Read assessed endpoint place reports for this exact public route
+ */
+export const getListV2PlaceReportsUrl = (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/subjects/${subjectId}/places?${stringifiedParams}`
+    : `/api/v2/subjects/${subjectId}/places`;
+};
+
+export const listV2PlaceReports = async (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: RequestInit,
+): Promise<V2PlaceReportPage> => {
+  return customFetch<V2PlaceReportPage>(
+    getListV2PlaceReportsUrl(subjectId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2PlaceReportsQueryKey = (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+) => {
+  return [
+    `/api/v2/subjects/${subjectId}/places`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2PlaceReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2PlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2PlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListV2PlaceReportsQueryKey(subjectId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2PlaceReports>>
+  > = ({ signal }) =>
+    listV2PlaceReports(subjectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2PlaceReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2PlaceReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2PlaceReports>>
+>;
+export type ListV2PlaceReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read assessed endpoint place reports for this exact public route
+ */
+
+export function useListV2PlaceReports<
+  TData = Awaited<ReturnType<typeof listV2PlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2PlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2PlaceReportsQueryOptions(
+    subjectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Both account and original route receipt are bound. Original active same-identity reports are Saved, not assessed public facts. No other account reports, private source references or receipts are returned.
+ * @summary Read only your saved direct location reports for your original route
+ */
+export const getListV2OwnPlaceReportsUrl = (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/my-routes/${clientSubmissionId}/places?${stringifiedParams}`
+    : `/api/v2/my-routes/${clientSubmissionId}/places`;
+};
+
+export const listV2OwnPlaceReports = async (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: RequestInit,
+): Promise<V2PlaceReportPage> => {
+  return customFetch<V2PlaceReportPage>(
+    getListV2OwnPlaceReportsUrl(clientSubmissionId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2OwnPlaceReportsQueryKey = (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+) => {
+  return [
+    `/api/v2/my-routes/${clientSubmissionId}/places`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2OwnPlaceReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListV2OwnPlaceReportsQueryKey(clientSubmissionId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2OwnPlaceReports>>
+  > = ({ signal }) =>
+    listV2OwnPlaceReports(clientSubmissionId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientSubmissionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2OwnPlaceReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2OwnPlaceReports>>
+>;
+export type ListV2OwnPlaceReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read only your saved direct location reports for your original route
+ */
+
+export function useListV2OwnPlaceReports<
+  TData = Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2OwnPlaceReportsQueryOptions(
+    clientSubmissionId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated safety action without contribution Terms. Exact original report/current route, assessment and both author safety gates rechecked. Opaque reference confers no access.
+ * @summary Report a public location report or hide its anonymous contributor
+ */
+export const getPlaceV2SafetyUrl = (subjectId: string, placeId: string) => {
+  return `/api/v2/subjects/${subjectId}/places/${placeId}/safety`;
+};
+
+export const placeV2Safety = async (
+  subjectId: string,
+  placeId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getPlaceV2SafetyUrl(subjectId, placeId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteSafetyAction),
+    },
+  );
+};
+
+export const getPlaceV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    TError,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof placeV2Safety>>,
+  TError,
+  { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["placeV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, placeId, data } = props ?? {};
+
+    return placeV2Safety(subjectId, placeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PlaceV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof placeV2Safety>>
+>;
+export type PlaceV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type PlaceV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a public location report or hide its anonymous contributor
+ */
+export const usePlaceV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    TError,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof placeV2Safety>>,
+  TError,
+  { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getPlaceV2SafetyMutationOptions(options));
+};
 
 /**
  * Authenticated safe context only. The structural identity key binds the displayed target; it never confers access or asserts travel, review or schedule approval. No-store. Recheck before saving after account/target changes.

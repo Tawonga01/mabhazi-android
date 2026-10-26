@@ -480,6 +480,7 @@ export interface V2Capabilities {
   actualJourneyEnabled?: boolean;
   fareReportsEnabled?: boolean;
   routeObservationsEnabled?: boolean;
+  placeReportsEnabled?: boolean;
 }
 
 export interface V2City {
@@ -1379,6 +1380,73 @@ export interface V2RouteObservationRequest {
   observations: V2RoutePlaceObservation[];
 }
 
+export type V2PlaceReportKind =
+  (typeof V2PlaceReportKind)[keyof typeof V2PlaceReportKind];
+
+export const V2PlaceReportKind = {
+  pickup: "pickup",
+  dropoff: "dropoff",
+} as const;
+
+export type V2PlaceReportBasis =
+  (typeof V2PlaceReportBasis)[keyof typeof V2PlaceReportBasis];
+
+export const V2PlaceReportBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+  legacy_import: "legacy_import",
+} as const;
+
+export type V2PlaceReportStatus =
+  (typeof V2PlaceReportStatus)[keyof typeof V2PlaceReportStatus];
+
+export const V2PlaceReportStatus = {
+  saved: "saved",
+  reported: "reported",
+  needs_review: "needs_review",
+} as const;
+
+export type V2PlaceReportFreshness =
+  (typeof V2PlaceReportFreshness)[keyof typeof V2PlaceReportFreshness];
+
+export const V2PlaceReportFreshness = {
+  current: "current",
+  recheck_due: "recheck_due",
+  unknown: "unknown",
+} as const;
+
+export interface V2PlaceReport {
+  id: string;
+  kind: V2PlaceReportKind;
+  city: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /** @maxLength 1000 */
+  instructions: string | null;
+  basis: V2PlaceReportBasis;
+  observedDate: string | null;
+  receivedAt: string;
+  status: V2PlaceReportStatus;
+  freshness: V2PlaceReportFreshness;
+  canBlock: boolean;
+}
+
+export interface V2PlaceReportPage {
+  subjectId: string;
+  /** @maxItems 20 */
+  items: V2PlaceReport[];
+  hasPendingReports: boolean;
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
 /**
  * Safe error with no raw payload, database message, token or private evidence
  */
@@ -1403,6 +1471,14 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListV2PlaceReportsParams = {
+  cursor?: string;
+};
+
+export type ListV2OwnPlaceReportsParams = {
+  cursor?: string;
+};
 
 export type ListV2FareReportsParams = {
   cursor?: string;

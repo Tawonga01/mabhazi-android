@@ -7,3 +7,6 @@ export function usePlaceCaptureAvailable() {
   useEffect(() => { let alive = true; void boundedRequest(signal => getV2Capabilities({ signal })).then(c => { if (alive) setEnabled(c.routeObservationsEnabled === true); }).catch(() => {}); return () => { alive = false; }; }, []);
   return enabled;
 }
+
+/** Read capability stays independent of writes and is absent on older servers. */
+export function usePlaceReportsAvailable(){const [enabled,setEnabled]=useState(false);useEffect(()=>{let alive=true;void boundedRequest(signal=>getV2Capabilities({signal})).then(c=>{if(alive)setEnabled(c.placeReportsEnabled===true);}).catch(()=>{});return()=>{alive=false;};},[]);return enabled;}

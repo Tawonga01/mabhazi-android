@@ -540,7 +540,10 @@ router.get("/admin/abuse-reports", requireAdmin, async (req: Request, res: Respo
   const enrichedReports = await Promise.all(
     reports.map(async (report) => {
       let targetPreview: string | null = null;
-      if (report.targetType === "fare_report") {
+      if (report.targetType === "place_report") {
+        const place=await db.execute(sql`SELECT (city->>'name')||' · '||field_key||' · '||(original_value->>'name') AS preview FROM public.v2_place_report_context WHERE place_ref::text=${report.targetId} LIMIT 1`);
+        targetPreview=String(place.rows[0]?.preview??'Location report no longer available');
+      } else if (report.targetType === "fare_report") {
         const fare=await db.execute(sql`SELECT (origin->>'name')||' → '||(destination->>'name')||' · '||field_key||' '||(original_value->>'currency')||' '||(original_value->>'amount') AS preview FROM public.v2_fare_report_context WHERE fare_ref::text=${report.targetId} LIMIT 1`);
         targetPreview=String(fare.rows[0]?.preview??'Fare report no longer available');
       } else if (report.targetType === "transport_subject") {
@@ -625,17 +628,20 @@ router.patch(
       if (report.status !== "pending") return { kind: "already-reviewed" as const };
 
       const targetType = report.targetType;
-      if (!["comment", "journey", "user", "transport_subject", "fare_report"].includes(targetType)) {
+      if (!["comment", "journey", "user", "transport_subject", "fare_report", "place_report"].includes(targetType)) {
         return { kind: "invalid-target" as const };
       }
       const actionMatchesTarget =
         action === "dismiss" ||
-        (["comment","fare_report"].includes(targetType) && action === "remove_content") ||
+        (["comment","fare_report","place_report"].includes(targetType) && action === "remove_content") ||
         (["journey","transport_subject"].includes(targetType) && action === "remove_route") ||
         (targetType === "user" && action === "hide_user");
       if (!actionMatchesTarget) return { kind: "incompatible-action" as const };
 
-      if(targetType==='fare_report' && action==='remove_content') {
+      if(targetType==='place_report' && action==='remove_content') {
+        const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_place(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
+        if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
+      } else if(targetType==='fare_report' && action==='remove_content') {
         const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_fare(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
         if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
       } else if(targetType==='transport_subject' && action==='remove_route') {
@@ -1253,6 +1259,7 @@ async function loadReports() {
         const target =
           report.targetType === 'user' ? 'Contributor ' + report.targetId :
           report.targetType === 'comment' ? 'Comment #' + report.targetId :
+          report.targetType === 'place_report' ? 'Location report ' + report.targetId :
           report.targetType === 'fare_report' ? 'Fare report ' + report.targetId :
           'Route #' + report.targetId;
         const primaryAction = report.targetType === 'user'

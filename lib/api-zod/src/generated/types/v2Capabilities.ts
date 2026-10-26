@@ -13,4 +13,5 @@ export interface V2Capabilities {
   actualJourneyEnabled?: boolean;
   fareReportsEnabled?: boolean;
   routeObservationsEnabled?: boolean;
+  placeReportsEnabled?: boolean;
 }
