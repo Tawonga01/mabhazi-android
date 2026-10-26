@@ -22,8 +22,10 @@ const users = [randomUUID(), randomUUID(), randomUUID()], tokens = users.map(() 
 let cities;
 // Screenshots must represent the settled UI, not the first frame of a modal
 // fade/slide. Geometry/opacity stability also covers RN's JavaScript animation.
+async function boundedBrowserStep(label,run,ms=20000){let timer;try{return await Promise.race([run(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Browser step timed out: '+label)),ms);})]);}finally{clearTimeout(timer);}}
 async function takeShot(page,name){
-  await page.evaluate(async()=>{
+  console.log('MABHAZI_SCREENSHOT_START '+name);
+  await boundedBrowserStep('settle '+name,()=>page.evaluate(async()=>{
     await Promise.race([document.fonts.ready,new Promise(resolve=>setTimeout(resolve,2000))]);
     const limit=performance.now()+2500;let previous='',stableSince=performance.now();
     while(performance.now()<limit){
@@ -32,8 +34,10 @@ async function takeShot(page,name){
       else if(performance.now()-stableSince>180)break;
       await new Promise(requestAnimationFrame);
     }
-  });
-  await page.screenshot({path:path.join(output,name),fullPage:true});
+  }));
+  console.log('MABHAZI_SCREENSHOT_SETTLED '+name);
+  await boundedBrowserStep('screenshot '+name,()=>page.screenshot({path:path.join(output,name),fullPage:true,animations:'disabled',timeout:15000}));
+  console.log('MABHAZI_SCREENSHOT_SAVED '+name);
 }
 
 try {
@@ -60,7 +64,7 @@ try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     context.setDefaultTimeout(20000);context.setDefaultNavigationTimeout(20000);
     // Drain intercepted background discovery before closing the test context.
-    let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;await context.unrouteAll({behavior:'wait'});await closeContext(options);};
+    let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;console.log('MABHAZI_CONTEXT_CLOSING');try{await boundedBrowserStep('drain context routes',()=>context.unrouteAll({behavior:'wait'}));}finally{await boundedBrowserStep('close context',()=>closeContext(options));}console.log('MABHAZI_CONTEXT_CLOSED');};
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
     let postCount = 0; const sent=[];
     await context.route('**/*', async route => {
