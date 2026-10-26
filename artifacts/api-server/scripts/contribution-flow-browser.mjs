@@ -17,6 +17,7 @@ let apiServer, webServer, browser;
 const root = path.resolve('../mobile/dist-flow-web'), output = path.resolve('../../flow-browser-evidence');
 fs.mkdirSync(output, { recursive: true });
 const results = [], consoleErrors = [];
+results.push=(...cases)=>{for(const item of cases)console.log('MABHAZI_BROWSER_PROGRESS '+item);return Array.prototype.push.apply(results,cases);};
 const users = [randomUUID(), randomUUID(), randomUUID()], tokens = users.map(() => randomBytes(32).toString('hex'));
 let cities;
 // Screenshots must represent the settled UI, not the first frame of a modal
@@ -57,6 +58,7 @@ try {
   browser = await chromium.launch();
   async function session(account = 0, loseResponse = false, mode = 'route') {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    context.setDefaultTimeout(20000);context.setDefaultNavigationTimeout(20000);
     // Drain intercepted background discovery before closing the test context.
     let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;await context.unrouteAll({behavior:'wait'});await closeContext(options);};
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
@@ -143,7 +145,7 @@ try {
     await s.page.getByRole('radio',{name:'Passenger: Unknown',exact:true}).click();await s.page.getByRole('radio',{name:'Ticket: Unknown',exact:true}).click();
     await s.page.getByRole('button',{name:'Preview fare',exact:true}).click();await s.page.getByRole('button',{name:'Use this fare',exact:true}).click();
     await s.page.getByRole('button',{name:'Review journey',exact:true}).click();
-    await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
+    await s.page.evaluate(async()=>{await Promise.race([Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined))),new Promise(resolve=>setTimeout(resolve,2000))]);});
     await takeShot(s.page,'own-route-followup.png');
     s.loseNext();await s.page.getByRole('button',{name:'Save journey report',exact:true}).click();
     await s.page.getByText('Save not confirmed.',{exact:false}).waitFor();
