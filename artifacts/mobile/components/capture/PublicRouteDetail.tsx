@@ -6,10 +6,11 @@ import {useAuth} from '@/lib/auth';
 import {useBlockedContributors} from '@/hooks/useBlockedContributors';
 import {publicSafetyHeaders} from '@/lib/use-public-routes';
 import {boundedRequest} from '@/lib/use-capture';
+import {usePlaceCaptureAvailable} from '@/lib/use-place-capture';
 import type {PublicRouteContext} from '@/lib/actual-journey-model';
 import {CaptureButton,CaptureFrame,CaptureHelp,Choices,ReviewRow,captureStyles as s} from './CapturePrimitives';
-export function PublicRouteDetail({subjectId,onClose,onContribute}:{subjectId:string;onClose():void;onContribute(route:PublicRouteContext,fare:boolean):void}){
- const auth=useAuth(),owner=auth.user?.id??null,safety=useBlockedContributors();
+export function PublicRouteDetail({subjectId,onClose,onContribute,onPlaces}:{subjectId:string;onClose():void;onContribute(route:PublicRouteContext,fare:boolean):void;onPlaces(route:PublicRouteContext):void}){
+ const auth=useAuth(),owner=auth.user?.id??null,safety=useBlockedContributors(),placesEnabled=usePlaceCaptureAvailable();
  const [route,setRoute]=useState<V2PublicLead|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[retry,setRetry]=useState(0),[reportOpen,setReportOpen]=useState(false),[reason,setReason]=useState<'spam'|'inaccurate'|'offensive'|'unsafe'|'other'|''>(''),[message,setMessage]=useState('');
  const [fareBusy,setFareBusy]=useState(false),[loadedIdentity,setLoadedIdentity]=useState('');
  const mounted=useRef(true),actor=useRef(owner);actor.current=owner;
@@ -22,9 +23,9 @@ export function PublicRouteDetail({subjectId,onClose,onContribute}:{subjectId:st
   return()=>{alive=false;mounted.current=false;};
  },[subjectId,owner,auth.isLoading,safety.isReady,safetyKey,retry]);
  async function login(){setBusy(true);try{await auth.login();}catch{if(current())setMessage('Sign-in did not finish. Try again.');}finally{if(current())setBusy(false);}}
- async function contribute(fare:boolean){if(busy||!owner||!safety.isReady)return;setBusy(true);setMessage('');try{const value=await fresh();if(!current())return;
+ async function contribute(fare:boolean,places=false){if(busy||!owner||!safety.isReady)return;setBusy(true);setMessage('');try{const value=await fresh();if(!current())return;
   if(!value.contributionTargetEligible){setMessage('Contributions for this route are not available yet.');return;}
-  onContribute({source:'public',ownerId:owner,subjectId:value.subjectId,expectedRevision:value.revision,origin:value.origin,destination:value.destination,operator:value.operatorReport.value,departureTime:value.reportedTime.value},fare);
+  const context:PublicRouteContext={source:'public',ownerId:owner,subjectId:value.subjectId,expectedRevision:value.revision,origin:value.origin,destination:value.destination,operator:value.operatorReport.value,departureTime:value.reportedTime.value}; if(places)onPlaces(context);else onContribute(context,fare);
  }catch{if(current())setMessage('This route changed or is unavailable. Your other drafts are kept. Refresh Search.');}finally{if(current())setBusy(false);}}
  async function safetyAction(action:'report'|'block'){if(!owner||busy||!safety.isReady)return;setBusy(true);setMessage('');try{await boundedRequest(signal=>routeV2Safety(subjectId,{action,...(action==='report'&&reason?{reason}:{})},{signal,headers:{'X-Mabhazi-Account':owner}}));if(!current())return;if(action==='block')onClose();else{setReportOpen(false);setMessage('Report received.');}}
  catch(error){if(current())setMessage((error as {data?:{error?:string}}).data?.error??'The safety action could not be confirmed. Try again.');}finally{if(current())setBusy(false);}}
@@ -40,6 +41,7 @@ export function PublicRouteDetail({subjectId,onClose,onContribute}:{subjectId:st
    </View>
    <View style={r.reports}>
     <FareReports key={identity} subjectId={route.subjectId} onBusy={setFareBusy} onChanged={()=>setRetry(v=>v+1)}/>
+    {owner&&placesEnabled?<CaptureButton title="Add pickup / drop-off" secondary disabled={busy||fareBusy||!route.contributionTargetEligible} onPress={()=>void contribute(false,true)}/>:null}
     <View style={r.rule}/>
     <CaptureHelp label="About this route"><Text style={s.label}>Details needed</Text><Text style={s.note}>Community reports. A timetable and current fare have not been confirmed.</Text><ReviewRow label="Operator report received" value={String(route.operatorReport.submittedAt).slice(0,10)}/><ReviewRow label="Time report received" value={String(route.reportedTime.submittedAt).slice(0,10)}/></CaptureHelp>
     {owner?<CaptureHelp label="Report or hide"><CaptureButton title="Report this route" secondary disabled={busy} onPress={()=>setReportOpen(v=>!v)}/>{reportOpen?<><Choices<typeof reason> label="Report reason" value={reason} options={[[ 'inaccurate','Incorrect details' ],['spam','Spam'],['offensive','Offensive content'],['unsafe','Unsafe content'],['other','Other']]} onChange={setReason}/><CaptureButton title="Send route report" disabled={busy||!reason} onPress={()=>void safetyAction('report')}/></>:null}<CaptureButton title="Hide this contributor’s route reports" secondary disabled={busy} onPress={()=>void safetyAction('block')}/></CaptureHelp>:null}

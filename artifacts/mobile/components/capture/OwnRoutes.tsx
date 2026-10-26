@@ -4,13 +4,14 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { getV2OwnRoute, listV2OwnRoutes, type V2OwnRoute } from '@workspace/api-client-react';
 import { useAuth } from '@/lib/auth';
 import { boundedRequest } from '@/lib/use-capture';
+import { usePlaceCaptureAvailable } from '@/lib/use-place-capture';
 import type { OwnRouteContext } from '@/lib/actual-journey-model';
 import { CaptureButton, CaptureFrame, CaptureHelp, captureStyles as s } from './CapturePrimitives';
 
 /** Read-only history. Selecting a route rechecks ownership/current identity;
  * the actual form remains the sole writer of its encrypted account draft. */
-export function OwnRoutes({ onClose, onFollowUp, onAddRoute }: { onClose(): void; onFollowUp(route: OwnRouteContext): void; onAddRoute(): void }) {
-  const auth = useAuth(), owner = auth.user?.id ?? null;
+export function OwnRoutes({ onClose, onFollowUp, onPlaces, onAddRoute }: { onClose(): void; onFollowUp(route: OwnRouteContext): void; onPlaces(route: OwnRouteContext): void; onAddRoute(): void }) {
+  const auth = useAuth(), owner = auth.user?.id ?? null, placesEnabled = usePlaceCaptureAvailable();
   const actor = useRef(owner); actor.current = auth.user?.id ?? null;
   const alive = useRef(true), busyRef = useRef(false);
   const [routes, setRoutes] = useState<V2OwnRoute[]>([]), [cursor, setCursor] = useState<string | undefined>();
@@ -30,7 +31,7 @@ export function OwnRoutes({ onClose, onFollowUp, onAddRoute }: { onClose(): void
     } finally { busyRef.current = false; if (active()) setBusy(false); }
   }
   useEffect(() => { alive.current = true; void load(); return () => { alive.current = false; }; }, []);
-  async function select(key: string) {
+  async function select(key: string, places = false) {
     if (!owner || busyRef.current) return;
     busyRef.current = true; setBusy(true); setError('');
     try {
@@ -40,7 +41,7 @@ export function OwnRoutes({ onClose, onFollowUp, onAddRoute }: { onClose(): void
       if (route.clientSubmissionId !== key || route.availability !== 'active' || !Number.isSafeInteger(route.currentLeadRevision) || route.currentLeadRevision! < 1) {
         setError('Details are unavailable for this submitted route.'); return;
       }
-      onFollowUp({ ownerId: owner, subjectId: route.subjectId, clientSubmissionId: route.clientSubmissionId,
+      (places ? onPlaces : onFollowUp)({ ownerId: owner, subjectId: route.subjectId, clientSubmissionId: route.clientSubmissionId,
         expectedRevision: route.currentLeadRevision!, origin: route.origin, destination: route.destination,
         operator: route.operator, departureTime: route.departureTime });
     } catch (cause) {
@@ -66,6 +67,7 @@ export function OwnRoutes({ onClose, onFollowUp, onAddRoute }: { onClose(): void
         <Text style={s.note}>{route.operator} · {route.departureTime}</Text>
         <Text style={s.note}>{route.availability === 'active' ? 'Submitted' : 'Unavailable'} · {new Date(route.submittedAt).toLocaleDateString()}</Text>
         {route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add details" secondary disabled={busy} onPress={() => void select(route.clientSubmissionId)} /> : null}
+        {placesEnabled && route.availability === 'active' && route.currentLeadRevision ? <CaptureButton title="Add pickup / drop-off" secondary disabled={busy} onPress={() => void select(route.clientSubmissionId, true)} /> : null}
       </View>)}
       {cursor ? <CaptureButton title="Load more routes" disabled={busy} onPress={() => void load(true)} /> : null}
       {loaded && routes.length ? <CaptureHelp label="About submitted routes"><Text style={s.note}>These are your saved route reports. Submitted does not mean reviewed or published.</Text></CaptureHelp> : null}

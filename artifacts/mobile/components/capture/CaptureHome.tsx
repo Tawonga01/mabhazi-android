@@ -3,22 +3,23 @@ import { ui } from '@/constants/ui';
 import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { useAuth } from '@/lib/auth';
-import { leadDrafts, actualDrafts } from '@/lib/lead-drafts';
+import { leadDrafts, actualDrafts, placeDrafts } from '@/lib/lead-drafts';
 import { useCaptureEntry } from '@/lib/capture-context';
 import { CaptureFrame, CaptureButton, CaptureHelp, captureStyles as s } from './CapturePrimitives';
 import { draftNotice } from './CaptureStatus';
 export function CaptureHome({ openFullForm }: { openFullForm(): void }) {
   const entry = useCaptureEntry();
-  const [drafts, setDrafts] = useState({ route: false, journey: false }), [error, setError] = useState('');
+  const [drafts, setDrafts] = useState({ route: false, journey: false, places: false }), [error, setError] = useState('');
   const { user } = useAuth(), owner = user?.id ?? null;
   useEffect(() => {
     let alive = true;
-    setDrafts({ route: false, journey: false }); setError('');
+    setDrafts({ route: false, journey: false, places: false }); setError('');
     void (async () => {
       try {
         const route = await leadDrafts.read(owner) ?? (owner ? await leadDrafts.read(null) : null);
         const journey = await actualDrafts.read(owner) ?? (owner ? await actualDrafts.read(null) : null);
-        if (alive) setDrafts({ route: !!route, journey: !!journey });
+        const places = await placeDrafts.read(owner);
+        if (alive) setDrafts({ route: !!route, journey: !!journey, places: !!places });
       } catch { if (alive) setError('Saved drafts could not be checked. Open a form to try again.'); }
     })();
     return () => { alive = false; };
@@ -38,6 +39,7 @@ export function CaptureHome({ openFullForm }: { openFullForm(): void }) {
         <View style={{flex:1,gap:6}}><Text style={{fontFamily:ui.type.semibold,fontSize:19,color:ui.color.ink}}>{journeyTitle}</Text><Text style={s.note}>{drafts.journey?'Saved on this device':'One detail is enough'}</Text></View><Feather name="chevron-right" size={20} color={ui.color.muted}/>
       </Pressable>
     </View>
+    {drafts.places?<CaptureButton title="Continue location draft" secondary onDark disabled={entry.isOpen} onPress={()=>entry.open({kind:'places',entrySurface:'contribute_tab'})}/>:null}
     <CaptureButton title="My routes" secondary onDark disabled={entry.isOpen} onPress={() => entry.open({kind:'history'})}/>
     <CaptureButton title="Full route form" secondary onDark onPress={openFullForm}/>
     <View style={{backgroundColor:ui.color.surface,borderRadius:16,paddingHorizontal:16}}><CaptureHelp label="About drafts"><Text style={[s.note,{paddingBottom:16}]}>{draftNotice}</Text></CaptureHelp></View>

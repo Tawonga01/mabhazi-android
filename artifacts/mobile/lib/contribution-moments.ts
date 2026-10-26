@@ -1,4 +1,4 @@
-import type { OwnRouteContext, PublicRouteContext } from './actual-journey-model';
+import type { CaptureRouteContext, OwnRouteContext, PublicRouteContext } from './actual-journey-model';
 import type { V2City } from '@workspace/api-client-react';
 
 export interface RoutePrefill {
@@ -9,6 +9,7 @@ export interface RoutePrefill {
 }
 export type CaptureRequest =
   | { kind: 'history' }
+  | { kind: 'places'; route?: CaptureRouteContext; entrySurface: 'contribute_tab' | 'route_detail' | 'own_contribution' }
   | { kind: 'public_route'; subjectId: string }
   | { kind: 'public_blocks' }
   | { kind: 'journey'; entrySurface: 'search_result' | 'route_detail'; route: PublicRouteContext; initialFact?: 'fare' }

@@ -19,7 +19,7 @@ interface CaptureStore<D, R> {
 export interface CaptureOptions<D, R> {
   empty(): D; errors(draft: D): Record<string, string>; prepare(draft: D, key: string): R;
   hasAnswers(draft: D): boolean; store: CaptureStore<D, R>;
-  capability: 'minimumLeadEnabled' | 'actualJourneyEnabled';
+  capability: 'minimumLeadEnabled' | 'actualJourneyEnabled' | 'routeObservationsEnabled';
   submit(request: R, options: { signal: AbortSignal; headers: Record<string, string> }): Promise<V2LeadReceipt>;
 }
 /** Shared explicit review/submit lifecycle; no autosubmit on login, resume or Terms. */
@@ -145,7 +145,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
   }
   // Explicit recovery only after a definitive target rejection. Never edit a
   // possibly committed request: privately look up its receipt first.
-  async function changeRejectedTarget(nextDraft: D) {
+  async function changeRejectedTarget(nextDraft: D, recoveryMessage = 'Kept as an independent report. Review your answers before saving.') {
     if (!targetProblem || !pending || busyRef.current || !owner) return;
     busyRef.current = true; setBusy(true);
     try {
@@ -164,7 +164,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
       await options.store.write({ version: 1, owner, updatedAt: time, draft: nextDraft });
       if (!active()) return;
       updatedAt.current = time; setDraft(nextDraft); setPending(undefined); setReviewing(false); setTargetProblem(false);
-      setMessage('Kept as an independent report. Review your answers before saving.'); setStorageError('');
+      setMessage(recoveryMessage); setStorageError('');
     } catch { if (active()) setMessage('Could not check the previous save. Your original report and reference are kept. Try again.'); }
     finally { busyRef.current = false; if (active()) setBusy(false); }
   }

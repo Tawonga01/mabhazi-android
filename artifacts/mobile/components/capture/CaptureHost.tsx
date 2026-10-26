@@ -3,7 +3,7 @@ import { Modal } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Crypto from 'expo-crypto';
 import { useAuth } from '@/lib/auth';
-import type { OwnRouteContext } from '@/lib/actual-journey-model';
+import type { OwnRouteContext, CaptureRouteContext } from '@/lib/actual-journey-model';
 import { useRouter } from 'expo-router';
 import { CaptureEntryContext, CaptureFrameContext } from '@/lib/capture-context';
 import type { CaptureRequest } from '@/lib/contribution-moments';
@@ -12,6 +12,7 @@ import { ActualJourneyForm } from './ActualJourneyForm';
 import { OwnRoutes } from './OwnRoutes';
 import { PublicRouteDetail } from './PublicRouteDetail';
 import { RouteBlocks } from './RouteBlocks';
+import { RoutePlaceForm } from './RoutePlaceForm';
 import type { PublicRouteContext } from '@/lib/actual-journey-model';
 
 /** One manual capture at a time; tabs cannot run competing writers for the same draft. */
@@ -44,6 +45,10 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
     if(active?.kind!=='public_route'||auth.user?.id!==route.ownerId)return;
     frame.current=null;setActive({kind:'journey',entrySurface:'route_detail',route,...(fare?{initialFact:'fare' as const}:{}),id:Crypto.randomUUID()});
   }
+  function placeFollowUp(route: CaptureRouteContext) {
+    if (!active || !['history','public_route'].includes(active.kind) || auth.user?.id !== route.ownerId) return;
+    frame.current = null; setActive({ kind: 'places', route, entrySurface: route.source === 'public' ? 'route_detail' : 'own_contribution', id: Crypto.randomUUID() });
+  }
   function openFullForm() {
     const prefill = active?.kind === 'route' ? active.prefill : undefined;
     dismiss();
@@ -58,12 +63,13 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
       onRequestClose={() => { if (frame.current && !frame.current.busy) frame.current.close?.(); }}>
       <SafeAreaProvider>
         <CaptureFrameContext.Provider value={presentation}>
-          {active.kind === 'public_route' ? <PublicRouteDetail key={active.id+(auth.user?.id??'guest')} subjectId={active.subjectId} onClose={dismiss} onContribute={publicFollowUp}/>
+          {active.kind === 'public_route' ? <PublicRouteDetail key={active.id+(auth.user?.id??'guest')} subjectId={active.subjectId} onClose={dismiss} onContribute={publicFollowUp} onPlaces={placeFollowUp}/>
+            :active.kind === 'places' ? <RoutePlaceForm key={active.id} route={active.route} entrySurface={active.entrySurface} onClose={dismiss}/>
             :active.kind === 'public_blocks' ? <RouteBlocks key={active.id+(auth.user?.id??'guest')} onClose={dismiss}/>
             :active.kind === 'route'
             ? <MinimumLeadForm key={active.id} entrySurface={active.entrySurface} prefill={active.prefill} onFollowUp={followUp} onClose={dismiss} openFullForm={openFullForm} />
             : active.kind === 'history'
-              ? <OwnRoutes key={active.id + (auth.user?.id ?? 'guest')} onClose={dismiss} onFollowUp={followUp} onAddRoute={() => { frame.current = null; setActive({ kind: 'route', entrySurface: 'contribute_tab', id: Crypto.randomUUID() }); }} />
+              ? <OwnRoutes key={active.id + (auth.user?.id ?? 'guest')} onClose={dismiss} onFollowUp={followUp} onPlaces={placeFollowUp} onAddRoute={() => { frame.current = null; setActive({ kind: 'route', entrySurface: 'contribute_tab', id: Crypto.randomUUID() }); }} />
               : <ActualJourneyForm key={active.id} route={active.route} entrySurface={active.entrySurface} initialFact={'initialFact' in active?active.initialFact:undefined} onClose={dismiss} />}
         </CaptureFrameContext.Provider>
       </SafeAreaProvider>
