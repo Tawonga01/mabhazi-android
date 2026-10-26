@@ -12,4 +12,5 @@ export interface V2Capabilities {
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
   fareReportsEnabled?: boolean;
+  routeObservationsEnabled?: boolean;
 }

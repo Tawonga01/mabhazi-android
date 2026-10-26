@@ -8,6 +8,207 @@
 import * as zod from "zod";
 
 /**
+ * Authenticated safe context only. The structural identity key binds the displayed target; it never confers access or asserts travel, review or schedule approval. No-store. Recheck before saving after account/target changes.
+ * @summary Read the exact visible or owned route context before a typed contribution
+ */
+export const GetV2RouteContributionContextParams = zod.object({
+  subjectId: zod.coerce.string().uuid(),
+});
+
+export const getV2RouteContributionContextHeaderXMabhaziAccountMax = 256;
+
+export const getV2RouteContributionContextHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const GetV2RouteContributionContextHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2RouteContributionContextHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(getV2RouteContributionContextHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+});
+
+export const getV2RouteContributionContextResponseRevisionMax = 9007199254740991;
+
+export const getV2RouteContributionContextResponseIdentityKeyRegExp =
+  new RegExp("^[0-9a-f]{64}$");
+export const getV2RouteContributionContextResponseOriginIdMax = 999999999;
+
+export const getV2RouteContributionContextResponseDestinationIdMax = 999999999;
+
+export const getV2RouteContributionContextResponseOperatorNameMax = 120;
+
+export const getV2RouteContributionContextResponseDepartureTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+export const GetV2RouteContributionContextResponse = zod.object({
+  subjectId: zod.string().uuid(),
+  revision: zod
+    .number()
+    .min(1)
+    .max(getV2RouteContributionContextResponseRevisionMax),
+  identityKey: zod
+    .string()
+    .regex(getV2RouteContributionContextResponseIdentityKeyRegExp),
+  origin: zod.object({
+    id: zod
+      .number()
+      .min(1)
+      .max(getV2RouteContributionContextResponseOriginIdMax),
+    name: zod.string(),
+    placeType: zod.string(),
+  }),
+  destination: zod.object({
+    id: zod
+      .number()
+      .min(1)
+      .max(getV2RouteContributionContextResponseDestinationIdMax),
+    name: zod.string(),
+    placeType: zod.string(),
+  }),
+  operatorName: zod
+    .string()
+    .min(1)
+    .max(getV2RouteContributionContextResponseOperatorNameMax),
+  departureTime: zod
+    .string()
+    .regex(getV2RouteContributionContextResponseDepartureTimeRegExp),
+});
+
+/**
+ * One or two explicit endpoint places on an existing own/community-public lead. Server binds account, current Terms, visibility and safety. Same-identity revision advance is accepted; structural changes require reconfirmation. Scope is unscoped endpoint knowledge; no intermediate stops, travel, fare, calendar, approval or publication is inferred. Use the existing private receipt lookup after an uncertain response.
+ * @summary Save endpoint pickup or drop-off knowledge without creating an actual journey
+ */
+export const submitV2RouteObservationsHeaderXMabhaziAccountMax = 256;
+
+export const submitV2RouteObservationsHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const SubmitV2RouteObservationsHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(submitV2RouteObservationsHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(submitV2RouteObservationsHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const submitV2RouteObservationsBodyTargetExistingExpectedRevisionMax = 9007199254740991;
+
+export const submitV2RouteObservationsBodyTargetExistingIdentityKeyRegExp =
+  new RegExp("^[0-9a-f]{64}$");
+export const submitV2RouteObservationsBodyObservationsItemValueCityIdMax = 999999999;
+
+export const submitV2RouteObservationsBodyObservationsItemValueNameMax = 200;
+
+export const submitV2RouteObservationsBodyObservationsItemValueInstructionsMax = 500;
+
+export const submitV2RouteObservationsBodyObservationsItemObservedDateRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const submitV2RouteObservationsBodyObservationsItemSourcesMax = 10;
+
+export const submitV2RouteObservationsBodyObservationsMax = 2;
+
+export const SubmitV2RouteObservationsBody = zod.object({
+  schemaVersion: zod.enum(["1.0"]),
+  clientSubmissionId: zod.string().uuid(),
+  entrySurface: zod.enum([
+    "contribute_tab",
+    "search_result",
+    "route_detail",
+    "own_contribution",
+  ]),
+  target: zod.object({
+    existing: zod.object({
+      subjectId: zod.string().uuid(),
+      expectedRevision: zod
+        .number()
+        .min(1)
+        .max(submitV2RouteObservationsBodyTargetExistingExpectedRevisionMax),
+      identityKey: zod
+        .string()
+        .regex(submitV2RouteObservationsBodyTargetExistingIdentityKeyRegExp),
+    }),
+  }),
+  observations: zod
+    .array(
+      zod.object({
+        fieldKey: zod.enum(["boarding.pickup", "alighting.dropoff"]),
+        value: zod.object({
+          cityId: zod
+            .number()
+            .min(1)
+            .max(submitV2RouteObservationsBodyObservationsItemValueCityIdMax),
+          name: zod
+            .string()
+            .min(1)
+            .max(submitV2RouteObservationsBodyObservationsItemValueNameMax),
+          instructions: zod
+            .string()
+            .max(
+              submitV2RouteObservationsBodyObservationsItemValueInstructionsMax,
+            )
+            .optional(),
+        }),
+        scope: zod.object({}),
+        knowledgeBasis: zod
+          .enum([
+            "travelled",
+            "saw_operating",
+            "observed_sign",
+            "operator_statement",
+            "heard_from_other",
+            "unprovided",
+          ])
+          .optional(),
+        observedDate: zod
+          .string()
+          .regex(
+            submitV2RouteObservationsBodyObservationsItemObservedDateRegExp,
+          )
+          .optional(),
+        sources: zod
+          .array(zod.string().uuid())
+          .max(submitV2RouteObservationsBodyObservationsItemSourcesMax)
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(submitV2RouteObservationsBodyObservationsMax),
+});
+
+export const SubmitV2RouteObservationsResponse = zod.object({
+  contributionId: zod.string().uuid(),
+  clientSubmissionId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  saveStatus: zod.enum(["saved"]),
+  processingStatus: zod.enum(["queued"]),
+  associationStatus: zod.enum(["unresolved"]),
+  publicationStatus: zod.enum(["pending"]),
+  replayed: zod.boolean(),
+  targetAdvanced: zod.boolean().optional(),
+});
+
+/**
  * Paid experiences, quotes and advertised fares remain scoped reports, not a current ticket price or canonical service. Current-time assessment/evidence and both route/fare contributor safety gates apply. Opaque presentation IDs never expose observation, receipt, source or author identity. Unready/date-held evidence is signalled without an amount. Refresh when a live cursor is no longer available.
  * @summary Read assessed dated fare reports for one visible route
  */
@@ -741,6 +942,7 @@ export const SubmitV2ActualJourneyResponse = zod.object({
   associationStatus: zod.enum(["unresolved"]),
   publicationStatus: zod.enum(["pending"]),
   replayed: zod.boolean(),
+  targetAdvanced: zod.boolean().optional(),
 });
 
 /**
@@ -1223,6 +1425,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   minimumLeadEnabled: zod.boolean(),
   actualJourneyEnabled: zod.boolean().optional(),
   fareReportsEnabled: zod.boolean().optional(),
+  routeObservationsEnabled: zod.boolean().optional(),
 });
 
 /**
@@ -1329,6 +1532,7 @@ export const SubmitV2LeadResponse = zod.object({
   associationStatus: zod.enum(["unresolved"]),
   publicationStatus: zod.enum(["pending"]),
   replayed: zod.boolean(),
+  targetAdvanced: zod.boolean().optional(),
 });
 
 /**
@@ -1367,6 +1571,7 @@ export const GetV2LeadReceiptResponse = zod.object({
       associationStatus: zod.enum(["unresolved"]),
       publicationStatus: zod.enum(["pending"]),
       replayed: zod.boolean(),
+      targetAdvanced: zod.boolean().optional(),
     })
     .optional(),
   currentLeadRevision: zod.number().min(1).optional(),

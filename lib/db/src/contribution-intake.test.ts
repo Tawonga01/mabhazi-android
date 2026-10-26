@@ -1,3 +1,4 @@
+import { registerRouteObservationTests } from './route-observations.cases';
 import { registerPromptWorkerTests } from './prompt-worker.cases';
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -746,3 +747,5 @@ registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origi
 
 
 registerPromptWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerRouteObservationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));

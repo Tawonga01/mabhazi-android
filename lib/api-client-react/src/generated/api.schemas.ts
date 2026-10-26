@@ -479,6 +479,7 @@ export interface V2Capabilities {
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
   fareReportsEnabled?: boolean;
+  routeObservationsEnabled?: boolean;
 }
 
 export interface V2City {
@@ -594,6 +595,7 @@ export interface V2LeadReceipt {
   associationStatus: V2LeadReceiptAssociationStatus;
   publicationStatus: V2LeadReceiptPublicationStatus;
   replayed: boolean;
+  targetAdvanced?: boolean;
 }
 
 export interface V2ReceiptLookup {
@@ -1278,6 +1280,103 @@ export interface V2OwnRoutes {
 
 export interface V2OwnRouteEnvelope {
   route: V2OwnRoute;
+}
+
+export interface V2RouteContributionContext {
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+  origin: V2City;
+  destination: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  operatorName: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  departureTime: string;
+}
+
+export type V2RouteObservationTargetExisting = {
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+};
+
+export interface V2RouteObservationTarget {
+  existing: V2RouteObservationTargetExisting;
+}
+
+export type V2RoutePlaceObservationFieldKey =
+  (typeof V2RoutePlaceObservationFieldKey)[keyof typeof V2RoutePlaceObservationFieldKey];
+
+export const V2RoutePlaceObservationFieldKey = {
+  boardingpickup: "boarding.pickup",
+  alightingdropoff: "alighting.dropoff",
+} as const;
+
+export type V2RoutePlaceObservationScope = { [key: string]: unknown };
+
+export type V2RoutePlaceObservationKnowledgeBasis =
+  (typeof V2RoutePlaceObservationKnowledgeBasis)[keyof typeof V2RoutePlaceObservationKnowledgeBasis];
+
+export const V2RoutePlaceObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2RoutePlaceObservation {
+  fieldKey: V2RoutePlaceObservationFieldKey;
+  value: V2ActualPlace;
+  scope: V2RoutePlaceObservationScope;
+  knowledgeBasis?: V2RoutePlaceObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2RouteObservationRequestSchemaVersion =
+  (typeof V2RouteObservationRequestSchemaVersion)[keyof typeof V2RouteObservationRequestSchemaVersion];
+
+export const V2RouteObservationRequestSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export type V2RouteObservationRequestEntrySurface =
+  (typeof V2RouteObservationRequestEntrySurface)[keyof typeof V2RouteObservationRequestEntrySurface];
+
+export const V2RouteObservationRequestEntrySurface = {
+  contribute_tab: "contribute_tab",
+  search_result: "search_result",
+  route_detail: "route_detail",
+  own_contribution: "own_contribution",
+} as const;
+
+export interface V2RouteObservationRequest {
+  schemaVersion: V2RouteObservationRequestSchemaVersion;
+  clientSubmissionId: string;
+  entrySurface: V2RouteObservationRequestEntrySurface;
+  target: V2RouteObservationTarget;
+  /**
+   * @minItems 1
+   * @maxItems 2
+   */
+  observations: V2RoutePlaceObservation[];
 }
 
 /**
