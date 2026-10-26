@@ -24,7 +24,7 @@ let cities;
 // fade/slide. Geometry/opacity stability also covers RN's JavaScript animation.
 async function takeShot(page,name){
   await page.evaluate(async()=>{
-    await document.fonts.ready;
+    await Promise.race([document.fonts.ready,new Promise(resolve=>setTimeout(resolve,2000))]);
     const limit=performance.now()+2500;let previous='',stableSince=performance.now();
     while(performance.now()<limit){
       const signature=JSON.stringify([...document.querySelectorAll('[role="heading"],[role="button"],[tabindex],input,[style*="opacity"],[style*="transform"]')].map(el=>{const r=el.getBoundingClientRect();return [Math.round(r.x*10),Math.round(r.y*10),Math.round(r.width*10),Math.round(r.height*10),getComputedStyle(el).opacity];}));
@@ -296,7 +296,7 @@ try {
     assert.equal(await s.page.getByLabel('Departure time in 24-hour format').inputValue(),'');
     assert.equal(await s.page.getByLabel('Bus operator name').inputValue(),'');
     // Wait for finite dialog transitions so the proof is the settled UI, not a fade frame.
-    await s.page.evaluate(async () => { await Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined))); });
+    await s.page.evaluate(async () => { await Promise.race([Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => undefined))),new Promise(resolve=>setTimeout(resolve,2000))]); });
     await takeShot(s.page,'empty-search-form.png');
     await s.page.getByLabel('Departure time in 24-hour format').fill('09:45');
     await s.page.getByLabel('Bus operator name').fill('Empty search fixture bus');
@@ -480,7 +480,7 @@ try {
     const h=await session(0,false,'home');await h.page.getByRole('button',{name:'My routes',exact:true}).click();await h.page.getByRole('heading',{name:'My routes',exact:true}).waitFor();
     const card=h.page.getByText('History browser bus · 08:30',{exact:true}).locator('..');await card.getByRole('button',{name:'Add details',exact:true}).waitFor();
     assert.equal(await h.page.getByRole('heading',{name:'Report a journey',exact:true}).count(),0);
-    await h.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});
+    await h.page.evaluate(async()=>{await Promise.race([Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined))),new Promise(resolve=>setTimeout(resolve,2000))]);});
     await takeShot(h.page,'my-routes.png');
     await card.getByRole('button',{name:'Add details',exact:true}).click();await h.page.getByText('Your submitted route',{exact:true}).waitFor();
     await h.page.getByRole('checkbox',{name:'Fare',exact:true}).click();
@@ -523,7 +523,7 @@ try {
   async function seedPublic(name,time){const response=await fetch('http://127.0.0.1:5000/api/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':users[0]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:publicCities[0],destinationCityId:publicCities[1],departureTime:time,operator:{name}}},observations:[]})});assert.equal(response.status,200);return await response.json();}
   const publicA=await seedPublic('Public popup A','08:30'),publicB=await seedPublic('Public popup B','14:00'),publicC=await seedPublic('Road Wolf','07:00');
   async function publicSearch(s){await s.page.getByText('Search for a route',{exact:true}).waitFor();for(const[label,name]of[['From city','Bulawayo'],['To city','Gweru']]){await s.page.getByText(label,{exact:true}).click();await s.page.getByPlaceholder('Type a city name…',{exact:true}).fill(name);await s.page.getByText(name,{exact:true}).click();}await s.page.getByText('Search Routes',{exact:true}).click();}
-  async function publicShot(s,name){await s.page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>undefined)));});await takeShot(s.page,name);}
+  async function publicShot(s,name){await takeShot(s.page,name);}
   async function openPublic(s,name='Public popup A',time='08:30'){await s.page.getByRole('button',{name:'Open route report '+name+' '+time,exact:true}).click();await s.page.getByRole('heading',{name:'Route report',exact:true}).waitFor();await s.page.getByRole('heading',{name:'Route report',exact:true}).locator('..').locator('..').getByText(name,{exact:true}).waitFor();}
   {
    const s=await session(1,true,'search');await publicSearch(s);await s.page.getByRole('button',{name:'Open route report Public popup B 14:00',exact:true}).waitFor();await publicShot(s,'public-search.png');await openPublic(s);await s.page.getByRole('heading',{name:'Route report',exact:true}).locator('..').locator('..').getByText('Days not confirmed',{exact:true}).waitFor();assert.equal(s.posts(),0);await publicShot(s,'public-route-detail.png');
