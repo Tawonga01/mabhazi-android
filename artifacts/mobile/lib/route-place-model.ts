@@ -1,8 +1,10 @@
 import type { V2RouteContributionContext, V2RouteObservationRequest, V2RoutePlaceObservation } from '@workspace/api-client-react';
 import { validDate } from './actual-journey-model';
+import { validPickupQuestion, type PickupQuestionDraft } from './pickup-question-model';
 export type PlaceKind = 'pickup' | 'dropoff';
 export interface PlaceAnswer { name: string; instructions: string; date: string; knowledge: '' | NonNullable<V2RoutePlaceObservation['knowledgeBasis']> }
 export interface PlaceDraft {
+  question?: PickupQuestionDraft;
   route: (V2RouteContributionContext & { ownerId: string }) | null;
   entrySurface: V2RouteObservationRequest['entrySurface']; needsContextRefresh: boolean;
   selected: PlaceKind[]; pickup: PlaceAnswer; dropoff: PlaceAnswer;
@@ -16,6 +18,7 @@ export function placeErrors(d: PlaceDraft): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!d.route || d.needsContextRefresh) errors.route = 'Check the route before saving.';
   if (!d.selected.length) errors.selected = 'Choose pickup, drop-off, or both.';
+  if (d.question && (!validPickupQuestion(d.question, d) || d.question.phase !== 'answer' || d.selected.length !== 1 || d.selected[0] !== 'pickup' || d.question.events.some(e => !e.sent))) errors.question = 'Finish this question step before saving.';
   for (const k of d.selected) {
     if (!d[k].name.trim() || d[k].name.trim().length > 200) errors[k + '.name'] = 'Name the station, rank or landmark.';
     if (d[k].instructions.trim().length > 500) errors[k + '.instructions'] = 'Keep directions within 500 characters.';
@@ -37,6 +40,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function validPlaceDraft(value: unknown): value is PlaceDraft {
   if (!value || typeof value !== 'object') return false;
   const d = value as PlaceDraft;
+  if (d.question !== undefined && !validPickupQuestion(d.question, d)) return false;
   if (!['contribute_tab','search_result','route_detail','own_contribution'].includes(d.entrySurface) || typeof d.needsContextRefresh !== 'boolean' || !Array.isArray(d.selected) || d.selected.length > 2 || new Set(d.selected).size !== d.selected.length || d.selected.some(k => !['pickup','dropoff'].includes(k))) return false;
   for (const k of ['pickup','dropoff'] as const) {
     const a = d[k];

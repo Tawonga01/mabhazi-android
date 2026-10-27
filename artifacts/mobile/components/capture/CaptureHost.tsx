@@ -45,9 +45,9 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
     if(active?.kind!=='public_route'||auth.user?.id!==route.ownerId)return;
     frame.current=null;setActive({kind:'journey',entrySurface:'route_detail',route,...(fare?{initialFact:'fare' as const}:{}),id:Crypto.randomUUID()});
   }
-  function placeFollowUp(route: CaptureRouteContext) {
+  function placeFollowUp(route: CaptureRouteContext, questionMode = false) {
     if (!active || !['history','public_route'].includes(active.kind) || auth.user?.id !== route.ownerId) return;
-    frame.current = null; setActive({ kind: 'places', route, entrySurface: route.source === 'public' ? 'route_detail' : 'own_contribution', id: Crypto.randomUUID() });
+    frame.current = null; setActive({ kind: 'places', route, questionMode, entrySurface: route.source === 'public' ? 'route_detail' : 'own_contribution', id: Crypto.randomUUID() });
   }
   function openFullForm() {
     const prefill = active?.kind === 'route' ? active.prefill : undefined;
@@ -64,7 +64,7 @@ export function CaptureHost({ children }: { children: React.ReactNode }) {
       <SafeAreaProvider>
         <CaptureFrameContext.Provider value={presentation}>
           {active.kind === 'public_route' ? <PublicRouteDetail key={active.id+(auth.user?.id??'guest')} subjectId={active.subjectId} onClose={dismiss} onContribute={publicFollowUp} onPlaces={placeFollowUp}/>
-            :active.kind === 'places' ? <RoutePlaceForm key={active.id} route={active.route} entrySurface={active.entrySurface} onClose={dismiss}/>
+            :active.kind === 'places' ? <RoutePlaceForm key={active.id} route={active.route} questionMode={active.questionMode} entrySurface={active.entrySurface} onClose={dismiss}/>
             :active.kind === 'public_blocks' ? <RouteBlocks key={active.id+(auth.user?.id??'guest')} onClose={dismiss}/>
             :active.kind === 'route'
             ? <MinimumLeadForm key={active.id} entrySurface={active.entrySurface} prefill={active.prefill} onFollowUp={followUp} onClose={dismiss} openFullForm={openFullForm} />

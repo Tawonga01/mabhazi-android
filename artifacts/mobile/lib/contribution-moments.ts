@@ -9,7 +9,7 @@ export interface RoutePrefill {
 }
 export type CaptureRequest =
   | { kind: 'history' }
-  | { kind: 'places'; route?: CaptureRouteContext; entrySurface: 'contribute_tab' | 'route_detail' | 'own_contribution' }
+  | { kind: 'places'; route?: CaptureRouteContext; questionMode?: boolean; entrySurface: 'contribute_tab' | 'route_detail' | 'own_contribution' }
   | { kind: 'public_route'; subjectId: string }
   | { kind: 'public_blocks' }
   | { kind: 'journey'; entrySurface: 'search_result' | 'route_detail'; route: PublicRouteContext; initialFact?: 'fare' }

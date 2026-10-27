@@ -20,7 +20,8 @@ export interface CaptureOptions<D, R> {
   empty(): D; errors(draft: D): Record<string, string>; prepare(draft: D, key: string): R;
   hasAnswers(draft: D): boolean; store: CaptureStore<D, R>;
   capability: 'minimumLeadEnabled' | 'actualJourneyEnabled' | 'routeObservationsEnabled';
-  submit(request: R, options: { signal: AbortSignal; headers: Record<string, string> }): Promise<V2LeadReceipt>;
+  submit(request: R, options: { signal: AbortSignal; headers: Record<string, string> }, draft: D): Promise<V2LeadReceipt>;
+  recovered?(draft: D, options: { signal: AbortSignal; headers: Record<string, string> }): Promise<unknown>;
 }
 /** Shared explicit review/submit lifecycle; no autosubmit on login, resume or Terms. */
 export function useCapture<D, R extends { clientSubmissionId: string }>(owner: string | null, options: CaptureOptions<D, R>) {
@@ -62,6 +63,19 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
     if (pending || busy) return;
     updatedAt.current = Date.now(); setDraft(next); setErrors({}); setMessage(''); setReviewing(false);
   }
+  /** Persist metadata before an external reservation or feedback write. */
+  async function checkpoint(next: D) {
+    if (!active() || !ready || resume || pending || receipt || busyRef.current) return false;
+    busyRef.current = true; setBusy(true);
+    try {
+      const time = Date.now();
+      await options.store.write({ version: 1, owner, updatedAt: time, draft: next });
+      if (!active()) return false;
+      updatedAt.current = time; setDraft(next); setErrors({}); setMessage(''); setReviewing(false); setStorageError('');
+      return true;
+    } catch { if (active()) setStorageError('Could not keep this step securely. Nothing new was sent. Try again.'); return false; }
+    finally { busyRef.current = false; if (active()) setBusy(false); }
+  }
   function review() {
     const validation = options.errors(draft); setErrors(validation);
     if (Object.keys(validation).length) { setMessage('Check the marked answers.'); return Object.keys(validation)[0]; }
@@ -100,8 +114,13 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
       setPending(frozen);
       const headers = { 'X-Mabhazi-Account': owner };
       const result = await recoverOrSubmit(frozen, {
-        lookup: key => boundedRequest(signal => getV2LeadReceipt(key, { signal, headers })),
-        submit: request => boundedRequest(signal => options.submit(request, { signal, headers })),
+        lookup: async key => {
+          const lookup = await boundedRequest(signal => getV2LeadReceipt(key, { signal, headers }));
+          // Auxiliary question state never invalidates an already saved receipt.
+          if (lookup.found && options.recovered && active()) await boundedRequest(signal => options.recovered!(draft, { signal, headers })).catch(() => undefined);
+          return lookup;
+        },
+        submit: request => boundedRequest(signal => options.submit(request, { signal, headers }, draft)),
       }, () => mounted.current ? actor.current : null);
       if (!active()) return;
       setReceipt(result); setPending(undefined);
@@ -169,6 +188,6 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
     finally { busyRef.current = false; if (active()) setBusy(false); }
   }
   function another() { setTargetProblem(false); updatedAt.current = Date.now(); setReceipt(null); setDraft(options.empty()); setErrors({}); setMessage(''); setStorageError(''); setReviewing(false); }
-  return { draft, change, errors, review, reviewing, edit: () => { if (!pending && !busy) setReviewing(false); }, submit, close, ready, resume, resumeDraft, discard,
+  return { draft, change, checkpoint, errors, review, reviewing, edit: () => { if (!pending && !busy) setReviewing(false); }, submit, close, ready, resume, resumeDraft, discard,
     receipt, another, pending, targetProblem, changeRejectedTarget, busy, locked: !!pending || busy, enabled, capabilityBusy, checkCapability, terms, owner, authExpired, message, storageError };
 }
