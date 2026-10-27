@@ -4,6 +4,7 @@ import { getV2PickupQuestion, recordV2PickupQuestionEvent, reserveV2PickupQuesti
 import { useAuth } from './auth';
 import { boundedRequest, useCapture } from './use-capture';
 import { publicSafetyHeaders } from './use-public-routes';
+import { placeDrafts } from './lead-drafts';
 import type { PlaceDraft } from './route-place-model';
 import { acceptPickupQuestion, acknowledgePickupEvent, independentPlaces, queuePickupEvent, reservationFor } from './pickup-question-model';
 
@@ -11,7 +12,7 @@ type Capture = ReturnType<typeof useCapture<PlaceDraft, V2RouteObservationReques
 export function usePickupQuestion(c: Capture, blocked: Set<string>, safetyReady: boolean) {
   const auth = useAuth(), owner = c.owner, actor = useRef(owner); actor.current = auth.user?.id ?? null;
   const mounted = useRef(true), busyRef = useRef(false), checked = useRef('');
-  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [checking, setChecking] = useState(false), [authNeeded, setAuthNeeded] = useState(false);
   const current = () => mounted.current && actor.current === owner;
   const d = c.draft, q = d.question;
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -20,6 +21,7 @@ export function usePickupQuestion(c: Capture, blocked: Set<string>, safetyReady:
     busyRef.current = true; setBusy(true); setError('');
     try { await work(); }
     catch (cause) {
+      if (current() && (cause as { status?: number }).status === 401) setAuthNeeded(true);
       if (current()) setError((cause as { status?: number }).status === 401 ? 'Sign in again to continue this question. Your draft is kept.' : 'This step could not be confirmed. Your answers and retry reference are kept.');
     } finally { busyRef.current = false; if (current()) setBusy(false); }
   }
@@ -59,15 +61,24 @@ export function usePickupQuestion(c: Capture, blocked: Set<string>, safetyReady:
   async function retryFeedback() { await run(async () => { await flush(d); }); }
   async function independent() {
     await run(async () => {
-      // Never discard an unacknowledged feedback action on the way to a report.
-      const next = await flush(d);
+      // A terminal/unavailable question must not remove access to manual help.
+      // No possibly committed answer can reach this path (run guards pending).
+      const next = q?.phase === 'none' || q?.phase === 'ended' ? d : await flush(d);
       if (current()) await c.checkpoint(independentPlaces(next));
+    });
+  }
+  async function login() { await run(async () => { if (!await c.checkpoint(d) || !current()) return; await auth.login(); if (current()) setAuthNeeded(false); }); }
+  async function finish(onClose: () => void) {
+    await run(async () => {
+      const hasAnswers = [d.pickup,d.dropoff].some(a => !!(a.name || a.instructions || a.date || a.knowledge));
+      if (!hasAnswers && !q?.events.some(e => !e.sent)) { await placeDrafts.remove(owner); if (current()) onClose(); }
+      else await c.close(onClose);
     });
   }
   // This effect follows an actual offered render, not a reservation response.
   useEffect(() => {
     if (c.ready && !c.resume && !c.pending && !c.receipt && q?.phase === 'offered' && !q.events.some(e => e.outcome === 'shown') && !busyRef.current && !c.busy && safetyReady) void feedback('shown');
-  }, [c.ready, c.resume, c.pending, c.receipt, c.busy, q?.phase, q?.invitationId, safetyReady]);
+  }, [c.ready, c.resume, c.pending, c.receipt, c.busy, busy, q?.phase, q?.invitationId, safetyReady]);
   // A resumed invitation is checked without consuming a new invitation or key.
   useEffect(() => {
     if (!c.ready || c.resume || c.pending || c.receipt || !q?.invitationId || !safetyReady || checked.current === q.invitationId || busyRef.current) return;
@@ -83,5 +94,5 @@ export function usePickupQuestion(c: Capture, blocked: Set<string>, safetyReady:
     }).catch(() => { if (alive && current()) setError('This question could not be checked. Your draft is kept.'); }).finally(() => { if (alive && current()) setChecking(false); });
     return () => { alive = false; };
   }, [c.ready, c.resume, c.pending, c.receipt, q?.invitationId, safetyReady, busy]);
-  return { busy: busy || checking, error, reserve, feedback, retryFeedback, independent, pendingFeedback: !!q?.events.some(e => !e.sent) };
+  return { busy: busy || checking, error, reserve, feedback, retryFeedback, independent, finish, authNeeded, login, pendingFeedback: !!q?.events.some(e => !e.sent) };
 }

@@ -135,6 +135,7 @@ export function useCapture<D, R extends { clientSubmissionId: string }>(owner: s
       else if (problem.status === 401) { setAuthExpired(true); setMessage('Sign in again with this account to check its saved receipt. Your answers are kept.'); }
       else if (problem.status === 422) { setPending(undefined); setReviewing(false); setMessage(problem.data?.error ?? 'The server rejected these answers. Review and correct them.'); }
       else if (problem.data?.code === 'ACCOUNT_CHANGED' || problem.message === 'ACCOUNT_CHANGED') setMessage('The active account changed. Reopen your own draft before continuing.');
+      else if (problem.data?.code === 'QUESTION_CHANGED' || problem.data?.code === 'QUESTION_UNAVAILABLE') { setTargetProblem(true); setMessage('This question changed or closed. Your location answers are kept. Check the route before saving them separately.'); }
       else if (problem.data?.code === 'TARGET_NOT_FOUND' || problem.data?.code === 'TARGET_IDENTITY_CHANGED') { setTargetProblem(true); setMessage('The selected route changed or is unavailable. Your report is kept.'); }
       else if (problem.status === 409) setMessage('This reference has different saved answers. Keep this reference and check its receipt before starting another entry.');
       else setMessage('Save not confirmed. Keep this draft and use Check and retry; it checks for a saved receipt before sending the same answers.');
