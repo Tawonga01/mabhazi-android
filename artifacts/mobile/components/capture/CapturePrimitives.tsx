@@ -29,7 +29,7 @@ export const captureStyles = StyleSheet.create({
   disabled: { opacity: 0.5 }, reviewValue: {fontFamily: ui.type.medium,  color: ui.color.ink, fontSize: 17, lineHeight: 24 },
 });
 const s = captureStyles;
-export function CaptureFrame({ title, children, footer, onClose, busy = false, phase = '', closeLabel = 'Close form and keep draft', appearance='form' }: { title: string; appearance?:'form'|'route'|'entry'; closeLabel?: string; children: React.ReactNode; footer?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
+export function CaptureFrame({ title, children, footer, fixedContent, onClose, busy = false, phase = '', closeLabel = 'Close form and keep draft', appearance='form' }: { title: string; appearance?:'form'|'route'|'entry'; closeLabel?: string; children: React.ReactNode; footer?: React.ReactNode; fixedContent?: React.ReactNode; onClose?(): void; busy?: boolean; phase?: string }) {
   const insets = useSafeAreaInsets(), body = useRef<ScrollView>(null), presentation = useContext(CaptureFrameContext);
   useEffect(() => presentation?.register(onClose, busy), [presentation, onClose, busy]);
   useEffect(() => { body.current?.scrollTo({ y: 0, animated: false }); }, [phase]);
@@ -38,13 +38,15 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
     const listener = BackHandler.addEventListener('hardwareBackPress', () => { if (!busy) onClose(); return true; });
     return () => listener.remove();
   }, [onClose, busy, presentation]));
-  // A root modal owns its system inset; a tab screen already has the Android inset.
+  // The modal frame starts at window origin; its safe padding is already in
+  // the child layout y. Do not add the status-bar inset a second time.
   return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: presentation?.overlay ? insets.bottom + 12 : Platform.OS === 'web' ? 96 : 12 }]}>
-    <FormKeyboardView style={s.avoid}>
+    <FormKeyboardView modal={!!presentation?.overlay} keyboardVerticalOffset={0} style={s.avoid}>
       <View style={[s.panel,appearance!=='form'&&{backgroundColor:'#102744'}]}>
         <View style={[s.header,appearance!=='form'&&{borderBottomWidth:0,paddingBottom:0}]}><Text accessibilityRole="header" style={[s.title,{flex:1},appearance!=='form'&&{fontSize:16,fontWeight:'500',color:'#B6C5D8'}]}>{title}</Text>
           {onClose ? <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} disabled={busy} onPress={onClose} style={[s.close,appearance!=='form'&&{backgroundColor:'#233B57',borderRadius:22},busy&&s.disabled]}><Feather name="x" size={22} color={appearance!=='form'?'#DDE7F1':'#24476A'} /></Pressable> : null}
         </View>
+        {fixedContent ? <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>{fixedContent}</View> : null}
         <ScrollView ref={body} style={{ flexShrink: 1 }} contentContainerStyle={[s.body,appearance!=='form'&&{paddingTop:18,gap:24}]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{children}</ScrollView>
         {footer ? <View style={[s.footer,appearance!=='form'&&{borderTopWidth:0,backgroundColor:'#102744',paddingTop:6}]}>{footer}</View> : null}
       </View>
@@ -88,8 +90,7 @@ export function CityPicker({ title, close, select, initialQuery = '' }: { title:
     return () => { alive = false; clearTimeout(timer); clearTimeout(timeout); controller.abort(); };
   }, [search, retry]);
   const dismiss = () => { Keyboard.dismiss(); close(); };
-  return <CapturePickerModal title={title} closeLabel="Close city search" onClose={dismiss}>
-        <CaptureInput autoFocus accessibilityLabel="Search cities" placeholder="Search a city" value={search} maxLength={80} returnKeyType="search" onChangeText={setSearch} />
+  return <CapturePickerModal title={title} closeLabel="Close city search" onClose={dismiss} input={<CaptureInput autoFocus accessibilityLabel="Search cities" placeholder="Search a city" value={search} maxLength={80} returnKeyType="search" onChangeText={setSearch} />}>
         {busy ? <ActivityIndicator accessibilityLabel="Searching cities" /> : null}
         {error ? <><Text accessibilityRole="alert" style={s.error}>{error}</Text><CaptureButton title="Try city search again" secondary onPress={() => setRetry(v => v + 1)} /></> : null}
         {!busy && !error && !cities.length ? <Text style={s.note}>No matching city. Try a different spelling.</Text> : null}
@@ -98,10 +99,10 @@ export function CityPicker({ title, close, select, initialQuery = '' }: { title:
 }
 // A nested picker must not replace the parent form's Android Back/draft owner.
 const pickerPresentation = { overlay: true, register: () => () => {} };
-export function CapturePickerModal({title,closeLabel,onClose,children}:{title:string;closeLabel:string;onClose():void;children:React.ReactNode}) {
+export function CapturePickerModal({title,closeLabel,onClose,children,input}:{title:string;closeLabel:string;onClose():void;children:React.ReactNode;input?:React.ReactNode}) {
   return <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
     <CaptureFrameContext.Provider value={pickerPresentation}>
-      <CaptureFrame title={title} closeLabel={closeLabel} onClose={onClose} phase="picker">{children}</CaptureFrame>
+      <CaptureFrame title={title} closeLabel={closeLabel} onClose={onClose} phase="picker" fixedContent={input}>{children}</CaptureFrame>
     </CaptureFrameContext.Provider>
   </Modal>;
 }

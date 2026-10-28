@@ -58,8 +58,7 @@ export default function DeparturesScreen() {
         </Pressable>}/>
     }
     {data?.hasHiddenRoutes&&items.length?<Text style={s.hidden}>Some routes are hidden by your settings.</Text>:null}
-    {pickerOpen?<CapturePickerModal title="Departure city" closeLabel="Close departure cities" onClose={closePicker}>
-      <CaptureInput accessibilityLabel="Search available departure cities" placeholder="Search available cities" value={search} onChangeText={setSearch} maxLength={80} autoFocus returnKeyType="search"/>
+    {pickerOpen?<CapturePickerModal title="Departure city" closeLabel="Close departure cities" onClose={closePicker} input={<CaptureInput accessibilityLabel="Search available departure cities" placeholder="Search available cities" value={search} onChangeText={setSearch} maxLength={80} autoFocus returnKeyType="search"/>}>
       {!filtered.length?<Text style={captureStyles.note}>No available city matches.</Text>:null}
       {filtered.map(city=><Pressable accessibilityRole="button" accessibilityLabel={'Departures from '+city.name} accessibilityState={{selected:city.key===data?.selectedOriginKey}} key={city.key} onPress={()=>{closePicker();setOriginKey(city.key);}} style={s.cityChoice}>
         <View style={{flex:1,gap:5}}><Text style={captureStyles.reviewValue}>{city.name}</Text>{origins.filter(c=>c.name.toLocaleLowerCase()===city.name.toLocaleLowerCase()).length>1?<Text style={captureStyles.note}>{city.hasCommunityReports?'Route reports':'Reported schedules'}</Text>:null}</View>{city.key===data?.selectedOriginKey?<Feather name="check" size={20} color="#24476A"/>:null}

@@ -1,321 +1,49 @@
-import { FormKeyboardView } from './FormKeyboardView';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Keyboard, Pressable, Text, View } from 'react-native';
+import { useListV2Cities, useListBusCompanies, getListV2CitiesQueryKey, getListBusCompaniesQueryKey, type V2City } from '@workspace/api-client-react';
+import { CaptureButton, CaptureInput, CapturePickerModal, captureStyles as s } from './capture/CapturePrimitives';
 import { ui } from '@/constants/ui';
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Keyboard,
-  StyleSheet,
-  Platform,
-  Animated,
-  Dimensions,
-} from "react-native";
-import { Feather } from "@/components/VectorIcon";
-import { useColors } from "@/hooks/useColors";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  useListV2Cities,
-  type V2City,
-  useListBusCompanies,
-  getListV2CitiesQueryKey,
-  getListBusCompaniesQueryKey,
-} from "@workspace/api-client-react";
 
 export interface SearchModalProps {
   visible: boolean;
-  onClose: () => void;
-  onSelect: (value: string) => void;
-  onSelectCity?: (city: V2City | null) => void;
+  onClose(): void;
+  onSelect(value: string): void;
+  onSelectCity?(city: V2City | null): void;
   title: string;
-  mode: "city" | "company";
+  mode: 'city' | 'company';
 }
-
-const { height: SCREEN_H } = Dimensions.get("window");
-
-export function SearchModal({
-  visible,
-  onClose,
-  onSelect,
-  onSelectCity,
-  title,
-  mode,
-}: SearchModalProps) {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+/** Same safe dialog and keyboard boundary as route capture. The search input
+ * stays fixed; only results scroll. No bottom-sheet animation competes with IME. */
+export function SearchModal({ visible, onClose, onSelect, onSelectCity, title, mode }: SearchModalProps) {
+  const [query, setQuery] = useState(''), [debouncedQuery, setDebouncedQuery] = useState('');
   const [isDismissing, setIsDismissing] = useState(false);
-  const inputRef = useRef<TextInput>(null);
-
-  const translateY = useRef(new Animated.Value(SCREEN_H)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 300);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  useEffect(() => {
-    if (visible) {
-      setIsDismissing(false);
-      setQuery("");
-      setDebouncedQuery("");
-      opacity.setValue(0);
-      translateY.setValue(SCREEN_H);
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: Platform.OS !== "web" }),
-        Animated.spring(translateY, {
-          toValue: 0,
-          tension: 65,
-          friction: 11,
-          useNativeDriver: Platform.OS !== "web",
-        }),
-      ]).start(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, [visible, translateY, opacity]);
-
+  useEffect(() => { const timer = setTimeout(() => setDebouncedQuery(query), 300); return () => clearTimeout(timer); }, [query]);
+  useEffect(() => { if (visible) { setIsDismissing(false); setQuery(''); setDebouncedQuery(''); } }, [visible]);
   const cityParams = { q: debouncedQuery || undefined };
-  const { data: citiesData, isLoading: citiesLoading } = useListV2Cities(
-    cityParams,
-    {
-      query: {
-        queryKey: getListV2CitiesQueryKey(cityParams),
-        enabled: mode === "city" && visible && debouncedQuery.length >= 2,
-        staleTime: 60 * 1000,
-      },
-    },
-  );
-
-  const { data: companiesData } = useListBusCompanies({
-    query: {
-      queryKey: getListBusCompaniesQueryKey(),
-      enabled: mode === "company" && visible,
-      staleTime: 5 * 60 * 1000,
-    },
-  });
-
-  const suggestions: { name: string; city?: V2City }[] =
-    mode === "city"
-      ? (citiesData?.cities ?? []).map(city => ({ name: city.name, city }))
-      : (companiesData?.companies ?? [])
-          .filter((c) => !query || c.name.toLowerCase().includes(query.toLowerCase()))
-          .map((c) => ({ name: c.name }));
-
-  const isLoading = mode === "city" && citiesLoading && debouncedQuery.length >= 2;
-
-  const handleClose = useCallback(() => {
+  const cities = useListV2Cities(cityParams, { query: { queryKey: getListV2CitiesQueryKey(cityParams), enabled: mode === 'city' && visible && debouncedQuery.length >= 2, retry: false, staleTime: 60_000 } });
+  const companies = useListBusCompanies({ query: { queryKey: getListBusCompaniesQueryKey(), enabled: mode === 'company' && visible, retry: false, staleTime: 300_000 } });
+  const current = mode === 'city' ? cities : companies;
+  const searching = mode === 'city' && query !== debouncedQuery;
+  const pending = searching || current.isLoading && (mode === 'company' || debouncedQuery.length >= 2);
+  const failed = current.isError && !searching && (mode === 'company' || debouncedQuery.length >= 2);
+  const suggestions: { name: string; city?: V2City }[] = mode === 'city'
+    ? (cities.data?.cities ?? []).map(city => ({ name: city.name, city }))
+    : (companies.data?.companies ?? []).filter(c => !query || c.name.toLowerCase().includes(query.toLowerCase())).map(c => ({ name: c.name }));
+  const close = useCallback(() => { if (isDismissing) return; setIsDismissing(true); Keyboard.dismiss(); onClose(); }, [isDismissing, onClose]);
+  const select = useCallback((value: string, city: V2City | null = null) => {
     if (isDismissing) return;
-    setIsDismissing(true);
-    Keyboard.dismiss();
-    onClose();
-  }, [isDismissing, onClose]);
-
-  const handleSelect = useCallback(
-    (value: string, city: V2City | null = null) => {
-      if (isDismissing) return;
-      setIsDismissing(true);
-      Keyboard.dismiss();
-      onClose();
-      requestAnimationFrame(() => { onSelectCity?.(city); onSelect(value); });
-    },
-    [isDismissing, onSelect, onSelectCity, onClose],
-  );
-
-  const handleCustom = useCallback(() => {
-    if (query.trim().length >= 2) handleSelect(query.trim());
-  }, [query, handleSelect]);
-
+    setIsDismissing(true); Keyboard.dismiss(); onClose();
+    requestAnimationFrame(() => { onSelectCity?.(city); onSelect(value); });
+  }, [isDismissing, onClose, onSelectCity, onSelect]);
+  const custom = () => { if (query.trim().length >= 2) select(query.trim()); };
   if (!visible || isDismissing) return null;
-
-  const iconName: React.ComponentProps<typeof Feather>["name"] = mode === "city" ? "map-pin" : "truck";
-
-  return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      onRequestClose={handleClose}
-      statusBarTranslucent
-    >
-      <FormKeyboardView style={styles.backdrop}>
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.4)", opacity }]}>
-            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.card,
-              transform: [{ translateY }],
-              paddingBottom: Platform.OS === "ios" ? insets.bottom : 24,
-            },
-          ]}
-        >
-          <View style={styles.grabberWrap}>
-            <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-          </View>
-
-          <View style={styles.header}>
-            <View style={styles.titleRow}>
-              <View style={[styles.iconWrap, { backgroundColor: colors.secondary }]}>
-                <Feather name={iconName} size={16} color={colors.primary} />
-              </View>
-              <Text style={[styles.headerTitle, { color: colors.foreground }]}>{title}</Text>
-            </View>
-            <TouchableOpacity onPress={handleClose} style={[styles.closeBtn, { backgroundColor: colors.secondary }]}>
-              <Feather name="x" size={16} color={colors.foreground} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.searchBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <Feather name="search" size={16} color={colors.mutedForeground} />
-            <TextInput
-              ref={inputRef}
-              style={[styles.searchInput, { color: colors.foreground }]}
-              placeholder={mode === "city" ? "Type a city name…" : "Type to filter companies…"}
-              placeholderTextColor={colors.mutedForeground}
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={handleCustom}
-            />
-            {query.length > 0 && (
-              <TouchableOpacity onPress={() => setQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Feather name="x-circle" size={16} color={colors.mutedForeground} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {isLoading ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          ) : (
-            <FlatList
-              data={suggestions}
-              keyExtractor={(item, i) => `${item.city?.id ?? item.name}-${i}`}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 20 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.item, { borderBottomColor: colors.border }]}
-                  onPress={() => handleSelect(item.name, item.city ?? null)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.itemIcon, { backgroundColor: colors.secondary }]}>
-                    <Feather name={iconName} size={14} color={colors.primary} />
-                  </View>
-                  <Text style={[styles.itemText, { color: colors.foreground }]}>{item.name}</Text>
-                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <View style={styles.empty}>
-                  {mode === "city" && debouncedQuery.length < 2 ? (
-                    <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                      Type at least 2 letters to search
-                    </Text>
-                  ) : (
-                    <>
-                      <View style={[styles.emptyIcon, { backgroundColor: colors.secondary }]}>
-                         <Feather name="inbox" size={24} color={colors.primary} />
-                      </View>
-                      <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                        No {mode === "city" ? "cities" : "companies"} found
-                        {query ? ` for "${query}"` : ""}
-                      </Text>
-                      {query.trim().length >= 2 && (
-                        <TouchableOpacity style={[styles.useCustomBtn, { backgroundColor: colors.primary }]} onPress={handleCustom}>
-                          <Feather name="plus" size={14} color={colors.primaryForeground} />
-                          <Text style={[styles.useCustomText, { color: colors.primaryForeground }]}>
-                            Use "{query.trim()}"
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  )}
-                </View>
-              }
-            />
-          )}
-        </Animated.View>
-      </FormKeyboardView>
-    </Modal>
-  );
+  return <CapturePickerModal title={title} closeLabel={mode === 'city' ? 'Close city search' : 'Close operator search'} onClose={close}
+    input={<CaptureInput autoFocus accessibilityLabel={mode === 'city' ? 'Search cities' : 'Search operators'} placeholder={mode === 'city' ? 'Type a city name…' : 'Type to filter companies…'} value={query} onChangeText={setQuery} maxLength={mode === 'city' ? 80 : 160} autoCapitalize="words" returnKeyType="search" onSubmitEditing={custom}/>}
+  >
+    {pending ? <ActivityIndicator accessibilityLabel={mode === 'city' ? 'Searching cities' : 'Searching operators'} color={ui.color.navy}/> : null}
+    {failed ? <View style={{gap:12}}><Text accessibilityRole="alert" style={s.error}>{mode === 'city' ? 'City search could not load.' : 'Operator search could not load.'}</Text><CaptureButton title={mode === 'city' ? 'Try city search again' : 'Try operator search again'} secondary onPress={() => void current.refetch()}/></View> : null}
+    {!pending && !failed && mode === 'city' && debouncedQuery.length < 2 ? <Text style={s.note}>Type at least 2 letters to search</Text> : null}
+    {!pending && !failed ? suggestions.map((item, i) => <Pressable accessibilityRole="button" accessibilityLabel={item.city ? item.name + ', ' + item.city.placeType : item.name} key={item.city?.id ?? item.name + i} onPress={() => select(item.name, item.city ?? null)} style={{paddingVertical:16,minHeight:56,borderBottomWidth:1,borderColor:ui.color.border,gap:4}}><Text style={s.reviewValue}>{item.name}</Text>{item.city ? <Text style={s.note}>{item.city.placeType}</Text> : null}</Pressable>) : null}
+    {!pending && !failed && !suggestions.length && (mode === 'company' || debouncedQuery.length >= 2) ? <View style={{gap:12}}><Text style={s.note}>No {mode === 'city' ? 'cities' : 'companies'} found{query ? ' for "' + query + '"' : ''}</Text>{query.trim().length >= 2 ? <CaptureButton title={'Use "' + query.trim() + '"'} secondary onPress={custom}/> : null}</View> : null}
+  </CapturePickerModal>;
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    maxHeight: "85%",
-    minHeight: "50%",
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 16 },
-      android: { elevation: 16 },
-    }),
-  },
-  grabberWrap: { alignItems: "center", paddingTop: 12, paddingBottom: 8 },
-  grabber: { width: 40, height: 4, borderRadius: 2 },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconWrap: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 23, fontFamily: ui.type.bold },
-  closeBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  searchInput: { flex: 1, fontSize: 16, fontFamily: ui.type.medium },
-  centerBox: { padding: 40, alignItems: "center" },
-  item: {minHeight: 56, 
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  itemIcon: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  itemText: { fontSize: 16, fontFamily: ui.type.medium, flex: 1 },
-  empty: { padding: 40, alignItems: "center", gap: 12 },
-  emptyIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 8 },
-  emptyText: { fontSize: 15, textAlign: "center", fontFamily: ui.type.regular },
-  useCustomBtn: {minHeight: 48, 
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  useCustomText: { fontSize: 15, fontFamily: ui.type.semibold },
-});
