@@ -42,7 +42,7 @@ export default function DeparturesScreen() {
           <Text style={s.city} numberOfLines={2}>{selected?.name??(busy?'Loading cities…':'Choose a city')}</Text><Feather name="chevron-down" size={22} color="#DDE7F1"/>
         </Pressable>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Refresh departure board" disabled={busy} onPress={()=>void query.refetch()} style={s.refresh}><Feather name="refresh-cw" size={20} color="#DDE7F1"/></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Refresh departure board" disabled={busy} onPress={()=>void query.refetch()} style={s.refresh}><Feather name="rotate-ccw" size={20} color="#DDE7F1"/></Pressable>
     </View>
     {selected&&items.length?<View style={s.boardHead}><Text style={s.reported}>Reported times</Text><View style={s.columns}><Text style={[s.column,{width:64}]}>TIME</Text><Text style={[s.column,{flex:1}]}>DESTINATION</Text><Text style={[s.column,{width:104}]}>OPERATOR</Text></View></View>:null}
     {safety.error?<State title="Safety settings could not load."><CaptureButton title="Try safety settings again" secondary onPress={()=>void safety.retryBlockedContributors().catch(()=>undefined)}/></State>:
