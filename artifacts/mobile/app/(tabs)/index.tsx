@@ -299,6 +299,7 @@ export default function SearchScreen() {
             },
           ]}
           pointerEvents={isExpanded ? "none" : "auto"}
+          accessibilityElementsHidden={isExpanded} importantForAccessibility={isExpanded ? "no-hide-descendants" : "auto"} aria-hidden={isExpanded}
         >
           <TouchableOpacity
             style={[styles.compactBarInner, { backgroundColor: "#FFFFFF" }]}
@@ -346,6 +347,7 @@ export default function SearchScreen() {
         <Animated.View
           style={{ height: cardHeight, opacity: cardOpacity, overflow: "hidden" }}
           pointerEvents={isExpanded ? "auto" : "none"}
+          accessibilityElementsHidden={!isExpanded} importantForAccessibility={isExpanded ? "auto" : "no-hide-descendants"} aria-hidden={!isExpanded}
         >
           <View style={styles.searchCard} onLayout={event => setSearchContentHeight(Math.ceil(event.nativeEvent.layout.height))}>
             <View style={styles.inputRow}>
@@ -359,6 +361,8 @@ export default function SearchScreen() {
                   styles.input,
                   { flexDirection: "row", alignItems: "center" },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={fromCity ? `From city: ${fromCity}` : "From city"}
                 onPress={() => setFromCityModal(true)}
                 activeOpacity={0.7}
               >
@@ -418,6 +422,8 @@ export default function SearchScreen() {
                   styles.input,
                   { flexDirection: "row", alignItems: "center" },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={toCity ? `To city: ${toCity}` : "To city"}
                 onPress={() => setToCityModal(true)}
                 activeOpacity={0.7}
               >
