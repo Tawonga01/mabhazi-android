@@ -28,6 +28,7 @@ import type {
   DeleteAccountBody,
   DeleteAccountResult,
   ErrorEnvelope,
+  GetV2DepartureBoardParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   Journey,
@@ -61,6 +62,7 @@ import type {
   V2ActualJourneyRequest,
   V2Capabilities,
   V2Cities,
+  V2DepartureBoard,
   V2ErrorResponse,
   V2LeadReceipt,
   V2MinimumLeadRequest,
@@ -4191,6 +4193,107 @@ export const useDeleteMabhaziAccount = <
 > => {
   return useMutation(getDeleteMabhaziAccountMutationOptions(options));
 };
+
+/**
+ * Origins come from the same moderation and account/device-safe rows as the board. A community clock or legacy schedule is not a canonical timed departure. No countdown or daily recurrence is inferred. An unavailable explicit origin never silently switches cities. No-store; old journey/city APIs are unchanged.
+ * @summary Read visible route origins and their reported schedules from one snapshot
+ */
+export const getGetV2DepartureBoardUrl = (
+  params?: GetV2DepartureBoardParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/departure-board?${stringifiedParams}`
+    : `/api/v2/departure-board`;
+};
+
+export const getV2DepartureBoard = async (
+  params?: GetV2DepartureBoardParams,
+  options?: RequestInit,
+): Promise<V2DepartureBoard> => {
+  return customFetch<V2DepartureBoard>(getGetV2DepartureBoardUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2DepartureBoardQueryKey = (
+  params?: GetV2DepartureBoardParams,
+) => {
+  return [`/api/v2/departure-board`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetV2DepartureBoardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2DepartureBoard>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: GetV2DepartureBoardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2DepartureBoard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2DepartureBoardQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2DepartureBoard>>
+  > = ({ signal }) =>
+    getV2DepartureBoard(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2DepartureBoard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2DepartureBoardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2DepartureBoard>>
+>;
+export type GetV2DepartureBoardQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read visible route origins and their reported schedules from one snapshot
+ */
+
+export function useGetV2DepartureBoard<
+  TData = Awaited<ReturnType<typeof getV2DepartureBoard>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: GetV2DepartureBoardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2DepartureBoard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2DepartureBoardQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Search known cities (OSM-seeded reference data)

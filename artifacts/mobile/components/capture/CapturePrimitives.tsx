@@ -1,6 +1,7 @@
+import { FormKeyboardView } from '@/components/FormKeyboardView';
 import { ui } from '@/constants/ui';
 import React, { forwardRef, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
+import { ActivityIndicator, BackHandler, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { listV2Cities, type V2City } from '@workspace/api-client-react';
@@ -39,7 +40,7 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
   }, [onClose, busy, presentation]));
   // A root modal owns its system inset; a tab screen already has the Android inset.
   return <View style={[s.backdrop, { paddingTop: insets.top + 12, paddingBottom: presentation?.overlay ? insets.bottom + 12 : Platform.OS === 'web' ? 96 : 12 }]}>
-    <KeyboardAvoidingView style={s.avoid} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} enabled={Platform.OS !== 'web'}>
+    <FormKeyboardView style={s.avoid}>
       <View style={[s.panel,appearance!=='form'&&{backgroundColor:'#102744'}]}>
         <View style={[s.header,appearance!=='form'&&{borderBottomWidth:0,paddingBottom:0}]}><Text accessibilityRole="header" style={[s.title,{flex:1},appearance!=='form'&&{fontSize:16,fontWeight:'500',color:'#B6C5D8'}]}>{title}</Text>
           {onClose ? <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} disabled={busy} onPress={onClose} style={[s.close,appearance!=='form'&&{backgroundColor:'#233B57',borderRadius:22},busy&&s.disabled]}><Feather name="x" size={22} color={appearance!=='form'?'#DDE7F1':'#24476A'} /></Pressable> : null}
@@ -47,7 +48,7 @@ export function CaptureFrame({ title, children, footer, onClose, busy = false, p
         <ScrollView ref={body} style={{ flexShrink: 1 }} contentContainerStyle={[s.body,appearance!=='form'&&{paddingTop:18,gap:24}]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}>{children}</ScrollView>
         {footer ? <View style={[s.footer,appearance!=='form'&&{borderTopWidth:0,backgroundColor:'#102744',paddingTop:6}]}>{footer}</View> : null}
       </View>
-    </KeyboardAvoidingView>
+    </FormKeyboardView>
   </View>;
 }
 export function CaptureButton({ title, onPress, disabled = false, busy = false, secondary = false, onDark = false }: { title: string; onPress(): void; disabled?: boolean; busy?: boolean; secondary?: boolean; onDark?:boolean }) {
@@ -73,7 +74,7 @@ export function Choices<T extends string>({ label, value, options, onChange, dis
 }
 export function ReviewRow({ label, value }: { label: string; value: string }) { return <View style={{ gap: 4 }}><Text style={s.label}>{label}</Text><Text style={s.reviewValue}>{value}</Text></View>; }
 export function CityPicker({ title, close, select, initialQuery = '' }: { title: string; close(): void; select(city: V2City): void; initialQuery?: string }) {
-  const insets = useSafeAreaInsets(), [search, setSearch] = useState(initialQuery), [cities, setCities] = useState<V2City[]>([]);
+  const [search, setSearch] = useState(initialQuery), [cities, setCities] = useState<V2City[]>([]);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [retry, setRetry] = useState(0);
   useEffect(() => {
     const controller = new AbortController(); let alive = true;
@@ -86,12 +87,21 @@ export function CityPicker({ title, close, select, initialQuery = '' }: { title:
     }, 250);
     return () => { alive = false; clearTimeout(timer); clearTimeout(timeout); controller.abort(); };
   }, [search, retry]);
-  return <Modal visible animationType="slide" onRequestClose={close}><View style={{ flex: 1, backgroundColor: '#F4F6FA', padding: 22, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16, gap: 12 }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}><Text accessibilityRole="header" style={[s.title, { flex: 1 }]}>{title}</Text><CaptureButton title="Close city search" secondary onPress={close} /></View>
-    <CaptureInput autoFocus accessibilityLabel="Search cities" placeholder="Search a city" value={search} maxLength={80} onChangeText={setSearch} />
-    {busy ? <ActivityIndicator accessibilityLabel="Searching cities" /> : null}
-    {error ? <><Text accessibilityRole="alert" style={s.error}>{error}</Text><CaptureButton title="Try city search again" secondary onPress={() => setRetry(v => v + 1)} /></> : null}
-    {!busy && !error && !cities.length ? <Text style={s.note}>No matching city. Try a different spelling.</Text> : null}
-    <ScrollView keyboardShouldPersistTaps="handled">{cities.map(city => <Pressable key={city.id} accessibilityRole="button" accessibilityLabel={`${city.name}, ${city.placeType}`} style={{paddingVertical:16,borderBottomWidth:1,borderColor:ui.color.border,gap:4,minHeight:56}} onPress={() => select(city)}><Text style={s.label}>{city.name}</Text><Text style={s.note}>{city.placeType}</Text></Pressable>)}</ScrollView>
-  </View></Modal>;
+  const dismiss = () => { Keyboard.dismiss(); close(); };
+  return <CapturePickerModal title={title} closeLabel="Close city search" onClose={dismiss}>
+        <CaptureInput autoFocus accessibilityLabel="Search cities" placeholder="Search a city" value={search} maxLength={80} returnKeyType="search" onChangeText={setSearch} />
+        {busy ? <ActivityIndicator accessibilityLabel="Searching cities" /> : null}
+        {error ? <><Text accessibilityRole="alert" style={s.error}>{error}</Text><CaptureButton title="Try city search again" secondary onPress={() => setRetry(v => v + 1)} /></> : null}
+        {!busy && !error && !cities.length ? <Text style={s.note}>No matching city. Try a different spelling.</Text> : null}
+        {cities.map(city => <Pressable key={city.id} accessibilityRole="button" accessibilityLabel={city.name + ', ' + city.placeType} style={{ paddingVertical: 16, borderBottomWidth: 1, borderColor: ui.color.border, gap: 4, minHeight: 56 }} onPress={() => { Keyboard.dismiss(); select(city); }}><Text style={s.reviewValue}>{city.name}</Text><Text style={s.note}>{city.placeType}</Text></Pressable>)}
+  </CapturePickerModal>;
+}
+// A nested picker must not replace the parent form's Android Back/draft owner.
+const pickerPresentation = { overlay: true, register: () => () => {} };
+export function CapturePickerModal({title,closeLabel,onClose,children}:{title:string;closeLabel:string;onClose():void;children:React.ReactNode}) {
+  return <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={onClose}>
+    <CaptureFrameContext.Provider value={pickerPresentation}>
+      <CaptureFrame title={title} closeLabel={closeLabel} onClose={onClose} phase="picker">{children}</CaptureFrame>
+    </CaptureFrameContext.Provider>
+  </Modal>;
 }

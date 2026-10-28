@@ -2707,6 +2707,76 @@ export const DeleteMabhaziAccountResponse = zod.object({
 });
 
 /**
+ * Origins come from the same moderation and account/device-safe rows as the board. A community clock or legacy schedule is not a canonical timed departure. No countdown or daily recurrence is inferred. An unavailable explicit origin never silently switches cities. No-store; old journey/city APIs are unchanged.
+ * @summary Read visible route origins and their reported schedules from one snapshot
+ */
+export const getV2DepartureBoardQueryOriginKeyMax = 240;
+
+export const getV2DepartureBoardQueryOriginKeyRegExp = new RegExp(
+  "^(city:[1-9][0-9]\*|legacy:.+)$",
+);
+
+export const GetV2DepartureBoardQueryParams = zod.object({
+  originKey: zod.coerce
+    .string()
+    .min(1)
+    .max(getV2DepartureBoardQueryOriginKeyMax)
+    .regex(getV2DepartureBoardQueryOriginKeyRegExp)
+    .optional(),
+});
+
+export const GetV2DepartureBoardHeader = zod.object({
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const getV2DepartureBoardResponseOriginsItemKeyMax = 240;
+
+export const getV2DepartureBoardResponseEntriesItemReportedTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+export const GetV2DepartureBoardResponse = zod.object({
+  origins: zod.array(
+    zod.object({
+      key: zod
+        .string()
+        .min(1)
+        .max(getV2DepartureBoardResponseOriginsItemKeyMax),
+      name: zod.string().min(1),
+      cityId: zod.number().min(1).nullable(),
+      hasCommunityReports: zod.boolean(),
+      hasLegacyRoutes: zod.boolean(),
+    }),
+  ),
+  selectedOriginKey: zod.string().nullable(),
+  selectionUnavailable: zod.boolean(),
+  hasHiddenRoutes: zod.boolean(),
+  entries: zod.array(
+    zod.object({
+      key: zod.string(),
+      kind: zod.enum(["community", "legacy"]),
+      originKey: zod.string(),
+      subjectId: zod.string().uuid().optional(),
+      journeyId: zod.number().min(1).optional(),
+      destination: zod.string().min(1),
+      operator: zod.string().nullish(),
+      reportedTime: zod
+        .string()
+        .regex(getV2DepartureBoardResponseEntriesItemReportedTimeRegExp)
+        .nullish(),
+      scheduledDays: zod.string().nullish(),
+      timedDepartureEligible: zod
+        .boolean()
+        .describe(
+          "False for these original community reports and legacy schedules. Canonical service calendar\/timezone publication remains a separate gate.",
+        ),
+    }),
+  ),
+});
+
+/**
  * @summary Search known cities (OSM-seeded reference data)
  */
 export const ListCitiesQueryParams = zod.object({

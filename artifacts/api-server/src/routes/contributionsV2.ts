@@ -1,3 +1,4 @@
+import departureBoard from './departureBoardV2';
 import pickupQuestions, {pickupQuestionsEnabled} from './pickupQuestionsV2';
 import placeReports, {placeReportsEnabled} from './placeReportsV2';
 import routeObservations, { routeObservationsEnabled } from './routeObservationsV2';
@@ -15,6 +16,7 @@ import fareReports,{fareReportsEnabled} from './fareReportsV2';
 import routeSafety, { parseBlockedIds } from './routeSafetyV2';
 
 const router: IRouter = Router();
+router.use(departureBoard);
 // Orval validates values but currently emits stripping objects and number() for
 // integer schemas. Preserve its generated rules and add the specified strictness.
 const coreSchema = SubmitV2LeadBody.shape.target.shape.newLead;

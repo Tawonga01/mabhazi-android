@@ -1,3 +1,4 @@
+import {registerDepartureBoardTests} from './departureBoardV2.cases';
 import {registerPickupQuestionApiTests} from './pickupQuestionsV2.cases';
 import {registerPlaceReportTests} from './placeReportsV2.cases';
 import { registerRouteObservationApiTests } from './routeObservations.cases';
@@ -244,3 +245,5 @@ registerRouteObservationApiTests(()=>({admin,cities,accounts,tokens,base,request
 registerPlaceReportTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
 
 registerPickupQuestionApiTests(()=>({admin,cities,accounts,tokens,request,leadBody:body}));
+
+registerDepartureBoardTests(()=>({admin,cities,accounts,request,leadBody:body}));

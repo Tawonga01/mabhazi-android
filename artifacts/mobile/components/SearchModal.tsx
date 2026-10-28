@@ -1,3 +1,4 @@
+import { FormKeyboardView } from './FormKeyboardView';
 import { ui } from '@/constants/ui';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -143,7 +144,7 @@ export function SearchModal({
       onRequestClose={handleClose}
       statusBarTranslucent
     >
-      <View style={styles.backdrop}>
+      <FormKeyboardView style={styles.backdrop}>
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.4)", opacity }]}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
         </Animated.View>
@@ -248,7 +249,7 @@ export function SearchModal({
             />
           )}
         </Animated.View>
-      </View>
+      </FormKeyboardView>
     </Modal>
   );
 }

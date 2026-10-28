@@ -5,6 +5,53 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface V2DepartureOrigin {
+  /**
+   * @minLength 1
+   * @maxLength 240
+   */
+  key: string;
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  cityId: number | null;
+  hasCommunityReports: boolean;
+  hasLegacyRoutes: boolean;
+}
+
+export type V2DepartureEntryKind =
+  (typeof V2DepartureEntryKind)[keyof typeof V2DepartureEntryKind];
+
+export const V2DepartureEntryKind = {
+  community: "community",
+  legacy: "legacy",
+} as const;
+
+export interface V2DepartureEntry {
+  key: string;
+  kind: V2DepartureEntryKind;
+  originKey: string;
+  subjectId?: string;
+  /** @minimum 1 */
+  journeyId?: number;
+  /** @minLength 1 */
+  destination: string;
+  operator?: string | null;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  reportedTime?: string | null;
+  scheduledDays?: string | null;
+  /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
+  timedDepartureEligible: boolean;
+}
+
+export interface V2DepartureBoard {
+  origins: V2DepartureOrigin[];
+  selectedOriginKey: string | null;
+  selectionUnavailable: boolean;
+  hasHiddenRoutes: boolean;
+  entries: V2DepartureEntry[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1617,6 +1664,15 @@ export type SearchJourneysParams = {
    * Filter by day of week, e.g. "Mon"
    */
   day?: string;
+};
+
+export type GetV2DepartureBoardParams = {
+  /**
+   * @minLength 1
+   * @maxLength 240
+   * @pattern ^(city:[1-9][0-9]*|legacy:.+)$
+   */
+  originKey?: string;
 };
 
 export type ListCitiesParams = {

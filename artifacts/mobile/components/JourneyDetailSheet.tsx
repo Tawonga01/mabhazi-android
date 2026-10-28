@@ -1,3 +1,4 @@
+import { FormKeyboardView } from '@/components/FormKeyboardView';
 import { ui } from '@/constants/ui';
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -13,7 +14,6 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  KeyboardAvoidingView,
 } from "react-native";
 import { Feather } from "@/components/VectorIcon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -535,9 +535,9 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close route details" onPress={onClose} style={{width:44,height:44,borderRadius:22,backgroundColor:'#233B57',alignItems:'center',justifyContent:'center'}}><Feather name="x" size={22} color="#DDE7F1"/></TouchableOpacity>
           </View>
 
-          <KeyboardAvoidingView
+          <FormKeyboardView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            
           >
             <ScrollView
               contentContainerStyle={[ss.scrollContent, { paddingBottom: Platform.OS === "ios" ? insets.bottom + 20 : 40 }]}
@@ -1005,7 +1005,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                 </>
               )}
             </ScrollView>
-          </KeyboardAvoidingView>
+          </FormKeyboardView>
           </Animated.View>
         </View>
       </Modal>

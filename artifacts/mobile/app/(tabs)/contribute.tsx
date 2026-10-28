@@ -1,3 +1,4 @@
+import { FormKeyboardView } from '@/components/FormKeyboardView';
 import { ui } from '@/constants/ui';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
@@ -11,7 +12,6 @@ import {
   Modal,
   Animated,
   Platform,
-  KeyboardAvoidingView,
 } from "react-native";
 import { Feather } from "@/components/VectorIcon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -594,9 +594,9 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
         onFindRoute={handleFindRoute}
       />
 
-      <KeyboardAvoidingView
+      <FormKeyboardView
         style={[styles.container, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        
       >
         <View style={[styles.pageHeader, { paddingTop: topPad + 8, backgroundColor: colors.primary }]}>
           <Text style={styles.pageTitle}>Contribute a Route</Text>
@@ -614,6 +614,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
           contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
           {/* Route */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -777,7 +778,7 @@ function LegacyContributeScreen({ fromCity = '', toCity = '' }: { fromCity?: str
             )}
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </FormKeyboardView>
 
       <SearchModal
         visible={fromCityModal}
