@@ -5,6 +5,61 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type V2PromptQuestionType =
+  (typeof V2PromptQuestionType)[keyof typeof V2PromptQuestionType];
+
+export const V2PromptQuestionType = {
+  identify_service: "identify_service",
+  clarify_time_basis: "clarify_time_basis",
+  operating_days: "operating_days",
+  pickup_place: "pickup_place",
+  fare_paid: "fare_paid",
+  fare_advertised: "fare_advertised",
+  complete_pattern: "complete_pattern",
+  confirm_current_fact: "confirm_current_fact",
+  resolve_conflict_context: "resolve_conflict_context",
+} as const;
+
+export type V2PromptPreferencesPolicyVersion =
+  (typeof V2PromptPreferencesPolicyVersion)[keyof typeof V2PromptPreferencesPolicyVersion];
+
+export const V2PromptPreferencesPolicyVersion = {
+  "prompts/1": "prompts/1",
+} as const;
+
+export interface V2PromptPreferences {
+  policyVersion: V2PromptPreferencesPolicyVersion;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  invitationsEnabled: boolean;
+  /** @maxItems 9 */
+  disabledTypes: V2PromptQuestionType[];
+  /** Server dismissal expiry; null when no dismissal is recorded. */
+  dismissedUntil: string | null;
+}
+
+export interface V2PromptPreferencesRequest {
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  invitationsEnabled: boolean;
+  /** @maxItems 9 */
+  disabledTypes: V2PromptQuestionType[];
+}
+
+export interface V2PromptActivityRequest {
+  [key: string]: unknown;
+}
+
+export interface V2PromptActivityResult {
+  recorded: boolean;
+}
+
 export interface V2DepartureOrigin {
   /**
    * @minLength 1
@@ -637,6 +692,7 @@ export interface V2Capabilities {
   routeObservationsEnabled?: boolean;
   placeReportsEnabled?: boolean;
   pickupQuestionsEnabled?: boolean;
+  promptControlsEnabled?: boolean;
 }
 
 export interface V2Cities {

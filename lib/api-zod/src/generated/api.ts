@@ -8,6 +8,154 @@
 import * as zod from "zod";
 
 /**
+ * @summary Read your optional question settings without recording activity
+ */
+export const getV2PromptPreferencesHeaderXMabhaziAccountMax = 256;
+
+export const GetV2PromptPreferencesHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(getV2PromptPreferencesHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const getV2PromptPreferencesResponseRevisionMax = 9007199254740991;
+
+export const getV2PromptPreferencesResponseDisabledTypesMax = 9;
+
+export const GetV2PromptPreferencesResponse = zod.object({
+  policyVersion: zod.enum(["prompts/1"]),
+  revision: zod.number().min(1).max(getV2PromptPreferencesResponseRevisionMax),
+  invitationsEnabled: zod.boolean(),
+  disabledTypes: zod
+    .array(
+      zod.enum([
+        "identify_service",
+        "clarify_time_basis",
+        "operating_days",
+        "pickup_place",
+        "fare_paid",
+        "fare_advertised",
+        "complete_pattern",
+        "confirm_current_fact",
+        "resolve_conflict_context",
+      ]),
+    )
+    .max(getV2PromptPreferencesResponseDisabledTypesMax),
+  dismissedUntil: zod
+    .string()
+    .nullable()
+    .describe("Server dismissal expiry; null when no dismissal is recorded."),
+});
+
+/**
+ * @summary Save your question settings with revision protection
+ */
+export const setV2PromptPreferencesHeaderXMabhaziAccountMax = 256;
+
+export const SetV2PromptPreferencesHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(setV2PromptPreferencesHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const setV2PromptPreferencesBodyExpectedRevisionMax = 9007199254740991;
+
+export const setV2PromptPreferencesBodyDisabledTypesMax = 9;
+
+export const SetV2PromptPreferencesBody = zod.object({
+  expectedRevision: zod
+    .number()
+    .min(1)
+    .max(setV2PromptPreferencesBodyExpectedRevisionMax),
+  invitationsEnabled: zod.boolean(),
+  disabledTypes: zod
+    .array(
+      zod.enum([
+        "identify_service",
+        "clarify_time_basis",
+        "operating_days",
+        "pickup_place",
+        "fare_paid",
+        "fare_advertised",
+        "complete_pattern",
+        "confirm_current_fact",
+        "resolve_conflict_context",
+      ]),
+    )
+    .max(setV2PromptPreferencesBodyDisabledTypesMax),
+});
+
+export const setV2PromptPreferencesResponseRevisionMax = 9007199254740991;
+
+export const setV2PromptPreferencesResponseDisabledTypesMax = 9;
+
+export const SetV2PromptPreferencesResponse = zod.object({
+  policyVersion: zod.enum(["prompts/1"]),
+  revision: zod.number().min(1).max(setV2PromptPreferencesResponseRevisionMax),
+  invitationsEnabled: zod.boolean(),
+  disabledTypes: zod
+    .array(
+      zod.enum([
+        "identify_service",
+        "clarify_time_basis",
+        "operating_days",
+        "pickup_place",
+        "fare_paid",
+        "fare_advertised",
+        "complete_pattern",
+        "confirm_current_fact",
+        "resolve_conflict_context",
+      ]),
+    )
+    .max(setV2PromptPreferencesResponseDisabledTypesMax),
+  dismissedUntil: zod
+    .string()
+    .nullable()
+    .describe("Server dismissal expiry; null when no dismissal is recorded."),
+});
+
+/**
+ * @summary Record foreground interaction at server time without revealing session identity
+ */
+export const recordV2PromptActivityHeaderXMabhaziAccountMax = 256;
+
+export const RecordV2PromptActivityHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(recordV2PromptActivityHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const RecordV2PromptActivityBody = zod.object({});
+
+export const RecordV2PromptActivityResponse = zod.object({
+  recorded: zod.literal(true),
+});
+
+/**
  * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.
  * @summary Start an optional manual pickup question for a displayed route
  */
@@ -2052,6 +2200,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   routeObservationsEnabled: zod.boolean().optional(),
   placeReportsEnabled: zod.boolean().optional(),
   pickupQuestionsEnabled: zod.boolean().optional(),
+  promptControlsEnabled: zod.boolean().optional(),
 });
 
 /**

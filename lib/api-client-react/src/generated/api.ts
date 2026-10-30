@@ -73,6 +73,10 @@ import type {
   V2PickupQuestionReservation,
   V2PickupQuestionState,
   V2PlaceReportPage,
+  V2PromptActivityRequest,
+  V2PromptActivityResult,
+  V2PromptPreferences,
+  V2PromptPreferencesRequest,
   V2PublicFarePage,
   V2PublicSearch,
   V2PublicSubjectEnvelope,
@@ -92,6 +96,256 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * @summary Read your optional question settings without recording activity
+ */
+export const getGetV2PromptPreferencesUrl = () => {
+  return `/api/v2/prompt-preferences`;
+};
+
+export const getV2PromptPreferences = async (
+  options?: RequestInit,
+): Promise<V2PromptPreferences> => {
+  return customFetch<V2PromptPreferences>(getGetV2PromptPreferencesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2PromptPreferencesQueryKey = () => {
+  return [`/api/v2/prompt-preferences`] as const;
+};
+
+export const getGetV2PromptPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2PromptPreferences>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2PromptPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>
+  > = ({ signal }) => getV2PromptPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2PromptPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2PromptPreferences>>
+>;
+export type GetV2PromptPreferencesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read your optional question settings without recording activity
+ */
+
+export function useGetV2PromptPreferences<
+  TData = Awaited<ReturnType<typeof getV2PromptPreferences>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2PromptPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save your question settings with revision protection
+ */
+export const getSetV2PromptPreferencesUrl = () => {
+  return `/api/v2/prompt-preferences`;
+};
+
+export const setV2PromptPreferences = async (
+  v2PromptPreferencesRequest: V2PromptPreferencesRequest,
+  options?: RequestInit,
+): Promise<V2PromptPreferences> => {
+  return customFetch<V2PromptPreferences>(getSetV2PromptPreferencesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PromptPreferencesRequest),
+  });
+};
+
+export const getSetV2PromptPreferencesMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    TError,
+    { data: BodyType<V2PromptPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>,
+  TError,
+  { data: BodyType<V2PromptPreferencesRequest> },
+  TContext
+> => {
+  const mutationKey = ["setV2PromptPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    { data: BodyType<V2PromptPreferencesRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setV2PromptPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetV2PromptPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>
+>;
+export type SetV2PromptPreferencesMutationBody =
+  BodyType<V2PromptPreferencesRequest>;
+export type SetV2PromptPreferencesMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Save your question settings with revision protection
+ */
+export const useSetV2PromptPreferences = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    TError,
+    { data: BodyType<V2PromptPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>,
+  TError,
+  { data: BodyType<V2PromptPreferencesRequest> },
+  TContext
+> => {
+  return useMutation(getSetV2PromptPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary Record foreground interaction at server time without revealing session identity
+ */
+export const getRecordV2PromptActivityUrl = () => {
+  return `/api/v2/prompt-activity`;
+};
+
+export const recordV2PromptActivity = async (
+  v2PromptActivityRequest: V2PromptActivityRequest,
+  options?: RequestInit,
+): Promise<V2PromptActivityResult> => {
+  return customFetch<V2PromptActivityResult>(getRecordV2PromptActivityUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PromptActivityRequest),
+  });
+};
+
+export const getRecordV2PromptActivityMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    TError,
+    { data: BodyType<V2PromptActivityRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>,
+  TError,
+  { data: BodyType<V2PromptActivityRequest> },
+  TContext
+> => {
+  const mutationKey = ["recordV2PromptActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    { data: BodyType<V2PromptActivityRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recordV2PromptActivity(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordV2PromptActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>
+>;
+export type RecordV2PromptActivityMutationBody =
+  BodyType<V2PromptActivityRequest>;
+export type RecordV2PromptActivityMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Record foreground interaction at server time without revealing session identity
+ */
+export const useRecordV2PromptActivity = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    TError,
+    { data: BodyType<V2PromptActivityRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>,
+  TError,
+  { data: BodyType<V2PromptActivityRequest> },
+  TContext
+> => {
+  return useMutation(getRecordV2PromptActivityMutationOptions(options));
+};
 
 /**
  * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.

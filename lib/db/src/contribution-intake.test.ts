@@ -1,3 +1,4 @@
+import {registerPromptControlTests} from './prompt-controls.cases';
 import {registerPickupQuestionTests} from './pickup-question.cases';
 import { registerRouteObservationTests } from './route-observations.cases';
 import { registerPromptWorkerTests } from './prompt-worker.cases';
@@ -414,6 +415,19 @@ before(async () => {
     ["ALTER TABLE v2_pickup_answer_requests DROP CONSTRAINT v2_pickup_answer_requests_observation_id_fkey",'pickup_table_shape_changed'],
     ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0036_pickup_question_api.sql'",'pickup_preview_hash_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(pickupApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  // Populated0036 ->0037 controls API: exact repeat and CRLF safely preserve state.
+  const controlsApply=await readFile(new URL('../scripts/preview-apply-0037.sql',import.meta.url),'utf8');
+  const controlsBefore=await promptSnapshot();
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_api_prompt_activity(varchar) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'");await assert.rejects(()=>db.query(controlsApply),/controls_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(controlsApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0037_prompt_controls_api.sql\n';
+  await db.query(controlsApply);assert.deepEqual(await promptSnapshot(),controlsBefore);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_prompt_activity(varchar) TO PUBLIC",'controls_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_prompt_preferences_read(varchar) SECURITY INVOKER",'controls_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_prompt_activity(varchar) SET search_path=public",'controls_function_fence_changed'],
+   ["GRANT EXECUTE ON FUNCTION v2_prompt_touch(varchar) TO mabhazi_api",'controls_dependency_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'controls_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(controlsApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
@@ -807,3 +821,5 @@ registerPromptWorkerTests(() => ({ db, connectionString, user, other, origin, de
 registerRouteObservationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerPickupQuestionTests(() => ({db,user,other,origin,destination}));
+
+registerPromptControlTests(() => ({db,user,other,connectionString}));
