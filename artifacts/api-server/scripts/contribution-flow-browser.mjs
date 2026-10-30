@@ -60,18 +60,19 @@ try {
   });
   await new Promise(resolve => webServer.listen(4173, '127.0.0.1', resolve));
   browser = await chromium.launch();
-  async function session(account = 0, loseResponse = false, mode = 'route') {
+  async function session(account = 0, loseResponse = false, mode = 'route', prepare = null) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
     context.setDefaultTimeout(20000);context.setDefaultNavigationTimeout(20000);
     // Cancel previous route handlers only after intentional session shutdown.
     let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;console.log('MABHAZI_CONTEXT_CLOSING');try{await boundedBrowserStep('drain context routes',()=>context.unrouteAll({behavior:'ignoreErrors'}));}finally{await boundedBrowserStep('close context',()=>closeContext(options));}console.log('MABHAZI_CONTEXT_CLOSED');};
     if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
-    let postCount = 0; const sent=[];
+    let postCount = 0; const sent=[],activities=[];
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
       if (url.origin === 'http://127.0.0.1:4173') { await route.continue(); return; }
       // Fail closed: no request reaches real Mabhazi, Google, Render or Supabase.
       if (url.origin !== 'https://preview.mabhazi.invalid') { await route.abort(); return; }
+      if(url.pathname==='/api/v2/prompt-activity'&&request.method()==='POST')activities.push({body:request.postDataJSON(),account:request.headers()['x-mabhazi-account']});
       const response = await route.fetch({url:'http://127.0.0.1:5000'+url.pathname+url.search});
       if ((['/api/v2/contributions','/api/v2/actual-journeys','/api/v2/route-observations'].includes(url.pathname) || /^\/api\/v2\/pickup-questions\/[^/]+\/answers$/.test(url.pathname)) && request.method() === 'POST') {
         postCount++; sent.push(request.postDataJSON());
@@ -84,11 +85,12 @@ try {
         if(!/Route is already handled|Target page, context or browser has been closed/.test(String(error))||(!closing&&!request.failure()&&!request.frame().isDetached()))throw error;
       }
     });
+    if(prepare)await prepare(context);
     const page = await context.newPage();
     page.on('pageerror', error => consoleErrors.push(error.message));
     const surfaces={search:'/',profile:'/profile',departures:'/departures',home:'/contribute'};
     await page.goto('http://127.0.0.1:4173'+(surfaces[mode] ?? '/contribute'));
-    if (surfaces[mode]) return {context,page,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
+    if (surfaces[mode]) return {context,page,posts:()=>postCount,requests:()=>sent,activities:()=>activities,loseNext:()=>{loseResponse=true;}};
     await page.getByRole('heading',{name:'Contribute',exact:true}).waitFor();
     if (!results.length) {
       await takeShot(page,'contribution-menu.png');
@@ -110,7 +112,7 @@ try {
       await page.getByLabel('Departure time in 24-hour format',{exact:true}).fill('08:30');
       await page.getByLabel('Bus operator name',{exact:true}).fill('Browser fixture bus');
     }
-    return {context,page,fill,posts:()=>postCount,requests:()=>sent,loseNext:()=>{loseResponse=true;}};
+    return {context,page,fill,posts:()=>postCount,requests:()=>sent,activities:()=>activities,loseNext:()=>{loseResponse=true;}};
   }
   // Actual rendered screen -> generated client -> authenticated HTTP -> restricted
   // facade -> committed Postgres receipt, with no fare or recurrence invention.
@@ -712,6 +714,72 @@ try {
   {
     const s=await session(null,false,'departures');let fail=true;await s.context.route('**/api/v2/departure-board*',route=>fail?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'TEMPORARILY_UNAVAILABLE',error:'Synthetic board outage'})}):route.fallback());await s.page.getByRole('button',{name:'Refresh departure board',exact:true}).click();await s.page.getByText('The departure board could not load.',{exact:true}).waitFor();assert.equal(await s.page.getByText('No routes available yet.',{exact:true}).count(),0);assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);await takeShot(s.page,'board-error.png');fail=false;await s.page.getByRole('button',{name:'Try departure board again',exact:true}).click();await s.page.getByRole('button',{name:'Choose departure city',exact:true}).click();await s.page.getByRole('button',{name:'Departures from Harare',exact:true}).click();await s.page.getByText('UI fixture bus',{exact:true}).waitFor();await s.context.close();
     const hidden=await session(null,false,'departures');await hidden.context.route('**/api/v2/departure-board*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({origins:[],selectedOriginKey:null,selectionUnavailable:false,hasHiddenRoutes:true,entries:[]})}));await hidden.page.getByRole('button',{name:'Refresh departure board',exact:true}).click();await hidden.page.getByText('Routes are hidden by your settings.',{exact:true}).waitFor();assert.equal(await hidden.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);await takeShot(hidden.page,'board-hidden.png');await hidden.context.close();results.push('departure read errors and privacy-filtered emptiness stay distinct from missing routes, with explicit retry and no duplicate-intake invitation');
+  }
+
+  // Account question settings: actual UI -> generated API -> restricted Postgres.
+  async function resetQuestionSettings(account){
+    await admin.query("INSERT INTO v2_prompt_preferences(user_id,invitations_enabled,disabled_types) VALUES($1,true,'{}') ON CONFLICT(user_id) DO UPDATE SET invitations_enabled=true,disabled_types='{}',revision=v2_prompt_preferences.revision+1",[users[account]]);
+  }
+  async function openQuestionSettings(s){
+    await s.page.getByRole('button',{name:'Contribution questions',exact:true}).click();
+    await s.page.getByRole('switch',{name:'Optional questions',exact:true}).waitFor();
+  }
+  const master=s=>s.page.getByRole('switch',{name:'Optional questions',exact:true});
+  const typeSwitch=(s,name)=>s.page.getByRole('switch',{name,exact:true});
+  {
+    await resetQuestionSettings(2);const prior=(await admin.query('SELECT terms_accepted_version,terms_accepted_at FROM users WHERE id=$1',[users[2]])).rows[0];await admin.query('UPDATE users SET terms_accepted_at=NULL WHERE id=$1',[users[2]]);
+    try{
+      const s=await session(2,false,'profile');await openQuestionSettings(s);assert.equal(await master(s).getAttribute('aria-checked'),'true');await takeShot(s.page,'question-settings.png');
+      await typeSwitch(s,'Pickup location').click();await master(s).click();await s.page.getByRole('button',{name:'Save settings',exact:true}).click();await s.page.getByText('Settings saved.',{exact:true}).waitFor();assert.equal(s.posts(),0);await s.context.close();
+      const reopened=await session(2,false,'profile');await openQuestionSettings(reopened);assert.equal(await master(reopened).getAttribute('aria-checked'),'false');assert.equal(await typeSwitch(reopened,'Pickup location').getAttribute('aria-checked'),'false');assert.equal(await typeSwitch(reopened,'Pickup location').getAttribute('aria-disabled'),'true');await takeShot(reopened.page,'question-settings-off.png');
+      const stored=(await admin.query('SELECT invitations_enabled,disabled_types FROM v2_prompt_preferences WHERE user_id=$1',[users[2]])).rows[0];assert.deepEqual(stored,{invitations_enabled:false,disabled_types:['pickup_place']});
+      await reopened.page.getByRole('button',{name:'Done',exact:true}).click();await reopened.page.goto('http://127.0.0.1:4173/contribute');await reopened.page.getByRole('button',{name:'Add a route',exact:true}).click();await reopened.page.getByRole('heading',{name:'Add a bus route',exact:true}).waitFor();assert.equal(reopened.posts(),0);await reopened.context.close();
+    }finally{await admin.query('UPDATE users SET terms_accepted_version=$2,terms_accepted_at=$3 WHERE id=$1',[users[2],prior.terms_accepted_version,prior.terms_accepted_at]);}
+    results.push('question settings save without contribution Terms, preserve type choices through global opt-out/restart, and keep independent route intake available');
+  }
+  {
+    await resetQuestionSettings(0);const s=await session(0,false,'profile');let posts=0,lose=true;
+    await s.context.route('**/api/v2/prompt-preferences',async route=>{if(route.request().method()!=='POST')return route.fallback();posts++;const response=await route.fetch({url:'http://127.0.0.1:5000/api/v2/prompt-preferences'});if(lose){lose=false;await route.abort('failed');}else await route.fulfill({response});});
+    await openQuestionSettings(s);await master(s).click();await s.page.getByRole('button',{name:'Save settings',exact:true}).click();await s.page.getByRole('button',{name:'Check saved settings',exact:true}).waitFor();assert.equal(await master(s).getAttribute('aria-disabled'),'true');await takeShot(s.page,'question-settings-unconfirmed.png');
+    await s.page.getByRole('button',{name:'Close question settings',exact:true}).click();await s.page.getByRole('button',{name:'Contribution questions',exact:true}).click();await s.page.getByText('Settings saved.',{exact:true}).waitFor();assert.equal(await master(s).getAttribute('aria-checked'),'false');assert.equal(posts,1);await takeShot(s.page,'question-settings-recovered.png');await s.context.close();
+    results.push('a committed settings save with a lost response keeps frozen choices; reopening reads the saved result without another POST');
+  }
+  {
+    await resetQuestionSettings(0);const s=await session(0,false,'profile');let first=true;const sent=[];
+    await s.context.route('**/api/v2/prompt-preferences',async route=>{if(route.request().method()!=='POST')return route.fallback();sent.push(route.request().postDataJSON());if(first){first=false;await route.abort('failed');}else await route.fallback();});
+    await openQuestionSettings(s);await master(s).click();await s.page.getByRole('button',{name:'Save settings',exact:true}).click();await s.page.getByRole('button',{name:'Check saved settings',exact:true}).click();await s.page.getByRole('button',{name:'Try saving again',exact:true}).waitFor();await takeShot(s.page,'question-settings-retry.png');await s.page.getByRole('button',{name:'Try saving again',exact:true}).click();await s.page.getByText('Settings saved.',{exact:true}).waitFor();assert.equal(sent.length,2);assert.deepEqual(sent[0],sent[1]);await s.context.close();
+    results.push('an uncommitted settings failure requires a successful unchanged-state read before retrying the exact original revision and choices');
+  }
+  {
+    await resetQuestionSettings(0);const s=await session(0,false,'profile');let posts=0;s.page.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname==='/api/v2/prompt-preferences')posts++;});
+    await openQuestionSettings(s);await master(s).click();await admin.query("UPDATE v2_prompt_preferences SET invitations_enabled=true,disabled_types=ARRAY['fare_paid'],revision=revision+1 WHERE user_id=$1",[users[0]]);
+    await s.page.getByRole('button',{name:'Save settings',exact:true}).click();await s.page.getByRole('button',{name:'Check saved settings',exact:true}).click();await s.page.getByRole('button',{name:'Reload saved settings',exact:true}).waitFor();assert.equal(await master(s).getAttribute('aria-checked'),'false');await takeShot(s.page,'question-settings-conflict.png');
+    await s.page.getByRole('button',{name:'Reload saved settings',exact:true}).click();await s.page.getByRole('button',{name:'Done',exact:true}).waitFor();assert.equal(await master(s).getAttribute('aria-checked'),'true');assert.equal(await typeSwitch(s,'Fares paid').getAttribute('aria-checked'),'false');assert.equal(posts,1);await s.context.close();
+    results.push('a real concurrent preference revision conflicts, preserves unsaved choices for review and reloads the other device state only on explicit action');
+  }
+  {
+    await resetQuestionSettings(0);const s=await session(0,false,'profile');let fail=true;
+    await s.context.route('**/api/v2/prompt-preferences',route=>fail&&route.request().method()==='GET'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({code:'TEMPORARILY_UNAVAILABLE',error:'Synthetic settings outage'})}):route.fallback());
+    await s.page.getByRole('button',{name:'Contribution questions',exact:true}).click();await s.page.getByText('Question settings could not load.',{exact:true}).waitFor();assert.equal(await s.page.getByRole('switch').count(),0);await takeShot(s.page,'question-settings-error.png');fail=false;await s.page.getByRole('button',{name:'Try again',exact:true}).click();await master(s).waitFor();assert.equal(await master(s).getAttribute('aria-checked'),'true');await s.context.close();
+    results.push('settings load errors show genuine retry without fabricated enabled defaults or hidden preference writes');
+  }
+  {
+    await resetQuestionSettings(0);const before=(await admin.query('SELECT count(*) n FROM v2_prompt_invitations WHERE user_id=$1',[users[0]])).rows[0].n;
+    const s=await session(0,false,'profile');await boundedBrowserStep('foreground activity recorded',async()=>{while(!s.activities().length)await new Promise(r=>setTimeout(r,25));});await openQuestionSettings(s);await master(s).click();await master(s).click();
+    await s.page.setViewportSize({width:390,height:450});await typeSwitch(s,'Clarify conflicting reports').scrollIntoViewIfNeeded();await takeShot(s.page,'question-settings-compact.png');
+    for(const name of ['Close question settings','Done']){const b=await s.page.getByRole('button',{name,exact:true}).boundingBox();assert.ok(b&&b.y>=0&&b.y+b.height<=450,JSON.stringify({name,b}));}
+    assert.equal(s.activities().length,1);assert.deepEqual(s.activities()[0].body,{});assert.equal(s.activities()[0].account,users[0]);assert.equal((await admin.query('SELECT count(*) n FROM v2_prompt_invitations WHERE user_id=$1',[users[0]])).rows[0].n,before);await s.context.close();
+    results.push('compact settings keep Close and footer reachable while types scroll; actual foreground interactions send one throttled empty-body account-bound activity request and no invitation');
+  }
+  {
+    const guest=await session(null,false,'profile');await guest.page.getByText('Join Mabhazi',{exact:true}).waitFor();assert.equal(await guest.page.getByRole('button',{name:'Contribution questions',exact:true}).count(),0);assert.equal(guest.activities().length,0);await guest.context.close();
+    const unsupported=await session(0,false,'profile',async context=>{await context.route('**/api/v2/capabilities',async route=>{const response=await route.fetch({url:'http://127.0.0.1:5000/api/v2/capabilities'});const body=await response.json();await route.fulfill({response,json:{...body,promptControlsEnabled:false}});});});await unsupported.page.getByText('Safety controls',{exact:true}).waitFor();assert.equal(await unsupported.page.getByRole('button',{name:'Contribution questions',exact:true}).count(),0);assert.equal(unsupported.activities().length,0);await unsupported.context.close();
+    results.push('guest and unsupported servers expose no account settings or activity writes while normal profile and manual features remain');
+  }
+  {
+    await resetQuestionSettings(0);await resetQuestionSettings(2);const s=await session(2,false,'profile');await openQuestionSettings(s);await master(s).click();await s.page.getByRole('button',{name:'Close question settings',exact:true}).click();await s.page.getByText('Log out',{exact:true}).click();await s.page.getByText('Join Mabhazi',{exact:true}).waitFor();assert.equal(await s.page.getByRole('button',{name:'Contribution questions',exact:true}).count(),0);
+    await s.page.evaluate(token=>localStorage.setItem('mabhazi_session_v2',token),tokens[0]);await s.page.reload();await openQuestionSettings(s);assert.equal(await master(s).getAttribute('aria-checked'),'true');assert.equal(await typeSwitch(s,'Pickup location').getAttribute('aria-checked'),'true');await takeShot(s.page,'question-settings-account-switch.png');await s.context.close();
+    results.push('actual logout clears prior dirty settings; a separately authenticated synthetic account loads only its own choices after restart');
   }
 
   // Owned public web pages: actual local backend HTML with the same real

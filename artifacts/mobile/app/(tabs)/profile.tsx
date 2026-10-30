@@ -1,3 +1,4 @@
+import {PromptSettingsEntry} from '@/components/PromptSettings';
 import { ui } from '@/constants/ui';
 import React, { useState, useRef } from "react";
 import {
@@ -629,6 +630,7 @@ export default function ProfileScreen() {
             {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
 
             {/* ── Pending route association proposals ── */}
+            <PromptSettingsEntry />
             <ProposalInbox colors={colors} />
 
           </>

@@ -1,3 +1,4 @@
+import {PromptActivityBoundary} from '@/components/PromptActivity';
 import { ui } from '@/constants/ui';
 import {
   Inter_400Regular,
@@ -89,7 +90,7 @@ export default function RootLayout() {
             <AccountQueryBoundary>
             <GestureHandlerRootView>
               <KeyboardProvider>
-                <CaptureHost><RootLayoutNav /></CaptureHost>
+                <PromptActivityBoundary><CaptureHost><RootLayoutNav /></CaptureHost></PromptActivityBoundary>
               </KeyboardProvider>
             </GestureHandlerRootView>
             </AccountQueryBoundary>

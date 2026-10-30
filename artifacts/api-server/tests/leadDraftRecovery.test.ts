@@ -1,3 +1,4 @@
+import {registerPromptControlModelTests} from './promptControlsModel.cases';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
@@ -76,3 +77,5 @@ test('native draft: sign-out/deletion clears guest/account drafts and invalidate
   const f=fixture();await f.store.write(f.record(null));await f.store.write(f.record());
   const late=f.store.write(f.record()),clear=f.store.clear();await assert.rejects(late,/DRAFT_CLEARED/);await clear;assert.equal(f.values.size,0);
 });
+
+registerPromptControlModelTests();
