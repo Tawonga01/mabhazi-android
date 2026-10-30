@@ -799,7 +799,15 @@ try {
   assert.ok(legacy>0);assert.deepEqual(consoleErrors,[]);
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({head:process.env.GITHUB_SHA,cases:results,consoleErrors,environment:'CI disposable Postgres, synthetic sessions, actual Expo web export at390x844; no native/device claim'},null,2));
   console.log('MABHAZI_BROWSER_CASES '+JSON.stringify(results));
-} catch(error) {
+ } catch(error) {
+  try{
+    const pages=(browser?.contexts()??[]).flatMap(context=>context.pages());const page=pages[pages.length-1];
+    if(page&&!page.isClosed()){
+      const state={url:page.url(),text:(await page.locator('body').innerText()).slice(0,7000)};
+      fs.writeFileSync(path.join(output,'failure-ui-state.json'),JSON.stringify(state,null,2));console.log('MABHAZI_BROWSER_FAILURE_UI '+JSON.stringify(state));
+      await takeShot(page,'failure-current-screen.png');
+    }
+  }catch(captureError){console.log('MABHAZI_FAILURE_CAPTURE_ERROR '+String(captureError));}
   fs.writeFileSync(path.join(output,'failure.txt'),String(error.stack ?? error));
   for(const name of fs.readdirSync(output).filter(n=>n.endsWith('.png'))) console.log('MABHAZI_BROWSER_IMAGE '+JSON.stringify({name,base64:fs.readFileSync(path.join(output,name)).toString('base64')}));
   throw error;
