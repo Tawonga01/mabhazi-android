@@ -65,7 +65,7 @@ try {
     context.setDefaultTimeout(20000);context.setDefaultNavigationTimeout(20000);
     // Cancel previous route handlers only after intentional session shutdown.
     let closing=false;const closeContext=context.close.bind(context);context.close=async options=>{closing=true;console.log('MABHAZI_CONTEXT_CLOSING');try{await boundedBrowserStep('drain context routes',()=>context.unrouteAll({behavior:'ignoreErrors'}));}finally{await boundedBrowserStep('close context',()=>closeContext(options));}console.log('MABHAZI_CONTEXT_CLOSED');};
-    if (account !== null) await context.addInitScript(token => localStorage.setItem('mabhazi_session_v2', token), tokens[account]);
+    if (account !== null) await context.addInitScript(token => { if (!sessionStorage.getItem('mabhazi_fixture_auth_initialized')) { localStorage.setItem('mabhazi_session_v2', token); sessionStorage.setItem('mabhazi_fixture_auth_initialized','1'); } }, tokens[account]);
     let postCount = 0; const sent=[],activities=[];
     await context.route('**/*', async route => {
       const request = route.request(), url = new URL(request.url());
@@ -777,7 +777,7 @@ try {
     results.push('guest and unsupported servers expose no account settings or activity writes while normal profile and manual features remain');
   }
   {
-    await resetQuestionSettings(0);await resetQuestionSettings(2);const s=await session(2,false,'profile');await openQuestionSettings(s);await master(s).click();await s.page.getByRole('button',{name:'Close question settings',exact:true}).click();await s.page.getByText('Log out',{exact:true}).click();await s.page.getByText('Join Mabhazi',{exact:true}).waitFor();assert.equal(await s.page.getByRole('button',{name:'Contribution questions',exact:true}).count(),0);
+    await resetQuestionSettings(0);await resetQuestionSettings(2);const s=await session(2,false,'profile');await openQuestionSettings(s);await master(s).click();await s.page.getByRole('button',{name:'Close question settings',exact:true}).click();await s.page.getByText('Log out',{exact:true}).click();await s.page.getByText('Search for a route',{exact:true}).waitFor();await s.page.getByText('Profile',{exact:true}).click();await s.page.getByText('Join Mabhazi',{exact:true}).waitFor();assert.equal(await s.page.getByRole('button',{name:'Contribution questions',exact:true}).count(),0);
     await s.page.evaluate(token=>localStorage.setItem('mabhazi_session_v2',token),tokens[0]);await s.page.reload();await openQuestionSettings(s);assert.equal(await master(s).getAttribute('aria-checked'),'true');assert.equal(await typeSwitch(s,'Pickup location').getAttribute('aria-checked'),'true');await takeShot(s.page,'question-settings-account-switch.png');await s.context.close();
     results.push('actual logout clears prior dirty settings; a separately authenticated synthetic account loads only its own choices after restart');
   }
