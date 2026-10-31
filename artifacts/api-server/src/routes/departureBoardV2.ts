@@ -2,6 +2,7 @@ import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { GetV2DepartureBoardQueryParams, GetV2DepartureBoardResponse } from '@workspace/api-zod';
 import { parseBlockedIds } from './routeSafetyV2';
+import { nextLegacyDeparture, legacyScheduleTimezone } from '../lib/departureSchedule';
 
 const router: IRouter = Router();
 // Origins and rows share one statement/snapshot and the same visibility rules.
@@ -11,12 +12,12 @@ const boardSql = `WITH candidates AS (
  p.subject_id::text subject_id,NULL::integer journey_id,p.origin_city_id city_id,
  p.origin->>'name' origin_name,p.destination->>'name' destination,
  p.operator_report->>'value' operator,p.reported_time->>'value' reported_time,
- NULL::text scheduled_days,NULL::text legacy_city,p.author_user_id author_id
+ NULL::text data_status,NULL::text scheduled_days,NULL::text pickup_point,NULL::text legacy_city,p.author_user_id author_id
  FROM public.v2_public_lead_reports p WHERE $3::boolean
  UNION ALL
  SELECT 'legacy:'||j.id::text,'legacy',NULL,j.id,c.id,
  coalesce(c.name,btrim(j.from_city)),btrim(j.to_city),nullif(btrim(j.bus_company),''),
- j.departure_time,nullif(btrim(j.travel_date),''),btrim(j.from_city),j.contributed_by
+ j.departure_time,j.data_status::text,nullif(btrim(j.travel_date),''),nullif(btrim(j.pickup_point),''),btrim(j.from_city),j.contributed_by
  FROM public.journeys j
  LEFT JOIN LATERAL (SELECT min(r.id) id FROM public.cities r
    WHERE lower(btrim(r.name))=lower(btrim(j.from_city)) HAVING count(*)=1) ref_match ON true
@@ -53,7 +54,7 @@ SELECT jsonb_build_object(
    'key',v.entry_key,'kind',v.kind,'originKey',v.origin_key,
    'subjectId',v.subject_id,'journeyId',v.journey_id,
    'destination',v.destination,'operator',v.operator,'reportedTime',v.clock,
-   'scheduledDays',v.scheduled_days,'timedDepartureEligible',false))
+   'scheduledDays',v.scheduled_days,'pickupPoint',v.pickup_point,'scheduleClock',CASE WHEN v.kind='legacy' AND v.data_status='active' THEN v.reported_time ELSE NULL END,'timedDepartureEligible',false))
    ORDER BY coalesce(v.clock,'99:99'),lower(v.destination),lower(v.operator),v.entry_key)
    FROM visible v JOIN chosen c ON c.origin_key=v.origin_key),'[]'::jsonb)
 ) board`;
@@ -72,7 +73,15 @@ router.get('/departure-board', async (req, res) => {
   try {
     const {rows}=await pool.query(boardSql,[blocked,req.isAuthenticated()?req.user.id:null,
       process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED==='true',query.data.originKey??null]);
-    res.json(GetV2DepartureBoardResponse.parse(rows[0]?.board));
+    const raw=rows[0]?.board,board=GetV2DepartureBoardResponse.parse(raw),now=Date.now();
+    const clocks=new Map<string,string>((raw.entries as {key:string;scheduleClock:string}[]).map(e=>[e.key,e.scheduleClock]));
+    const entries=board.entries.map(entry=>{
+      // Search eligibility is not proof of a schedule: only a legacy timetable
+      // with explicit recognised operating days gets a derived instant.
+      const next=entry.kind==='legacy'?nextLegacyDeparture(clocks.get(entry.key),entry.scheduledDays,now):null;
+      return {...entry,countdownEligible:!!next,...(next?{nextDepartureAt:next,scheduleTimezone:legacyScheduleTimezone}:{})};
+    }).sort((a,b)=>(a.nextDepartureAt?Date.parse(String(a.nextDepartureAt)):Infinity)-(b.nextDepartureAt?Date.parse(String(b.nextDepartureAt)):Infinity)||0);
+    res.json(GetV2DepartureBoardResponse.parse({...board,generatedAt:new Date(now).toISOString(),entries}));
   }catch{res.status(503).json({code:'TEMPORARILY_UNAVAILABLE',error:'The departure board could not load. Try again.'});}
 });
 export default router;

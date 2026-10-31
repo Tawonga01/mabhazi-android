@@ -1192,6 +1192,10 @@ components:
         operator: { type: string, nullable: true }
         reportedTime: { type: string, nullable: true, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
         scheduledDays: { type: string, nullable: true }
+        pickupPoint: { type: string }
+        countdownEligible: { type: boolean, description: Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. }
+        nextDepartureAt: { type: string, format: date-time }
+        scheduleTimezone: { type: string, enum: [Africa/Harare] }
         timedDepartureEligible:
           type: boolean
           description: False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate.
@@ -1199,6 +1203,7 @@ components:
       type: object
       required: [origins, selectedOriginKey, selectionUnavailable, hasHiddenRoutes, entries]
       properties:
+        generatedAt: { type: string, format: date-time }
         origins:
           type: array
           items: { $ref: '#/components/schemas/V2DepartureOrigin' }

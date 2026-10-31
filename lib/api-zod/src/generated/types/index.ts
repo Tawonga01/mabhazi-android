@@ -114,6 +114,7 @@ export * from "./v2City";
 export * from "./v2DepartureBoard";
 export * from "./v2DepartureEntry";
 export * from "./v2DepartureEntryKind";
+export * from "./v2DepartureEntryScheduleTimezone";
 export * from "./v2DepartureOrigin";
 export * from "./v2Error";
 export * from "./v2ErrorFieldErrorsItem";

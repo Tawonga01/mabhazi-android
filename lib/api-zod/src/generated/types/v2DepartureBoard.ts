@@ -9,6 +9,7 @@ import type { V2DepartureEntry } from "./v2DepartureEntry";
 import type { V2DepartureOrigin } from "./v2DepartureOrigin";
 
 export interface V2DepartureBoard {
+  generatedAt?: Date;
   origins: V2DepartureOrigin[];
   selectedOriginKey: string | null;
   selectionUnavailable: boolean;

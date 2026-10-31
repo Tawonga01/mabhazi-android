@@ -2887,6 +2887,7 @@ export const getV2DepartureBoardResponseEntriesItemReportedTimeRegExp =
   new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
 
 export const GetV2DepartureBoardResponse = zod.object({
+  generatedAt: zod.coerce.date().optional(),
   origins: zod.array(
     zod.object({
       key: zod
@@ -2916,6 +2917,15 @@ export const GetV2DepartureBoardResponse = zod.object({
         .regex(getV2DepartureBoardResponseEntriesItemReportedTimeRegExp)
         .nullish(),
       scheduledDays: zod.string().nullish(),
+      pickupPoint: zod.string().optional(),
+      countdownEligible: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Legacy timetable has explicit recognised operating days and user-selected Africa\/Harare timezone; this is not canonical approval.",
+        ),
+      nextDepartureAt: zod.coerce.date().optional(),
+      scheduleTimezone: zod.enum(["Africa/Harare"]).optional(),
       timedDepartureEligible: zod
         .boolean()
         .describe(

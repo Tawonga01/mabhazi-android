@@ -1,3 +1,4 @@
+import {registerDepartureScheduleTests} from './departureSchedule.cases';
 import {registerPromptControlModelTests} from './promptControlsModel.cases';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -79,3 +80,5 @@ test('native draft: sign-out/deletion clears guest/account drafts and invalidate
 });
 
 registerPromptControlModelTests();
+
+registerDepartureScheduleTests();

@@ -82,6 +82,13 @@ export const V2DepartureEntryKind = {
   legacy: "legacy",
 } as const;
 
+export type V2DepartureEntryScheduleTimezone =
+  (typeof V2DepartureEntryScheduleTimezone)[keyof typeof V2DepartureEntryScheduleTimezone];
+
+export const V2DepartureEntryScheduleTimezone = {
+  "Africa/Harare": "Africa/Harare",
+} as const;
+
 export interface V2DepartureEntry {
   key: string;
   kind: V2DepartureEntryKind;
@@ -95,11 +102,17 @@ export interface V2DepartureEntry {
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
   reportedTime?: string | null;
   scheduledDays?: string | null;
+  pickupPoint?: string;
+  /** Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. */
+  countdownEligible?: boolean;
+  nextDepartureAt?: string;
+  scheduleTimezone?: V2DepartureEntryScheduleTimezone;
   /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
   timedDepartureEligible: boolean;
 }
 
 export interface V2DepartureBoard {
+  generatedAt?: string;
   origins: V2DepartureOrigin[];
   selectedOriginKey: string | null;
   selectionUnavailable: boolean;

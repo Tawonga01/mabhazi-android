@@ -22,11 +22,11 @@ export function registerDepartureBoardTests(context:()=>Context){
   const selected=await read('?originKey=city:'+ids[24]);assert.equal(selected.value.selectedOriginKey,'city:'+ids[24]);assert.equal(selected.value.entries.length,1);assert.equal(selected.value.entries[0].kind,'community');assert.equal(selected.value.entries[0].timedDepartureEligible,false);
   assert.equal(JSON.stringify(selected.value).includes(context().accounts[0]),false);
  });
- test('departure board API: exact origins exclude transit-stop clocks and never infer daily next departures',async()=>{
+ test('departure board API: exact origins exclude transit-stop clocks and report-only times never become scheduled departures',async()=>{
   const name='Exact board '+randomUUID(),id=await city(name),saved=await lead(id),own=await legacy(name,'Board destination','Board legacy coach'),through=await legacy('Other board origin',name,'Through coach');
   await q("INSERT INTO journey_stops(journey_id,city,departure_time,sequence) VALUES($1,$2,'12:30',1)",[through,name]);
   const r=await read('?originKey=city:'+id);assert.equal(r.status,200);assert.ok(r.value.entries.some((e:any)=>e.journeyId===own));assert.ok(r.value.entries.some((e:any)=>e.subjectId===saved.subjectId));assert.equal(r.value.entries.some((e:any)=>e.journeyId===through),false);
-  assert.ok(r.value.entries.every((e:any)=>e.originKey==='city:'+id&&e.timedDepartureEligible===false));assert.ok(r.value.entries.every((e:any)=>!('minsUntil' in e)&&!('nextDepartureAt' in e)));assert.equal(r.value.entries.find((e:any)=>e.journeyId===own).scheduledDays,'Mon, Fri');
+  assert.ok(r.value.entries.every((e:any)=>e.originKey==='city:'+id&&e.timedDepartureEligible===false));assert.ok(r.value.entries.filter((e:any)=>e.kind==='community').every((e:any)=>!e.countdownEligible&&!('nextDepartureAt' in e)));assert.equal(r.value.entries.find((e:any)=>e.journeyId===own).countdownEligible,true);assert.equal(r.value.entries.find((e:any)=>e.journeyId===own).scheduleTimezone,'Africa/Harare');assert.equal(r.value.entries.find((e:any)=>e.journeyId===own).scheduledDays,'Mon, Fri');
  });
  test('departure board API: device/account hiding removes authors from both rows and origins without leaking their identities',async()=>{
   const name='Private board '+randomUUID(),id=await city(name),saved=await lead(id);await legacy(name,'Hidden destination','Hidden board coach');
@@ -51,5 +51,16 @@ export function registerDepartureBoardTests(context:()=>Context){
   const name='Paused board '+randomUUID();await legacy(name,'Other destination','Paused legacy coach',null);delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
   try{const r=await read();assert.equal(r.status,200);assert.ok(r.value.origins.some((c:any)=>c.name===name));assert.equal(r.value.origins.some((c:any)=>c.hasCommunityReports),false);}
   finally{process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';}
+ });
+
+ test('departure board API: only active explicit legacy schedules receive a real future instant and pickup; raw/private schedule inputs stay private',async()=>{
+  const name='Countdown board '+randomUUID(),id=await city(name),good=await legacy(name,'Valid destination','Scheduled coach',null,'08:00:30'),uncertain=await legacy(name,'Uncertain destination','Uncertain coach'),unknown=await legacy(name,'Unknown destination','Unknown coach');
+  await q("UPDATE journeys SET travel_date='Daily' WHERE id=$1",[good]);await q("UPDATE journeys SET data_status='uncertain' WHERE id=$1",[uncertain]);await q("UPDATE journeys SET travel_date='sometimes' WHERE id=$1",[unknown]);
+  const result=await read('?originKey=city:'+id);assert.equal(result.status,200);const data=result.value,entry=data.entries.find((e:any)=>e.journeyId===good);assert.equal(entry.countdownEligible,true);assert.equal(entry.timedDepartureEligible,false);assert.equal(entry.pickupPoint,'Fixture rank');assert.equal(entry.scheduleTimezone,'Africa/Harare');assert.ok(Date.parse(entry.nextDepartureAt)>Date.parse(data.generatedAt));assert.match(entry.nextDepartureAt,/T06:00:30.000Z$/);
+  for(const key of [uncertain,unknown]){const e=data.entries.find((x:any)=>x.journeyId===key);assert.equal(e.countdownEligible,false);assert.equal(e.nextDepartureAt,undefined);}assert.equal(data.entries[0].journeyId,good);assert.equal(JSON.stringify(data).includes('scheduleClock'),false);
+ });
+ test('departure board API: past explicit dates cannot become daily, and Search-visible original reports keep an unavailable countdown',async()=>{
+  const name='Past schedule '+randomUUID(),id=await city(name),l=await lead(id),j=await legacy(name,'Old destination','Dated coach');await q("UPDATE journeys SET travel_date='2000-01-01' WHERE id=$1",[j]);const data=(await read('?originKey=city:'+id)).value;
+  assert.equal(data.entries.find((e:any)=>e.journeyId===j).countdownEligible,false);assert.equal(data.entries.find((e:any)=>e.subjectId===l.subjectId).countdownEligible,false);const search=await context().request('/v2/search?originCityId='+id);assert.ok(search.value.items.some((e:any)=>e.subjectId===l.subjectId));
  });
 }

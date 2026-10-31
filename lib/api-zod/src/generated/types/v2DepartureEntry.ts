@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { V2DepartureEntryKind } from "./v2DepartureEntryKind";
+import type { V2DepartureEntryScheduleTimezone } from "./v2DepartureEntryScheduleTimezone";
 
 export interface V2DepartureEntry {
   key: string;
@@ -20,6 +21,11 @@ export interface V2DepartureEntry {
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
   reportedTime?: string | null;
   scheduledDays?: string | null;
+  pickupPoint?: string;
+  /** Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. */
+  countdownEligible?: boolean;
+  nextDepartureAt?: Date;
+  scheduleTimezone?: V2DepartureEntryScheduleTimezone;
   /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
   timedDepartureEligible: boolean;
 }
