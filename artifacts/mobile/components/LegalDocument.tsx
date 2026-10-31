@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React from "react";
 import {
   Linking,
@@ -190,7 +191,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
         <Text
           style={[
             styles.intro,
-            { color: colors.foreground, fontFamily: "Inter_500Medium" },
+            { color: colors.foreground, fontFamily: ui.type.medium },
           ]}
         >
           {displayedIntro}
@@ -207,7 +208,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
             <Text
               style={[
                 styles.sectionTitle,
-                { color: colors.primary, fontFamily: "Inter_700Bold" },
+                { color: colors.primary, fontFamily: ui.type.bold },
               ]}
             >
               {section.title}
@@ -215,7 +216,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
             <Text
               style={[
                 styles.sectionBody,
-                { color: colors.foreground, fontFamily: "Inter_400Regular" },
+                { color: colors.foreground, fontFamily: ui.type.regular },
               ]}
             >
               {section.body}
@@ -234,7 +235,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
             <Text
               style={[
                 styles.contactTitle,
-                { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                { color: colors.primary, fontFamily: ui.type.semibold },
               ]}
             >
               Questions or account help?
@@ -242,7 +243,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
             <Text
               style={[
                 styles.contactBody,
-                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+                { color: colors.mutedForeground, fontFamily: ui.type.regular },
               ]}
             >
               Contact the Mabhazi operator.
@@ -251,7 +252,7 @@ export function LegalDocument({ title, intro, sections }: LegalDocumentProps) {
               accessibilityRole="link"
               style={[
                 styles.email,
-                { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                { color: colors.primary, fontFamily: ui.type.semibold },
               ]}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             >
@@ -274,28 +275,28 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.14)",
   },
   headerTitle: {
     color: "#FFFFFF",
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontSize: 26,
+    fontFamily: ui.type.bold,
   },
-  content: { padding: 16, gap: 12 },
-  intro: { fontSize: 15, lineHeight: 22, paddingHorizontal: 4 },
+  content: {alignSelf: 'center', maxWidth: 720, width: "100%",  padding: 20, gap: 24 },
+  intro: { fontSize: 16, lineHeight: 24, paddingHorizontal: 4 },
   section: {
     borderRadius: 14,
-    borderWidth: 1,
-    padding: 16,
-    gap: 8,
+    borderWidth: 0,
+    padding: 0,
+    gap: 12,
   },
-  sectionTitle: { fontSize: 15 },
-  sectionBody: { fontSize: 14, lineHeight: 21 },
+  sectionTitle: { fontSize: 19 },
+  sectionBody: { fontSize: 16, lineHeight: 25 },
   contactCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   contactCopy: { flex: 1, gap: 4 },
-  contactTitle: { fontSize: 14 },
-  contactBody: { fontSize: 13, lineHeight: 18 },
-  email: { fontSize: 13, marginTop: 2 },
+  contactTitle: { fontSize: 16 },
+  contactBody: { fontSize: 14, lineHeight: 21 },
+  email: {paddingVertical: 12, minHeight: 44,  fontSize: 16, marginTop: 2 },
 });

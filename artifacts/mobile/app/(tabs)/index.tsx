@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -20,7 +21,12 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { JourneyCard, type Journey } from "@/components/JourneyCard";
 import { JourneyDetailSheet } from "@/components/JourneyDetailSheet";
-import { useSearchJourneys, useRateJourney, getSearchJourneysQueryKey } from "@workspace/api-client-react";
+import { useSearchJourneys, useRateJourney, getSearchJourneysQueryKey, type V2City } from "@workspace/api-client-react";
+import { PublicRouteCard } from '@/components/PublicRouteCard';
+import { usePublicRoutes } from '@/lib/use-public-routes';
+import { useCaptureEntry } from '@/lib/capture-context';
+import { searchViewState, searchRoutePrefill, type RoutePrefill } from '@/lib/contribution-moments';
+import { CaptureButton } from '@/components/capture/CapturePrimitives';
 import { SearchModal } from "@/components/SearchModal";
 import { filterBlockedContributors, useBlockedContributors } from "@/hooks/useBlockedContributors";
 import { TermsAcceptanceCard, useTermsAcceptance } from "@/components/TermsAcceptance";
@@ -34,14 +40,18 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default function SearchScreen() {
   const colors = useColors();
+  const capture = useCaptureEntry();
+  const [fromChoice, setFromChoice] = useState<V2City | null>(null), [toChoice, setToChoice] = useState<V2City | null>(null);
+  const [searchedRoute, setSearchedRoute] = useState<RoutePrefill>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const terms = useTermsAcceptance();
   const {
     blockedContributorIds,
     isLoading: isBlockedContributorsLoading,
     error: blockedContributorsError,
+    retryBlockedContributors,
   } = useBlockedContributors();
   const params = useLocalSearchParams<{ fromCity?: string; toCity?: string }>();
 
@@ -67,12 +77,16 @@ export default function SearchScreen() {
   const [toCityModal, setToCityModal] = useState(false);
 
   const expandAnim = useRef(new Animated.Value(1)).current;
+  const headerScroll = useRef<ScrollView>(null);
+  useEffect(() => { headerScroll.current?.scrollTo({y:0,animated:false}); },[isExpanded]);
 
   // Auto-trigger search when navigated here from Contribute with pre-filled cities
   useEffect(() => {
     if (params.fromCity || params.toCity) {
       const fc = (params.fromCity as string) ?? "";
       const tc = (params.toCity as string) ?? "";
+      setFromChoice(null); setToChoice(null);
+      setSearchedRoute(searchRoutePrefill(fc, tc, null, null));
       setFromCity(fc);
       setToCity(tc);
       setSearchParams({ fromCity: fc || undefined, toCity: tc || undefined });
@@ -84,7 +98,7 @@ export default function SearchScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.fromCity, params.toCity]);
 
-  const { data, isLoading, isFetching } = useSearchJourneys(
+  const { data, isLoading, isFetching, isSuccess, isError, refetch } = useSearchJourneys(
     searchParams ?? {},
     {
       query: {
@@ -112,6 +126,18 @@ export default function SearchScreen() {
       ? filterBlockedContributors(journeys, blockedContributorIds)
       : [];
 
+  const safetyReady=!isBlockedContributorsLoading&&!blockedContributorsError;
+  const publicRequired=searchParams!==null;
+  const publicParams={...(searchedRoute?.origin?{originCityId:searchedRoute.origin.id}:{fromCity:searchParams?.fromCity}),...(searchedRoute?.destination?{destinationCityId:searchedRoute.destination.id}:{toCity:searchParams?.toCity})};
+  const publicResults=usePublicRoutes(publicParams,publicRequired&&safetyReady&&!authLoading,user?.id??null,blockedContributorIds,capture.revision);
+  const publicItems=safetyReady&&!authLoading?(publicResults.data?.pages.flatMap(page=>page.items)??[]):[];
+  const publicHidden=safetyReady&&publicResults.data?.pages.some(page=>page.hasHiddenResults)?1:0;
+  const resultItems=[...visibleJourneys.map(journey=>({kind:'legacy' as const,journey})),...publicItems.map(route=>({kind:'lead' as const,route}))];
+  const viewState = searchViewState({ searched: hasSearched, loading: isLoading || isFetching || authLoading || publicRequired&&safetyReady&&publicResults.isLoading,
+    succeeded: isSuccess&&(!publicRequired||!safetyReady||publicResults.isSuccess),failed:isError||publicRequired&&safetyReady&&publicResults.isError,
+    safetyLoading: isBlockedContributorsLoading,safetyFailed:!!blockedContributorsError,total:journeys.length+publicItems.length+publicHidden,visible:resultItems.length });
+  const retrySearch=()=>{void refetch();if(publicRequired&&safetyReady)void publicResults.refetch();};
+
   const collapseSearch = useCallback(() => {
     Animated.timing(expandAnim, {
       toValue: 0,
@@ -132,20 +158,22 @@ export default function SearchScreen() {
   const handleSearch = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setHasSearched(true);
+    setSearchedRoute(searchRoutePrefill(fromCity, toCity, fromChoice, toChoice));
     setSearchParams({
       fromCity: fromCity.trim() || undefined,
       toCity: toCity.trim() || undefined,
       day: selectedDay ?? undefined,
     });
     collapseSearch();
-  }, [fromCity, toCity, selectedDay, collapseSearch]);
+  }, [fromCity, toCity, fromChoice, toChoice, selectedDay, collapseSearch]);
 
   const swapCities = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setFromChoice(toChoice); setToChoice(fromChoice);
     const temp = fromCity;
     setFromCity(toCity);
     setToCity(temp);
-  }, [fromCity, toCity]);
+  }, [fromCity, toCity, fromChoice, toChoice]);
 
   const toggleDay = useCallback((day: string) => {
     Haptics.selectionAsync();
@@ -225,9 +253,11 @@ export default function SearchScreen() {
     default: insets.bottom + 20,
   });
 
+  const [searchContentHeight, setSearchContentHeight] = useState(378);
+  const [compactContentHeight, setCompactContentHeight] = useState(64);
   const cardHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 378],
+    outputRange: [0, searchContentHeight],
   });
 
   const cardOpacity = expandAnim.interpolate({
@@ -242,13 +272,13 @@ export default function SearchScreen() {
 
   const compactHeight = expandAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [52, 0],
+    outputRange: [compactContentHeight, 0],
   });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
+      <ScrollView ref={headerScroll} style={{ flexGrow: 0, flexShrink: isExpanded ? 1 : 0, maxHeight: isExpanded ? '80%' : undefined }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
           styles.header,
           {
             backgroundColor: colors.primary,
@@ -257,9 +287,6 @@ export default function SearchScreen() {
         ]}
       >
         <Text style={[styles.appTitle, { color: "#FFFFFF" }]}>Mabhazi.com</Text>
-        <Text style={[styles.appSubtitle, { color: "rgba(255,255,255,0.7)" }]}>
-          Find intercity bus routes
-        </Text>
 
         {/* Compact bar shown after search */}
         <Animated.View
@@ -272,9 +299,11 @@ export default function SearchScreen() {
             },
           ]}
           pointerEvents={isExpanded ? "none" : "auto"}
+          accessibilityElementsHidden={isExpanded} importantForAccessibility={isExpanded ? "no-hide-descendants" : "auto"} aria-hidden={isExpanded}
         >
           <TouchableOpacity
             style={[styles.compactBarInner, { backgroundColor: "#FFFFFF" }]}
+            onLayout={event => setCompactContentHeight(Math.ceil(event.nativeEvent.layout.height))}
             onPress={expandSearch}
             activeOpacity={0.85}
           >
@@ -318,8 +347,9 @@ export default function SearchScreen() {
         <Animated.View
           style={{ height: cardHeight, opacity: cardOpacity, overflow: "hidden" }}
           pointerEvents={isExpanded ? "auto" : "none"}
+          accessibilityElementsHidden={!isExpanded} importantForAccessibility={isExpanded ? "auto" : "no-hide-descendants"} aria-hidden={!isExpanded}
         >
-          <View style={styles.searchCard}>
+          <View style={styles.searchCard} onLayout={event => setSearchContentHeight(Math.ceil(event.nativeEvent.layout.height))}>
             <View style={styles.inputRow}>
               <View
                 style={[styles.inputIcon, { backgroundColor: colors.secondary }]}
@@ -331,6 +361,8 @@ export default function SearchScreen() {
                   styles.input,
                   { flexDirection: "row", alignItems: "center" },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={fromCity ? `From city: ${fromCity}` : "From city"}
                 onPress={() => setFromCityModal(true)}
                 activeOpacity={0.7}
               >
@@ -338,7 +370,7 @@ export default function SearchScreen() {
                   style={{
                     flex: 1,
                     fontSize: 15,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                     color: fromCity ? colors.foreground : colors.mutedForeground,
                   }}
                   numberOfLines={1}
@@ -390,6 +422,8 @@ export default function SearchScreen() {
                   styles.input,
                   { flexDirection: "row", alignItems: "center" },
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={toCity ? `To city: ${toCity}` : "To city"}
                 onPress={() => setToCityModal(true)}
                 activeOpacity={0.7}
               >
@@ -397,7 +431,7 @@ export default function SearchScreen() {
                   style={{
                     flex: 1,
                     fontSize: 15,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                     color: toCity ? colors.foreground : colors.mutedForeground,
                   }}
                   numberOfLines={1}
@@ -427,11 +461,11 @@ export default function SearchScreen() {
                   styles.dayFilterLabel,
                   {
                     color: colors.mutedForeground,
-                    fontFamily: "Inter_400Regular",
+                    fontFamily: ui.type.regular,
                   },
                 ]}
               >
-                Day of week — optional
+              Travel day (optional)
               </Text>
               <View style={styles.dayChips}>
                 {DAYS.map((day) => {
@@ -457,8 +491,8 @@ export default function SearchScreen() {
                           {
                             color: active ? "#FFFFFF" : colors.foreground,
                             fontFamily: active
-                              ? "Inter_600SemiBold"
-                              : "Inter_400Regular",
+                              ? ui.type.semibold
+                              : ui.type.regular,
                           },
                         ]}
                       >
@@ -475,32 +509,37 @@ export default function SearchScreen() {
               onPress={handleSearch}
               activeOpacity={0.85}
             >
-              <Feather name="search" size={18} color="#FFFFFF" />
+              <Feather name="search" size={18} color={colors.accentForeground} />
               <Text style={styles.searchBtnText}>Search Routes</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
-      </View>
+      </ScrollView>
 
-      {isLoading || isFetching ? (
+      {viewState === 'loading' ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text
             style={[
               styles.loadingText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             Finding routes...
           </Text>
         </View>
-      ) : hasSearched && blockedContributorsError ? (
+      ) : viewState === 'error' ? (
+        <View style={styles.centered}>
+          <Text accessibilityRole="alert" style={[styles.emptyTitle, { color: colors.foreground }]}>Search could not load</Text>
+          <CaptureButton title="Try search again" onPress={retrySearch} />
+        </View>
+      ) : viewState === 'safety_error' ? (
         <View style={styles.centered}>
           <Feather name="alert-triangle" size={48} color={colors.destructive} />
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.destructive, fontFamily: "Inter_600SemiBold" },
+              { color: colors.destructive, fontFamily: ui.type.semibold },
             ]}
           >
             Block settings unavailable
@@ -508,31 +547,34 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             {blockedContributorsError}
           </Text>
+          <CaptureButton title="Try safety settings again" onPress={() => void retryBlockedContributors().catch(() => undefined)} />
         </View>
-      ) : hasSearched && isBlockedContributorsLoading ? (
+      ) : viewState === 'safety_loading' ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text
             style={[
               styles.loadingText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
             Loading safety settings...
           </Text>
         </View>
-      ) : hasSearched && visibleJourneys.length === 0 ? (
+      ) : viewState === 'hidden' ? (
+        <View style={styles.centered}><Text style={[styles.emptyTitle, { color: colors.foreground }]}>Results hidden by your block settings</Text></View>
+      ) : viewState === 'empty' ? (
         <View style={styles.centered}>
           <Feather name="inbox" size={48} color={colors.border} />
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+              { color: colors.foreground, fontFamily: ui.type.semibold },
             ]}
           >
             No routes found
@@ -540,51 +582,44 @@ export default function SearchScreen() {
           <Text
             style={[
               styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              { color: colors.mutedForeground, fontFamily: ui.type.regular },
             ]}
           >
-            Try different cities or a different day
+            Know a bus on this route?
           </Text>
+          <CaptureButton title="Add a route" disabled={capture.isOpen} onPress={() => capture.open({ kind: 'route', entrySurface: 'search_empty', prefill: searchedRoute })} />
         </View>
-      ) : !hasSearched ? (
+      ) : viewState === 'idle' ? (
         <View style={styles.centered}>
           <Feather name="compass" size={52} color={colors.border} />
           <Text
             style={[
               styles.emptyTitle,
-              { color: colors.foreground, fontFamily: "Inter_600SemiBold" },
+              { color: colors.foreground, fontFamily: ui.type.semibold },
             ]}
           >
             Search for a route
           </Text>
-          <Text
-            style={[
-              styles.emptySubtitle,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            Community-contributed bus routes across cities
-          </Text>
         </View>
       ) : (
         <FlatList
-           data={visibleJourneys}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => (
+           data={resultItems}
+          keyExtractor={(item) => item.kind==='lead'?'lead:'+item.route.subjectId:'legacy:'+item.journey.id}
+          renderItem={({ item }) => item.kind==='lead'? <PublicRouteCard route={item.route} disabled={capture.isOpen} onPress={()=>capture.open({kind:'public_route',subjectId:item.route.subjectId})}/> : (
             <JourneyCard
               journey={{
-                ...item,
-                 userRating: getLocalUserRating(item.id) ?? item.userRating,
+                ...item.journey,
+                 userRating: getLocalUserRating(item.journey.id) ?? item.journey.userRating,
               }}
               onRate={
                 isAuthenticated
-                  ? (score) => handleRate(item.id, score)
+                  ? (score) => handleRate(item.journey.id, score)
                   : undefined
               }
               onPress={() =>
                 handleCardPress({
-                  ...item,
-                   userRating: getLocalUserRating(item.id) ?? item.userRating,
+                  ...item.journey,
+                   userRating: getLocalUserRating(item.journey.id) ?? item.journey.userRating,
                 })
               }
             />
@@ -596,6 +631,7 @@ export default function SearchScreen() {
             },
           ]}
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={publicResults.hasNextPage?<View style={{margin:16}}><CaptureButton title="Load more route reports" busy={publicResults.isFetchingNextPage} onPress={()=>void publicResults.fetchNextPage()}/></View>:null}
           ListHeaderComponent={
              <View>
                {isAuthenticated && !terms.isAccepted ? (
@@ -608,11 +644,11 @@ export default function SearchScreen() {
                    styles.resultsCount,
                    {
                      color: colors.mutedForeground,
-                     fontFamily: "Inter_500Medium",
+                     fontFamily: ui.type.medium,
                    },
                  ]}
                >
-                  {visibleJourneys.length} route{visibleJourneys.length !== 1 ? "s" : ""} found
+                  {resultItems.length} route{resultItems.length !== 1 ? "s" : ""} found
                </Text>
              </View>
           }
@@ -629,6 +665,7 @@ export default function SearchScreen() {
         visible={fromCityModal}
         onClose={() => setFromCityModal(false)}
         onSelect={setFromCity}
+        onSelectCity={setFromChoice}
         title="Departure City"
         mode="city"
       />
@@ -636,6 +673,7 @@ export default function SearchScreen() {
         visible={toCityModal}
         onClose={() => setToCityModal(false)}
         onSelect={setToCity}
+        onSelectCity={setToChoice}
         title="Destination City"
         mode="city"
       />
@@ -647,16 +685,16 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingBottom: 20,
   },
   appTitle: {
     fontSize: 26,
-    fontFamily: "Inter_700Bold",
-    marginBottom: 2,
+    fontFamily: ui.type.bold,
+    marginBottom: 16,
   },
   appSubtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: ui.type.regular,
     marginBottom: 8,
   },
   compactBar: {
@@ -668,12 +706,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0,
     shadowRadius: 12,
-    elevation: 4,
+    elevation: 0,
   },
   compactRoute: {
     flex: 1,
@@ -682,8 +720,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   compactCity: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    fontFamily: ui.type.semibold,
     flexShrink: 1,
   },
   compactDay: {
@@ -694,55 +732,55 @@ const styles = StyleSheet.create({
   },
   compactDayText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    fontFamily: ui.type.semibold,
   },
   editBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 10,
   },
   searchCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
+    borderRadius: ui.radius.group,
     padding: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: 0,
   },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
-  inputIcon: {
+  inputIcon: {backgroundColor: ui.color.soft, 
     width: 36,
     height: 36,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
   },
-  input: {
+  input: {minHeight: 50, 
     flex: 1,
-    fontSize: 15,
-    paddingVertical: 10,
+    fontSize: 16,
+    paddingVertical: 12,
   },
   swapRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 0,
     paddingLeft: 48,
   },
   dividerLine: { flex: 1, height: 1 },
   swapBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
@@ -750,7 +788,7 @@ const styles = StyleSheet.create({
   },
   separator: { height: 1, marginVertical: 8 },
   dayFilterSection: { gap: 8, marginBottom: 4 },
-  dayFilterLabel: { fontSize: 12 },
+  dayFilterLabel: { fontSize: 14 },
   dayChips: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -760,13 +798,13 @@ const styles = StyleSheet.create({
   dayChip: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  dayChipText: { fontSize: 13 },
-  searchBtn: {
+  dayChipText: { fontSize: 14 },
+  searchBtn: {minHeight: 50, 
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -776,9 +814,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   searchBtnText: {
-    color: "#FFFFFF",
+    color: ui.color.ink,
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: ui.type.semibold,
   },
   centered: {
     flex: 1,
@@ -788,11 +826,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   loadingText: { fontSize: 15, marginTop: 8 },
-  emptyTitle: { fontSize: 18, marginTop: 12, textAlign: "center" },
-  emptySubtitle: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  emptyTitle: { fontSize: 23, marginTop: 12, textAlign: "center" },
+  emptySubtitle: { fontSize: 16, textAlign: "center", lineHeight: 24 },
   list: { paddingTop: 16 },
   resultsCount: {
-    fontSize: 13,
+    fontSize: 14,
     paddingHorizontal: 16,
     paddingBottom: 8,
   },

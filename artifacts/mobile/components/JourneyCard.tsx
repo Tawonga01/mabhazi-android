@@ -1,5 +1,6 @@
+import { ui } from '@/constants/ui';
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, Platform, Animated } from "react-native";
 import { AntDesign, Feather, Ionicons } from "@/components/VectorIcon";
 import { useColors } from "@/hooks/useColors";
 import { useBlockedContributors } from "@/hooks/useBlockedContributors";
@@ -74,10 +75,12 @@ function Stars({
           return (
             <TouchableOpacity
               key={score}
+              accessibilityRole="button"
+              accessibilityLabel={`Rate route accuracy: ${score} of 5`}
               onPress={() => { setHover(0); onSelect(score); }}
               onPressIn={() => setHover(score)}
               onPressOut={() => setHover(0)}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
               activeOpacity={0.7}
             >
               <Ionicons
@@ -108,11 +111,9 @@ const starStyles = StyleSheet.create({
 function RatingSection({
   journey,
   onRate,
-  onPress,
 }: {
   journey: Journey;
   onRate?: (score: number) => void;
-  onPress?: () => void;
 }) {
   const colors = useColors();
   const hasRated = !!journey.userRating;
@@ -154,7 +155,7 @@ function RatingSection({
         onTouchEnd={(e) => { if (onRate) e.stopPropagation(); }}
       >
         <View style={styles.communityLeft}>
-          <Text style={[styles.ratingLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.ratingLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Community accuracy
           </Text>
           <View style={styles.communityScoreRow}>
@@ -164,11 +165,11 @@ function RatingSection({
               size={hasRated ? 16 : onRate ? 22 : 16}
             />
             {journey.ratingCount > 0 ? (
-              <Text style={[styles.ratingCountText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.ratingCountText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                 {journey.ratingCount} {journey.ratingCount === 1 ? "rating" : "ratings"}
               </Text>
             ) : (
-              <Text style={[styles.noRatingText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text style={[styles.noRatingText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                 {onRate ? "Tap to rate" : "No ratings yet"}
               </Text>
             )}
@@ -188,26 +189,12 @@ function RatingSection({
           ]}
         >
           <Feather name="check-circle" size={12} color="#16A34A" />
-          <Text style={[styles.confirmedBadgeText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.confirmedBadgeText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
             Rated
           </Text>
         </Animated.View>
       </View>
 
-      {!onRate && (
-        <Text style={[styles.signInHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          Sign in to rate this route
-        </Text>
-      )}
-
-      {onPress && (
-        <View style={[styles.tapHint, { borderTopColor: colors.border }]}>
-          <Feather name="info" size={11} color={colors.mutedForeground} />
-          <Text style={[styles.tapHintText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Tap card for community insights
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -225,7 +212,7 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
     <View style={[styles.inner]}>
       <View style={styles.header}>
         <View style={[styles.companyBadge, { backgroundColor: colors.primary }]}>
-          <Feather name="truck" size={12} color={colors.primaryForeground} />
+          <Image source={require("../assets/images/departures-bus.png")} style={{width:16,height:16,tintColor:colors.primaryForeground}} resizeMode="contain" accessible={false}/>
           <Text style={[styles.companyText, { color: colors.primaryForeground }]} numberOfLines={1}>
             {journey.busCompany}
           </Text>
@@ -283,7 +270,7 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
       {hasStops ? (
         <View style={[styles.viaRow, { backgroundColor: colors.primary + "0D" }]}>
           <Feather name="map-pin" size={11} color={colors.primary} />
-          <Text style={[styles.viaText, { color: colors.primary, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
+          <Text style={[styles.viaText, { color: colors.primary, fontFamily: ui.type.medium }]} numberOfLines={1}>
             via{" "}
             {journey.stops.map((s, i) => (
               <Text key={s.id}>
@@ -298,7 +285,7 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
 
       <View style={styles.daysBadgeRow}>
         <Feather name="calendar" size={12} color={colors.primary} />
-        <Text style={[styles.daysText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+        <Text style={[styles.daysText, { color: colors.primary, fontFamily: ui.type.medium }]}>
           {journey.scheduledDays}
         </Text>
       </View>
@@ -350,13 +337,15 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
 
       <View style={[styles.ratingDivider, { backgroundColor: colors.border }]} />
 
-      <RatingSection journey={journey} onRate={onRate} onPress={onPress} />
+      <RatingSection journey={journey} onRate={onRate} />
     </View>
   );
 
   if (onPress) {
     return (
       <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={`View route: ${journey.fromCity} to ${journey.toCity}, ${journey.busCompany}`}
         style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
         onPress={onPress}
         activeOpacity={0.92}
@@ -376,7 +365,7 @@ export function JourneyCard({ journey, onRate, onPress }: JourneyCardProps) {
 const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0,
     marginHorizontal: 16,
     marginBottom: 12,
     ...Platform.select({
@@ -389,8 +378,8 @@ const styles = StyleSheet.create({
       android: { elevation: 2 },
     }),
   },
-  inner: { padding: 16 },
-  header: {
+  inner: { padding: 20 },
+  header: {gap: 8, 
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -405,14 +394,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: 8,
     maxWidth: "60%",
   },
   companyText: {
-    fontSize: 12,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    fontFamily: ui.type.semibold,
     flexShrink: 1,
   },
   scoreBadge: {
@@ -425,7 +414,7 @@ const styles = StyleSheet.create({
   },
   scoreBadgeText: {
     fontSize: 12,
-    fontFamily: "Inter_700Bold",
+    fontFamily: ui.type.bold,
     color: "#92400E",
   },
   priceBadge: {
@@ -434,18 +423,18 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   priceText: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
+    fontSize: 16,
+    fontFamily: ui.type.bold,
   },
   routeRow: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 8,
   },
-  cityBlock: { width: 90 },
+  cityBlock: { width: "38%" },
   cityBlockRight: { alignItems: "flex-end" },
-  timeText: { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 2 },
-  cityText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  timeText: { fontSize: 23, fontFamily: ui.type.bold, marginBottom: 2 },
+  cityText: { fontSize: 16, fontFamily: ui.type.medium },
   routeMiddle: {
     flex: 1,
     flexDirection: "row",
@@ -470,31 +459,31 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginBottom: 8,
   },
-  viaText: { fontSize: 11, flex: 1 },
+  viaText: { fontSize: 14, flex: 1 },
   daysBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     marginBottom: 10,
   },
-  daysText: { fontSize: 12 },
+  daysText: { fontSize: 14 },
   divider: { height: 1, marginBottom: 12 },
   footer: { gap: 6 },
   footerItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  footerText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  footerText: { fontSize: 14, fontFamily: ui.type.regular, flex: 1 },
   safetyActions: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   ratingDivider: { height: 1, marginTop: 12, marginBottom: 12 },
   ratingSection: { gap: 6 },
-  communityRow: {
+  communityRow: {gap: 12, flexWrap: 'wrap', 
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   communityLeft: { flex: 1, gap: 4 },
   communityScoreRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  ratingLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 },
-  ratingCountText: { fontSize: 11 },
-  noRatingText: { fontSize: 11 },
+  ratingLabel: { fontSize: 14, textTransform: 'none', letterSpacing: 0, marginBottom: 2 },
+  ratingCountText: { fontSize: 14 },
+  noRatingText: { fontSize: 14 },
   confirmedBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -505,8 +494,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginLeft: 8,
   },
-  confirmedBadgeText: { fontSize: 11 },
-  signInHint: { fontSize: 12, fontStyle: "italic" },
+  confirmedBadgeText: { fontSize: 14 },
+  signInHint: { fontSize: 14, fontStyle: 'normal' },
   tapHint: {
     flexDirection: "row",
     alignItems: "center",
@@ -514,5 +503,5 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
   },
-  tapHintText: { fontSize: 11 },
+  tapHintText: { fontSize: 14 },
 });

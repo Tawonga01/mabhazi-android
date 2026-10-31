@@ -1,15 +1,23 @@
+import {registerPickupInvitationApiTests} from './pickupInvitationsV2.cases';
+import {registerPromptControlApiTests} from './promptControlsV2.cases';
+import {registerDepartureBoardTests} from './departureBoardV2.cases';
+import {registerPickupQuestionApiTests} from './pickupQuestionsV2.cases';
+import {registerPlaceReportTests} from './placeReportsV2.cases';
+import { registerRouteObservationApiTests } from './routeObservations.cases';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import { before, after, test } from 'node:test';
 import pg from 'pg';
-import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse } from '@workspace/api-zod';
+import { SubmitV2LeadResponse, GetV2CapabilitiesResponse, ListV2CitiesResponse, GetV2LeadReceiptResponse, ListV2OwnRoutesResponse, GetV2OwnRouteResponse } from '@workspace/api-zod';
 import type { infer as Infer } from 'zod';
 import { registerActualApiTests } from './actualJourney.cases';
-type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse>;
+import {registerFareReportTests} from './fareReportsV2.cases';
+import { registerPublicRouteTests } from './publicRoutesV2.cases';
+type TestPayload = Infer<typeof SubmitV2LeadResponse> & Infer<typeof GetV2CapabilitiesResponse> & Infer<typeof ListV2CitiesResponse> & Infer<typeof GetV2LeadReceiptResponse> & Infer<typeof ListV2OwnRoutesResponse> & Infer<typeof GetV2OwnRouteResponse>;
 
 let admin: pg.Client, server: Server, base: string;
-const accounts = [randomUUID(), randomUUID(), randomUUID()], tokens = accounts.map(() => randomBytes(32).toString('hex'));
+const accounts = [randomUUID(), randomUUID(), randomUUID(), randomUUID()], tokens = accounts.map(() => randomBytes(32).toString('hex'));
 let cities: number[];
 before(async () => {
   process.env.PUBLIC_ORIGIN = 'https://api.mabhazi.com';
@@ -49,7 +57,7 @@ async function request(path: string, input?: unknown, account: number | null = 0
 }
 test('minimum API: capability defaults off and does not write legacy or v2', async () => {
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
-  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false});
+  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false,fareReportsEnabled:false,routeObservationsEnabled:false,placeReportsEnabled:false,pickupQuestionsEnabled:false,pickupInvitationsEnabled:false,promptControlsEnabled:true});
   assert.equal((await request('/v2/contributions',body())).status,503);
   process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';
   assert.equal((await request('/v2/capabilities')).value.minimumLeadEnabled,true);
@@ -78,8 +86,46 @@ test('minimum API: four answers commit a lead, two facts, receipt and durable jo
   assert.equal((await admin.query('SELECT count(*) FROM v2_observations WHERE contribution_id=$1',[contribution.id])).rows[0].count,'2');
   assert.equal((await admin.query("SELECT count(*) FROM v2_jobs WHERE contribution_id=$1 AND kind='normalise' AND state='pending'",[contribution.id])).rows[0].count,'1');
   assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,count);
-  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true},currentLeadRevision:Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[saved.value.subjectId])).rows[0].revision)});
 });
+
+test('minimum API: empty-search intake needs no approved route and preserves its surface on recovery', async () => {
+  const input={...body(),entrySurface:'search_empty'}, count=(await admin.query('SELECT count(*) FROM journeys')).rows[0].count;
+  const saved=await request('/v2/contributions',input);assert.equal(saved.status,200);assert.equal(saved.value.publicationStatus,'pending');
+  const row=(await admin.query('SELECT entry_surface,payload FROM v2_contributions WHERE id=$1',[saved.value.contributionId])).rows[0];
+  assert.equal(row.entry_surface,'search_empty');assert.equal(row.payload.entrySurface,'search_empty');
+  assert.equal((await request('/v2/contributions',input)).value.contributionId,saved.value.contributionId);
+  assert.equal((await request('/v2/receipts/'+input.clientSubmissionId)).value.initialReceipt?.contributionId,saved.value.contributionId);
+  assert.equal((await request('/v2/contributions',{...input,entrySurface:'contribute_tab'})).status,409);
+  assert.equal((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value.found,false);
+  assert.equal((await request('/v2/contributions',{...body(),entrySurface:'search_empty'},null)).status,401);
+  assert.equal((await request('/v2/contributions',{...body(),entrySurface:'search_empty'},2)).status,428);
+  assert.equal((await admin.query('SELECT count(*) FROM journeys')).rows[0].count,count);
+});
+test('minimum API: other surfaces and null still fail in both HTTP and restricted facade', async () => {
+  for(const entrySurface of [null,'route_detail','search_result','own_contribution','unknown']) {
+    const input={...body(),entrySurface};
+    assert.equal((await request('/v2/contributions',input)).status,422);
+    await admin.query('SET ROLE mabhazi_api');
+    try { await assert.rejects(admin.query('SELECT v2_api_submit_minimum_lead($1,$2,$3)',[accounts[0],'2026-09-12',input]), e=>(e as Error).message==='v2_minimum_capability_only'); }
+    finally { await admin.query('RESET ROLE'); }
+  }
+});
+
+
+test('own lead context: receipt stays immutable while live revision is private and unavailable targets are omitted', async () => {
+  const input=body(), saved=await request('/v2/contributions',input);assert.equal(saved.status,200);
+  const first=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.ok(Number.isSafeInteger(first.value.currentLeadRevision));assert.ok(first.value.currentLeadRevision!>0);
+  await admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.value.subjectId]);
+  const changed=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.equal(changed.value.currentLeadRevision,first.value.currentLeadRevision!+1);assert.deepEqual(changed.value.initialReceipt,first.value.initialReceipt);
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value,{found:false});
+  await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.value.subjectId]);
+  const retired=await request('/v2/receipts/'+input.clientSubmissionId);
+  assert.equal(retired.value.found,true);assert.equal(retired.value.currentLeadRevision,undefined);assert.deepEqual(retired.value.initialReceipt,first.value.initialReceipt);
+});
+
 test('minimum API: strict fields and an explicit valid clock, never hidden defaults', async () => {
   for(const patch of [{departureTime:''},{departureTime:'8:30'},{departureTime:'24:00'},{departureTime:'Leaves when full'},
     {operator:{name:'unknown'}},{operator:{name:' bus '}},{operator:{name:'Bus\nline'}},{originCityId:1.5},{destinationCityId:cities[0]}, {price:0}]) {
@@ -95,7 +141,7 @@ test('minimum API: paused new intake still permits private committed receipt rec
   const input=body(), saved=await request('/v2/contributions',input);assert.equal(saved.status,200);
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
   try {
-    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true}});
+    assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId)).value,{found:true,initialReceipt:{...saved.value,replayed:true},currentLeadRevision:Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[saved.value.subjectId])).rows[0].revision)});
     assert.equal((await request('/v2/contributions',body())).status,503);
     assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,1)).value,{found:false});
   } finally { process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true'; }
@@ -146,5 +192,64 @@ test('minimum API: restricted facade cannot expose optional facts or privileged 
   } finally { await admin.query('RESET ROLE'); }
 });
 
+test('own route history: authentication, account namespace and strict queries precede reads', async () => {
+  assert.equal((await request('/v2/my-routes',undefined,null)).status,401);
+  assert.equal((await request('/v2/my-routes',undefined,0,{'X-Mabhazi-Account':accounts[1]})).status,409);
+  assert.equal((await request('/v2/my-routes?owner='+accounts[1])).status,400);
+  for(const query of ['cursor=x','cursor[]=x','cursor=','cursor='+randomUUID()+'.'+randomUUID()]) assert.equal((await request('/v2/my-routes?'+query)).status,400);
+  assert.equal((await request('/v2/my-routes/not-a-uuid')).status,400);
+});
+test('own route history: private precision-safe keyset pages exclude concurrent newer submissions', async () => {
+  const keys:string[]=[];
+  for(let i=0;i<22;i++) {const input=body();input.target.newLead.operator.name='History bus '+i;const saved=await request('/v2/contributions',input,3);assert.equal(saved.status,200);keys.push(input.clientSubmissionId);}
+  const first=await request('/v2/my-routes',undefined,3);assert.equal(first.status,200);assert.equal(first.headers.get('cache-control'),'no-store');assert.equal(first.value.routes.length,20);assert.ok(first.value.nextCursor);
+  const originalCursor=first.value.nextCursor!;
+  const later=body();later.target.newLead.operator.name='History latest bus';assert.equal((await request('/v2/contributions',later,3)).status,200);
+  const last=await request('/v2/my-routes?cursor='+encodeURIComponent(originalCursor),undefined,3);assert.equal(last.status,200);assert.equal(last.value.routes.length,2);assert.equal(last.value.nextCursor,undefined);
+  const received=[...first.value.routes,...last.value.routes].map(row=>row.clientSubmissionId);assert.equal(new Set(received).size,22);assert.deepEqual(new Set(received),new Set(keys));assert.ok(!received.includes(later.clientSubmissionId));
+  assert.equal((await request('/v2/my-routes?cursor='+encodeURIComponent(originalCursor),undefined,0)).status,400);
+  assert.equal((await request('/v2/my-routes/'+keys[0],undefined,0)).status,404);
+  assert.equal((await request('/v2/my-routes',undefined,3)).value.routes[0].clientSubmissionId,later.clientSubmissionId);
+  const dto=first.value.routes[0];assert.deepEqual(Object.keys(dto).sort(),['availability','clientSubmissionId','currentLeadRevision','departureTime','destination','operator','origin','subjectId','submittedAt'].sort());assert.ok(!('payload' in dto));assert.equal(dto.origin.id,cities[0]);assert.equal(dto.departureTime,'00:00');assert.equal(dto.availability,'active');
+});
+test('own route history: recheck sees current revision and retirement, not historical receipt status', async () => {
+  const input=body(),saved=await request('/v2/contributions',input,3);assert.equal(saved.status,200);
+  const initial=(await request('/v2/receipts/'+input.clientSubmissionId,undefined,3)).value.initialReceipt;
+  const old=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;
+  await admin.query('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[saved.value.subjectId]);
+  const current=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;assert.equal(current.currentLeadRevision,old.currentLeadRevision!+1);assert.equal(current.operator,input.target.newLead.operator.name);
+  delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
+  try {assert.equal((await request('/v2/my-routes',undefined,3)).status,200);assert.equal((await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).status,200);} finally {process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';}
+  await admin.query("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[saved.value.subjectId]);
+  const retired=(await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).value.route;assert.equal(retired.availability,'unavailable');assert.equal(retired.currentLeadRevision,undefined);
+  assert.deepEqual((await request('/v2/receipts/'+input.clientSubmissionId,undefined,3)).value.initialReceipt,initial);
+  await admin.query('UPDATE v2_leads SET attribution_erased=true WHERE subject_id=$1',[saved.value.subjectId]);
+  assert.equal((await request('/v2/my-routes/'+input.clientSubmissionId,undefined,3)).status,404);
+  assert.ok(!(await request('/v2/my-routes',undefined,3)).value.routes.some(row=>row.clientSubmissionId===input.clientSubmissionId));
+});
+test('own route history: deleting a contribution removes list/detail and invalidates its cursor without disclosure', async () => {
+  const page=(await request('/v2/my-routes',undefined,3)).value;assert.ok(page.nextCursor);
+  const anchor=page.routes[0];await admin.query('DELETE FROM v2_contributions WHERE id=(SELECT contribution_id FROM v2_receipts WHERE user_id=$1 AND client_submission_id=$2)',[accounts[3],anchor.clientSubmissionId]);
+  assert.equal((await request('/v2/my-routes/'+anchor.clientSubmissionId,undefined,3)).status,404);
+  assert.equal((await request('/v2/my-routes?cursor='+encodeURIComponent(page.nextCursor!),undefined,3)).status,400);
+  assert.equal((await request('/v2/my-routes/'+anchor.clientSubmissionId,undefined,1)).status,404);
+});
+
 registerActualApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
 
+
+registerPublicRouteTests(()=>({admin,cities,accounts,tokens,base}));
+
+registerFareReportTests(()=>({admin,cities,accounts,tokens,base}));
+
+registerRouteObservationApiTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
+
+registerPlaceReportTests(()=>({admin,cities,accounts,tokens,base,request,leadBody:body}));
+
+registerPickupQuestionApiTests(()=>({admin,cities,accounts,tokens,request,leadBody:body}));
+
+registerDepartureBoardTests(()=>({admin,cities,accounts,request,leadBody:body}));
+
+registerPromptControlApiTests(()=>({admin,accounts,request}));
+
+registerPickupInvitationApiTests(()=>({admin,cities,accounts,tokens,request,leadBody:body}));

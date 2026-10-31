@@ -1,6 +1,11 @@
+import {registerPickupInvitationTests} from './pickup-invitation.cases';
+import {registerPromptControlTests} from './prompt-controls.cases';
+import {registerPickupQuestionTests} from './pickup-question.cases';
+import { registerRouteObservationTests } from './route-observations.cases';
+import { registerPromptWorkerTests } from './prompt-worker.cases';
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { after, before, beforeEach, afterEach, test } from "node:test";
@@ -8,10 +13,12 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 import pg from "pg";
 import { processingTables } from "./schema/processing";
+import { registerAssessmentWorkerTests } from './assessment-worker.cases';
 import { registerProcessingTests } from "./processing.cases";
 import { registerLeadAssociationTests } from "./lead-association.cases";
 import { registerPatternAssociationTests } from "./pattern-association.cases";
 import { identityLookupTables } from "./schema/identityLookup";
+import { publicRouteContextTables } from "./schema/publicRouteContext";
 import { registerIdentityLookupTests } from "./identity-lookup.cases";
 import { registerJourneyProcessingTests } from "./journey-processing.cases";
 import { intakeTables } from "./schema/contributionIntake";
@@ -277,6 +284,166 @@ before(async () => {
     await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(canonical).digest('hex')]);
     await db.query('COMMIT');previousStageLog+=`Applied ${name}\n`;
   }
+  // Exercise the exact guarded hosted-editor upgrade from populated0029, then its no-op replay.
+  for(const name of ['0028_actual_journey_api.sql','0029_empty_search_minimum.sql']){
+    const sql=await readFile(new URL('../migrations/'+name,import.meta.url),'utf8');await db.query('BEGIN');await db.query(sql);
+    await db.query('INSERT INTO mabhazi_migrations.applied(name,checksum) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');previousStageLog+='Applied '+name+'\n';
+  }
+  const contextApply=await readFile(new URL('../scripts/preview-apply-0030.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_route_report_blocks(id uuid)');
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_partial_or_unrecorded'));await db.query('ROLLBACK');
+  assert.equal((await db.query("SELECT to_regclass('public.v2_route_report_blocks') t")).rows[0].t,null);
+  await db.query(contextApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0030_public_route_context.sql\n';
+  const contextFingerprint=(await db.query("SELECT pg_get_functiondef('public.v2_api_submit_public_actual_journey(varchar,text,jsonb,varchar[])'::regprocedure) d")).rows[0].d;
+  await db.query(contextApply);assert.equal((await db.query("SELECT pg_get_functiondef('public.v2_api_submit_public_actual_journey(varchar,text,jsonb,varchar[])'::regprocedure) d")).rows[0].d,contextFingerprint);
+  await db.query('BEGIN');await db.query("UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0030_public_route_context.sql'");
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_preview_hash_changed'));await db.query('ROLLBACK');
+  await db.query('BEGIN');await db.query(contextFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
+  await assert.rejects(()=>db.query(contextApply),(e:unknown)=>e instanceof Error&&e.message.includes('public_context_function_fence_changed'));await db.query('ROLLBACK');
+  // Exercise exact populated0030 →0031 hosted-editor guard, replay and rollback fences.
+  // Preserve a real pre0031 cached fare assessment which collapsed one owner's currencies.
+  const currencyRepairSubject=randomUUID(),currencyRepairUser=randomUUID(),currencyRepairContribution=randomUUID();
+  await db.query('BEGIN');
+  await db.query('INSERT INTO users(id) VALUES($1)',[currencyRepairUser]);await db.query("INSERT INTO v2_subjects(id,kind) VALUES($1,'actual_journey')",[currencyRepairSubject]);await db.query('INSERT INTO v2_actual_journeys(subject_id) VALUES($1)',[currencyRepairSubject]);
+  await db.query("INSERT INTO v2_contributions(id,user_id,client_submission_id,schema_version,entry_surface,semantic_hash,payload,original_subject_id) VALUES($1,$2,gen_random_uuid(),'1.0','route_detail',repeat('a',64),'{}',$3)",[currencyRepairContribution,currencyRepairUser,currencyRepairSubject]);
+  const currencyRepairScope={schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:upgradeCities[0],destinationCityId:upgradeCities[1]},passengerCategory:'unknown',ticketBasis:'unknown'};
+  for(const currency of ['USD','ZAR']){const value={amount:'25.00',currency};await db.query("INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key) VALUES($1,$2,'fare.quoted',$3,$4,v2_assessment_hash($4),v2_assessment_hash($3))",[currencyRepairContribution,currencyRepairSubject,value,currencyRepairScope]);}
+  const currencyRepairAssessment=(await db.query("SELECT v2_assess_field($1,'fare.quoted',v2_assessment_hash($2),$2,s.revision,s.input_generation,g.revision,statement_timestamp(),gen_random_uuid()) id FROM v2_subjects s CROSS JOIN v2_source_graph g WHERE s.id=$1",[currencyRepairSubject,currencyRepairScope])).rows[0].id;
+  await db.query('SELECT v2_process_field_assessment($1)',[currencyRepairAssessment]);assert.equal((await db.query("SELECT v2_read_field($1,'fare.quoted',v2_assessment_hash($2)) r",[currencyRepairSubject,currencyRepairScope])).rows[0].r.candidates.length,1);
+  await db.query('COMMIT');
+  const assessmentApply=await readFile(new URL('../scripts/preview-apply-0031.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query("CREATE FUNCTION public.v2_worker_claim_assess() RETURNS integer LANGUAGE sql AS 'SELECT 1'");
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_partial_or_unrecorded'));await db.query('ROLLBACK');
+  await db.query(assessmentApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0031_assessment_worker.sql\n';
+  assert.equal((await db.query("SELECT v2_read_field($1,'fare.quoted',v2_assessment_hash($2)) r",[currencyRepairSubject,currencyRepairScope])).rows[0].r.status,'recheck_required');
+  assert.equal((await db.query('SELECT count(*) n FROM v2_observations WHERE original_subject_id=$1',[currencyRepairSubject])).rows[0].n,'2');
+  assert.equal((await db.query("SELECT count(*) n FROM v2_jobs j JOIN v2_subjects s ON s.id=j.subject_id WHERE s.id=$1 AND j.kind='assess' AND j.policy_version='evidence/1' AND j.state='pending' AND j.requested_generation=s.input_generation",[currencyRepairSubject])).rows[0].n,'1');
+  const assessmentFingerprint=(await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d;
+  await db.query(assessmentApply);assert.equal((await db.query("SELECT pg_get_functiondef('public.v2_worker_finish_assess(uuid,uuid)'::regprocedure) d")).rows[0].d,assessmentFingerprint);
+  await db.query('BEGIN');await db.query("UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0031_assessment_worker.sql'");
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_preview_hash_changed'));await db.query('ROLLBACK');
+  await db.query('BEGIN');await db.query(assessmentFingerprint.replace('SECURITY DEFINER','SECURITY INVOKER'));
+  await assert.rejects(()=>db.query(assessmentApply),(e:unknown)=>e instanceof Error&&e.message.includes('assessment_function_fence_changed'));await db.query('ROLLBACK');
+  // The exact Preview0032 wrapper must upgrade populated evidence without rewriting it.
+  const fareApply=await readFile(new URL('../scripts/preview-apply-0032.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_public_fare_refs(id uuid)');
+  await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes('fare_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const fareOriginal=(await db.query('SELECT * FROM v2_observations WHERE original_subject_id=$1 ORDER BY id',[currencyRepairSubject])).rows;
+  await db.query(fareApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0032_public_fare_reports.sql\n';
+  const fareRefs=(await db.query('SELECT * FROM v2_public_fare_refs ORDER BY id')).rows;assert.ok(fareRefs.length>=2);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations WHERE original_subject_id=$1 ORDER BY id',[currencyRepairSubject])).rows,fareOriginal);
+  await db.query(fareApply);assert.deepEqual((await db.query('SELECT * FROM v2_public_fare_refs ORDER BY id')).rows,fareRefs);
+  for(const [change,expected]of[
+    ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0032_public_fare_reports.sql'",'fare_preview_hash_changed'],
+    ["GRANT EXECUTE ON FUNCTION v2_api_fare_report_action(varchar,uuid,uuid,text,text,varchar[]) TO PUBLIC",'fare_function_fence_changed'],
+    ['ALTER TABLE v2_public_fare_refs DISABLE ROW LEVEL SECURITY','fare_rls_changed'],
+    ['ALTER TABLE v2_observations DISABLE TRIGGER v2_fare_reference_created','fare_trigger_changed'],
+    ['DELETE FROM v2_public_fare_refs','fare_reference_coverage_changed'],
+    ['GRANT INSERT ON v2_public_fare_refs TO mabhazi_api','fare_relation_fence_changed'],
+    ['ALTER TABLE v2_public_fare_refs DROP CONSTRAINT v2_public_fare_refs_observation_id_fkey','fare_foreign_key_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(fareApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
+  // Exact hosted0033 upgrade, replay and drift fences; original evidence stays intact.
+  const taskApply=await readFile(new URL('../scripts/preview-apply-0033.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_worker_claim_tasks() RETURNS uuid LANGUAGE sql AS 'SELECT NULL::uuid'");
+  await assert.rejects(()=>db.query(taskApply),(e:unknown)=>e instanceof Error&&e.message.includes('prompt_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const originalTaskEvidence=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows;
+  const preservedTaskFailureId=randomUUID();
+  await db.query("INSERT INTO v2_jobs(id,kind,subject_id,requested_generation,policy_version,trigger_id,state,attempt,last_error_code) SELECT $1,'refresh_tasks',id,input_generation,'prompts/1',gen_random_uuid(),'failed',8,'processing_error' FROM v2_subjects WHERE id=$2",[preservedTaskFailureId,currencyRepairSubject]);
+  const failureBudgetBefore=(await db.query("SELECT * FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks' AND policy_version='prompts/1' ORDER BY id",[currencyRepairSubject])).rows;
+  await db.query(taskApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0033_prompt_refresh_worker.sql\n';
+  await db.query(taskApply);assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,originalTaskEvidence);
+  assert.deepEqual((await db.query("SELECT * FROM v2_jobs WHERE subject_id=$1 AND kind='refresh_tasks' AND policy_version='prompts/1' ORDER BY id",[currencyRepairSubject])).rows,failureBudgetBefore);
+  await db.query('DELETE FROM v2_jobs WHERE id=$1',[preservedTaskFailureId]);
+  for(const [change,expected]of[
+    ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0033_prompt_refresh_worker.sql'",'prompt_preview_hash_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_worker_drain_tasks(integer) TO PUBLIC','prompt_function_fence_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_prompt_erase_worker_cursor() TO mabhazi_api','prompt_function_fence_changed'],
+    ['ALTER TABLE v2_subjects DISABLE TRIGGER v2_worker_tasks_input_changed','prompt_worker_trigger_changed'],
+    ['ALTER TABLE v2_observations DISABLE TRIGGER ab_v2_prompt_worker_cursor_erasure','prompt_worker_trigger_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(taskApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
+  // Exact Preview0033 ->0034 place-facade guard, preserved evidence and replay.
+  const placeApply=await readFile(new URL('../scripts/preview-apply-0034.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_api_route_contribution_context(actor varchar,subject uuid,blocked varchar[] DEFAULT '{}') RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'");
+  await assert.rejects(()=>db.query(placeApply),(e:unknown)=>e instanceof Error&&e.message.includes('prompt_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const placeEvidenceBefore=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows;
+  const placeTasksBefore=(await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows;
+  await db.query(placeApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0034_route_place_observations.sql\n';
+  await db.query(placeApply);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,placeEvidenceBefore);
+  assert.deepEqual((await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows,placeTasksBefore);
+  for(const [change,expected]of[
+    ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0034_route_place_observations.sql'",'prompt_preview_hash_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_api_route_contribution_context(varchar,uuid,varchar[]) TO PUBLIC','prompt_function_fence_changed'],
+    ['GRANT EXECUTE ON FUNCTION v2_api_submit_route_observations(varchar,text,jsonb,varchar[]) TO authenticated','prompt_function_fence_changed'],
+    ['ALTER FUNCTION v2_api_submit_route_observations(varchar,text,jsonb,varchar[]) SECURITY INVOKER','prompt_function_fence_changed'],
+    ['ALTER TABLE v2_subjects DISABLE TRIGGER v2_worker_tasks_input_changed','prompt_worker_trigger_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(placeApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));await db.query('ROLLBACK');}
+  // Exact populated0034 ->0035 reader upgrade; backfill does not rewrite observations.
+  const placeReportUpgradeUser=randomUUID();await db.query("INSERT INTO users(id,terms_accepted_version,terms_accepted_at) VALUES($1,'2026-09-12',now())",[placeReportUpgradeUser]);
+  const placeReportLead=(await db.query("SELECT v2_api_submit_minimum_lead($1,'2026-09-12',$2) r",[placeReportUpgradeUser,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:upgradeCities[0],destinationCityId:upgradeCities[1],departureTime:'09:30',operator:{name:'Reader upgrade coach'}}},observations:[]}])).rows[0].r;
+  const placeReportContext=(await db.query("SELECT v2_api_route_contribution_context($1,$2,'{}') r",[placeReportUpgradeUser,placeReportLead.subjectId])).rows[0].r;
+  const placeReportReceipt=(await db.query("SELECT v2_api_submit_route_observations($1,'2026-09-12',$2,'{}') r",[placeReportUpgradeUser,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'own_contribution',target:{existing:{subjectId:placeReportLead.subjectId,expectedRevision:placeReportContext.revision,identityKey:placeReportContext.identityKey}},observations:[{fieldKey:'boarding.pickup',value:{cityId:upgradeCities[0],name:'Original upgrade rank'},scope:{}}]}])).rows[0].r;
+  const readerApply=await readFile(new URL('../scripts/preview-apply-0035.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE v2_place_report_refs(id uuid)');await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes('place_partial_or_unrecorded'));await db.query('ROLLBACK');
+  const readerEvidence=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,readerTasks=(await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows;
+  await db.query(readerApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0035_route_place_reports.sql\n';
+  const readerRefs=(await db.query('SELECT * FROM v2_place_report_refs ORDER BY id')).rows;assert.equal(readerRefs.length,1);
+  assert.equal((await db.query('SELECT original_value FROM v2_place_report_context WHERE route_subject_id=$1',[placeReportLead.subjectId])).rows[0].original_value.name,'Original upgrade rank');
+  await db.query(readerApply);assert.deepEqual((await db.query('SELECT * FROM v2_place_report_refs ORDER BY id')).rows,readerRefs);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,readerEvidence);assert.deepEqual((await db.query('SELECT * FROM v2_question_tasks ORDER BY id')).rows,readerTasks);
+  for(const [change,expected]of[
+   ["UPDATE mabhazi_migrations.applied SET checksum='unrecorded-change' WHERE name='0035_route_place_reports.sql'",'place_preview_hash_changed'],
+   ['GRANT EXECUTE ON FUNCTION v2_api_place_report_action(varchar,uuid,uuid,text,text,varchar[]) TO PUBLIC','place_function_fence_changed'],
+   ['GRANT SELECT ON v2_place_report_context TO authenticated','place_table_fence_changed'],
+   ['ALTER TABLE v2_place_report_refs DISABLE TRIGGER v2_place_reference_immutable','place_trigger_changed'],
+   ['ALTER TABLE v2_place_report_refs DROP CONSTRAINT v2_place_report_refs_observation_id_fkey','place_table_shape_changed'],
+   ['CREATE OR REPLACE VIEW v2_place_report_context AS SELECT c.*,false AS altered FROM v2_place_report_context c','place_view_changed']
+  ]){await db.query('BEGIN');if(!change!.includes('false AS altered')){await db.query(change!);await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}else{await db.query('ALTER VIEW v2_place_report_context RENAME COLUMN city TO wrong_city');await assert.rejects(()=>db.query(readerApply),(e:unknown)=>e instanceof Error&&e.message.includes(expected!));}await db.query('ROLLBACK');}
+
+  // Exact populated0035 ->0036 guarded manual-question API upgrade and drift rejection.
+  const pickupApply=await readFile(new URL('../scripts/preview-apply-0036.sql',import.meta.url),'utf8');
+  const pickupOriginal=(await db.query('SELECT * FROM v2_observations ORDER BY id')).rows;
+  const pickupPromptOriginal=await promptSnapshot();
+  await db.query('BEGIN');await db.query('CREATE TABLE v2_pickup_answer_requests(id uuid)');await assert.rejects(()=>db.query(pickupApply),/pickup_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(pickupApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0036_pickup_question_api.sql\n';
+  await db.query(pickupApply);
+  assert.deepEqual((await db.query('SELECT * FROM v2_observations ORDER BY id')).rows,pickupOriginal);
+  assert.deepEqual(await promptSnapshot(),pickupPromptOriginal);
+  for(const [change,message]of [
+    ["GRANT EXECUTE ON FUNCTION v2_api_pickup_question_read(varchar,uuid,varchar[]) TO PUBLIC",'pickup_function_fence_changed'],
+    ["GRANT INSERT ON v2_pickup_answer_requests TO mabhazi_api",'pickup_table_fence_changed'],
+    ["ALTER TABLE v2_pickup_answer_requests DISABLE TRIGGER v2_pickup_answer_request_immutable",'pickup_trigger_changed'],
+    ["ALTER TABLE v2_pickup_answer_requests DROP CONSTRAINT v2_pickup_answer_requests_observation_id_fkey",'pickup_table_shape_changed'],
+    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0036_pickup_question_api.sql'",'pickup_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(pickupApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  // Populated0036 ->0037 controls API: exact repeat and CRLF safely preserve state.
+  const controlsApply=await readFile(new URL('../scripts/preview-apply-0037.sql',import.meta.url),'utf8');
+  const controlsBefore=await promptSnapshot();
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_api_prompt_activity(varchar) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'");await assert.rejects(()=>db.query(controlsApply),/controls_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(controlsApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0037_prompt_controls_api.sql\n';
+  await db.query(controlsApply);assert.deepEqual(await promptSnapshot(),controlsBefore);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_prompt_activity(varchar) TO PUBLIC",'controls_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_prompt_preferences_read(varchar) SECURITY INVOKER",'controls_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_prompt_activity(varchar) SET search_path=public",'controls_function_fence_changed'],
+   ["GRANT EXECUTE ON FUNCTION v2_prompt_touch(varchar) TO mabhazi_api",'controls_dependency_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'controls_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(controlsApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  // Exact populated0037 ->0038 supported invitation seam; repeat/CRLF and drift fail closed.
+  const invitationApply=await readFile(new URL('../scripts/preview-apply-0038.sql',import.meta.url),'utf8');
+  const invitationBefore=await promptSnapshot();
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'");await assert.rejects(()=>db.query(invitationApply),/invitation_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(invitationApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0038_pickup_invitation_api.sql\n';
+  await db.query(invitationApply);assert.deepEqual(await promptSnapshot(),invitationBefore);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) TO PUBLIC",'invitation_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) SECURITY INVOKER",'invitation_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) SET search_path=public",'invitation_function_fence_changed'],
+   ["GRANT EXECUTE ON FUNCTION v2_prompt_eligible(uuid,varchar,text[]) TO mabhazi_api",'invitation_dependency_changed'],
+   ["ALTER FUNCTION v2_prompt_read(varchar,uuid) SECURITY DEFINER",'invitation_dependency_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'invitation_preview_baseline_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0038_pickup_invitation_api.sql'",'invitation_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(invitationApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
@@ -396,7 +563,8 @@ test("populated upgrade preserves legacy rows and records checksums once", async
   assert.equal(preservedIntakeUpgrade, true);
   assert.deepEqual((await db.query("SELECT to_jsonb(j) AS row FROM journeys j ORDER BY id")).rows, legacySnapshot);
   const ledger = (await db.query("SELECT name,checksum FROM mabhazi_migrations.applied ORDER BY name")).rows;
-  assert.equal(ledger.length, 29);
+  const names = (await readdir(new URL("../migrations/", import.meta.url))).filter(name => /^\d{4}_[a-z0-9_]+\.sql$/.test(name)).sort();
+  assert.deepEqual(ledger.map(entry => entry.name), names);
   for (const entry of ledger) {
     const sql = await readFile(new URL(`../migrations/${entry.name}`, import.meta.url), "utf8");
     assert.equal(entry.checksum, createHash("sha256").update(sql).digest("hex"));
@@ -415,7 +583,7 @@ test("actual HTTP facade grants only restricted backend execution, never constru
 });
 
 test("all Drizzle query columns, primary keys, types and generated fields match the migrated database", async () => {
-  for (const table of [...intakeTables, ...processingTables, ...identityLookupTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
+  for (const table of [...intakeTables, ...processingTables, ...identityLookupTables, ...publicRouteContextTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables]) {
     const name = getTableName(table);
     const actual = (await db.query(`SELECT column_name,data_type,is_nullable,is_generated FROM information_schema.columns
       WHERE table_schema='public' AND table_name=$1 ORDER BY column_name`, [name])).rows;
@@ -443,9 +611,9 @@ test("four details suffice, midnight is explicit, no price or recurring schedule
   const row = (await db.query("SELECT * FROM v2_leads WHERE subject_id=$1", [c.subjectId])).rows[0];
   assert.equal(row.reported_departure_seconds, 0);
   assert.equal(row.resolved_status, "unresolved");
-  assert.equal((await db.query("SELECT count(*) FROM v2_observations WHERE field_key LIKE 'fare.%'")).rows[0].count, "0");
-  assert.equal((await db.query("SELECT knowledge_basis,observed_from FROM v2_observations")).rows[0].knowledge_basis, "unprovided");
-  assert.equal((await db.query("SELECT observed_from FROM v2_observations")).rows[0].observed_from, null);
+  assert.equal((await db.query("SELECT count(*) FROM v2_observations WHERE contribution_id=$1 AND field_key LIKE 'fare.%'",[c.id])).rows[0].count, "0");
+  assert.equal((await db.query("SELECT knowledge_basis,observed_from FROM v2_observations WHERE contribution_id=$1",[c.id])).rows[0].knowledge_basis, "unprovided");
+  assert.equal((await db.query("SELECT observed_from FROM v2_observations WHERE contribution_id=$1",[c.id])).rows[0].observed_from, null);
 });
 
 test("community leads reject missing required fields and sentinel operators", async () => {
@@ -599,10 +767,10 @@ test("failed transaction leaves no contribution, receipt or job", async () => {
 });
 
 test("all intake tables enable RLS and deny PUBLIC/anon/authenticated while permitting the server role", async () => {
-  const tables = [...intakeTables, ...processingTables, ...identityLookupTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
+  const tables = [...intakeTables, ...processingTables, ...identityLookupTables, ...publicRouteContextTables, ...transportTables, ...reviewTables, ...derivedTables, ...observationRegistryTables, ...observationEventTables, ...observationTargetTables, ...sourceIdentityTables, ...evidenceAssessmentTables, ...fieldResolutionTables, ...affiliationIssuerTables, ...promptTables, ...transportPropagationTables, ...transportWriterTables, ...transportCreationTables, ...routePatternCreationTables].map(getTableName);
   const policies = (await db.query("SELECT tablename,roles::text[] AS roles,cmd FROM pg_policies WHERE schemaname='public' AND tablename=ANY($1::text[])", [tables])).rows;
   assert.equal(policies.length, tables.length);
-  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_jobs", "v2_job_effects", ...processingTables.map(getTableName), ...identityLookupTables.map(getTableName), "v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
+  for (const policy of policies) { assert.deepEqual(policy.roles, ["mabhazi_api"]); assert.equal(policy.cmd, ["v2_jobs", "v2_job_effects", ...processingTables.map(getTableName), ...identityLookupTables.map(getTableName), ...publicRouteContextTables.map(getTableName), "v2_observation_refs", "v2_observation_events", ...observationTargetTables.map(getTableName), ...sourceIdentityTables.map(getTableName), ...evidenceAssessmentTables.map(getTableName), ...fieldResolutionTables.map(getTableName), ...affiliationIssuerTables.map(getTableName), ...promptTables.map(getTableName), ...transportPropagationTables.map(getTableName), ...transportWriterTables.map(getTableName), ...transportCreationTables.map(getTableName), ...routePatternCreationTables.map(getTableName)].includes(policy.tablename) ? "SELECT" : "ALL"); }
   const rls = (await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relname=ANY($1::text[])", [tables])).rows;
   assert.ok(rls.every(row => row.relrowsecurity));
   const publicGrants = await db.query(`SELECT c.relname FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a
@@ -656,9 +824,20 @@ registerServiceRunTests(() => ({ db, connectionString, user, other, origin, dest
 
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
+registerAssessmentWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerLeadAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerPatternAssociationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerIdentityLookupTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerJourneyProcessingTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
+
+registerPromptWorkerTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerRouteObservationTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+
+registerPickupQuestionTests(() => ({db,user,other,origin,destination}));
+
+registerPromptControlTests(() => ({db,user,other,connectionString}));
+
+registerPickupInvitationTests(()=>({db,user,other,origin,destination}));

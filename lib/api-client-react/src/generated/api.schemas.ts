@@ -5,6 +5,121 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type V2PromptQuestionType =
+  (typeof V2PromptQuestionType)[keyof typeof V2PromptQuestionType];
+
+export const V2PromptQuestionType = {
+  identify_service: "identify_service",
+  clarify_time_basis: "clarify_time_basis",
+  operating_days: "operating_days",
+  pickup_place: "pickup_place",
+  fare_paid: "fare_paid",
+  fare_advertised: "fare_advertised",
+  complete_pattern: "complete_pattern",
+  confirm_current_fact: "confirm_current_fact",
+  resolve_conflict_context: "resolve_conflict_context",
+} as const;
+
+export type V2PromptPreferencesPolicyVersion =
+  (typeof V2PromptPreferencesPolicyVersion)[keyof typeof V2PromptPreferencesPolicyVersion];
+
+export const V2PromptPreferencesPolicyVersion = {
+  "prompts/1": "prompts/1",
+} as const;
+
+export interface V2PromptPreferences {
+  policyVersion: V2PromptPreferencesPolicyVersion;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  invitationsEnabled: boolean;
+  /** @maxItems 9 */
+  disabledTypes: V2PromptQuestionType[];
+  /** Server dismissal expiry; null when no dismissal is recorded. */
+  dismissedUntil: string | null;
+}
+
+export interface V2PromptPreferencesRequest {
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  invitationsEnabled: boolean;
+  /** @maxItems 9 */
+  disabledTypes: V2PromptQuestionType[];
+}
+
+export interface V2PromptActivityRequest {
+  [key: string]: unknown;
+}
+
+export interface V2PromptActivityResult {
+  recorded: boolean;
+}
+
+export interface V2DepartureOrigin {
+  /**
+   * @minLength 1
+   * @maxLength 240
+   */
+  key: string;
+  /** @minLength 1 */
+  name: string;
+  /** @minimum 1 */
+  cityId: number | null;
+  hasCommunityReports: boolean;
+  hasLegacyRoutes: boolean;
+}
+
+export type V2DepartureEntryKind =
+  (typeof V2DepartureEntryKind)[keyof typeof V2DepartureEntryKind];
+
+export const V2DepartureEntryKind = {
+  community: "community",
+  legacy: "legacy",
+} as const;
+
+export type V2DepartureEntryScheduleTimezone =
+  (typeof V2DepartureEntryScheduleTimezone)[keyof typeof V2DepartureEntryScheduleTimezone];
+
+export const V2DepartureEntryScheduleTimezone = {
+  "Africa/Harare": "Africa/Harare",
+} as const;
+
+export interface V2DepartureEntry {
+  key: string;
+  kind: V2DepartureEntryKind;
+  originKey: string;
+  subjectId?: string;
+  /** @minimum 1 */
+  journeyId?: number;
+  /** @minLength 1 */
+  destination: string;
+  operator?: string | null;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  reportedTime?: string | null;
+  scheduledDays?: string | null;
+  pickupPoint?: string;
+  /** Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. */
+  countdownEligible?: boolean;
+  nextDepartureAt?: string;
+  scheduleTimezone?: V2DepartureEntryScheduleTimezone;
+  /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
+  timedDepartureEligible: boolean;
+}
+
+export interface V2DepartureBoard {
+  generatedAt?: string;
+  origins: V2DepartureOrigin[];
+  selectedOriginKey: string | null;
+  selectionUnavailable: boolean;
+  hasHiddenRoutes: boolean;
+  entries: V2DepartureEntry[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -467,6 +582,149 @@ export interface ProposedAssociationsEnvelope {
   proposals: ProposedAssociation[];
 }
 
+export type V2PickupInvitationReservationEntrySurface =
+  (typeof V2PickupInvitationReservationEntrySurface)[keyof typeof V2PickupInvitationReservationEntrySurface];
+
+export const V2PickupInvitationReservationEntrySurface = {
+  search_result: "search_result",
+  route_detail: "route_detail",
+} as const;
+
+export type V2PickupInvitationReservationDeclaredContextItem =
+  (typeof V2PickupInvitationReservationDeclaredContextItem)[keyof typeof V2PickupInvitationReservationDeclaredContextItem];
+
+export const V2PickupInvitationReservationDeclaredContextItem = {
+  knows_route: "knows_route",
+  at_stop: "at_stop",
+  travelled: "travelled",
+} as const;
+
+export interface V2PickupInvitationReservation {
+  clientRequestId: string;
+  subjectId: string;
+  entrySurface: V2PickupInvitationReservationEntrySurface;
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  declaredContext: V2PickupInvitationReservationDeclaredContextItem[];
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+}
+
+export type V2PickupQuestionReservationEntrySurface =
+  (typeof V2PickupQuestionReservationEntrySurface)[keyof typeof V2PickupQuestionReservationEntrySurface];
+
+export const V2PickupQuestionReservationEntrySurface = {
+  search_result: "search_result",
+  route_detail: "route_detail",
+  own_contribution: "own_contribution",
+  contribute_tab: "contribute_tab",
+} as const;
+
+export type V2PickupQuestionReservationDeclaredContextItem =
+  (typeof V2PickupQuestionReservationDeclaredContextItem)[keyof typeof V2PickupQuestionReservationDeclaredContextItem];
+
+export const V2PickupQuestionReservationDeclaredContextItem = {
+  knows_route: "knows_route",
+  at_stop: "at_stop",
+  travelled: "travelled",
+} as const;
+
+export interface V2PickupQuestionReservation {
+  clientRequestId: string;
+  subjectId: string;
+  entrySurface: V2PickupQuestionReservationEntrySurface;
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  declaredContext: V2PickupQuestionReservationDeclaredContextItem[];
+}
+
+export interface V2City {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  id: number;
+  name: string;
+  placeType: string;
+}
+
+export interface V2RouteContributionContext {
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+  origin: V2City;
+  destination: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  operatorName: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  departureTime: string;
+}
+
+export type V2PickupQuestionState =
+  | {
+      status:
+        | "none"
+        | "unavailable"
+        | "expired"
+        | "reconfirm_identity"
+        | "obsolete"
+        | "suppressed"
+        | "skip"
+        | "dismiss"
+        | "unknown"
+        | "answered";
+    }
+  | {
+      status: "offered" | "opened";
+      invitationId: string;
+      questionKey: "pickup_place";
+      formSchemaId: "boarding-pickup/1";
+      expiresAt: string;
+      route: V2RouteContributionContext;
+    };
+
+export type V2PickupQuestionEventRequestOutcome =
+  (typeof V2PickupQuestionEventRequestOutcome)[keyof typeof V2PickupQuestionEventRequestOutcome];
+
+export const V2PickupQuestionEventRequestOutcome = {
+  shown: "shown",
+  opened: "opened",
+  skip: "skip",
+  dismiss: "dismiss",
+  unknown: "unknown",
+} as const;
+
+export interface V2PickupQuestionEventRequest {
+  clientEventId: string;
+  outcome: V2PickupQuestionEventRequestOutcome;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone: string;
+}
+
+export interface V2PickupQuestionEventResult {
+  eventId: string;
+}
+
 export type V2CapabilitiesSchemaVersion =
   (typeof V2CapabilitiesSchemaVersion)[keyof typeof V2CapabilitiesSchemaVersion];
 
@@ -478,16 +736,12 @@ export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
-}
-
-export interface V2City {
-  /**
-   * @minimum 1
-   * @maximum 999999999
-   */
-  id: number;
-  name: string;
-  placeType: string;
+  fareReportsEnabled?: boolean;
+  routeObservationsEnabled?: boolean;
+  placeReportsEnabled?: boolean;
+  pickupQuestionsEnabled?: boolean;
+  pickupInvitationsEnabled?: boolean;
+  promptControlsEnabled?: boolean;
 }
 
 export interface V2Cities {
@@ -539,6 +793,7 @@ export type V2MinimumLeadRequestEntrySurface =
 
 export const V2MinimumLeadRequestEntrySurface = {
   contribute_tab: "contribute_tab",
+  search_empty: "search_empty",
 } as const;
 
 export type V2MinimumLeadRequestObservationsItem = { [key: string]: unknown };
@@ -592,11 +847,14 @@ export interface V2LeadReceipt {
   associationStatus: V2LeadReceiptAssociationStatus;
   publicationStatus: V2LeadReceiptPublicationStatus;
   replayed: boolean;
+  targetAdvanced?: boolean;
 }
 
 export interface V2ReceiptLookup {
   found: boolean;
   initialReceipt?: V2LeadReceipt;
+  /** @minimum 1 */
+  currentLeadRevision?: number;
 }
 
 export type V2ErrorFieldErrorsItem = {
@@ -992,10 +1250,448 @@ export interface V2ActualJourneyRequest {
   actualContext?: V2ActualContext;
 }
 
+export type V2PublicOperatorReportSupport =
+  (typeof V2PublicOperatorReportSupport)[keyof typeof V2PublicOperatorReportSupport];
+
+export const V2PublicOperatorReportSupport = {
+  reported: "reported",
+} as const;
+
+export type V2PublicOperatorReportFreshness =
+  (typeof V2PublicOperatorReportFreshness)[keyof typeof V2PublicOperatorReportFreshness];
+
+export const V2PublicOperatorReportFreshness = {
+  unknown: "unknown",
+} as const;
+
+export interface V2PublicOperatorReport {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  value: string;
+  support: V2PublicOperatorReportSupport;
+  freshness: V2PublicOperatorReportFreshness;
+  submittedAt: string;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  observedDate: string | null;
+}
+
+export type V2PublicClockReportSupport =
+  (typeof V2PublicClockReportSupport)[keyof typeof V2PublicClockReportSupport];
+
+export const V2PublicClockReportSupport = {
+  reported: "reported",
+} as const;
+
+export type V2PublicClockReportFreshness =
+  (typeof V2PublicClockReportFreshness)[keyof typeof V2PublicClockReportFreshness];
+
+export const V2PublicClockReportFreshness = {
+  unknown: "unknown",
+} as const;
+
+export type V2PublicClockReportBasis =
+  (typeof V2PublicClockReportBasis)[keyof typeof V2PublicClockReportBasis];
+
+export const V2PublicClockReportBasis = {
+  unspecified: "unspecified",
+  scheduled: "scheduled",
+  actual: "actual",
+} as const;
+
+export interface V2PublicClockReport {
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  value: string;
+  support: V2PublicClockReportSupport;
+  freshness: V2PublicClockReportFreshness;
+  submittedAt: string;
+  /**
+   * @nullable
+   * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+   */
+  observedDate: string | null;
+  basis: V2PublicClockReportBasis;
+}
+
+export type V2PublicFareReportKind =
+  (typeof V2PublicFareReportKind)[keyof typeof V2PublicFareReportKind];
+
+export const V2PublicFareReportKind = {
+  paid: "paid",
+  quoted: "quoted",
+  advertised: "advertised",
+} as const;
+
+export type V2PublicFareReportBasis =
+  (typeof V2PublicFareReportBasis)[keyof typeof V2PublicFareReportBasis];
+
+export const V2PublicFareReportBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+  legacy_import: "legacy_import",
+} as const;
+
+export type V2PublicFareReportStatus =
+  (typeof V2PublicFareReportStatus)[keyof typeof V2PublicFareReportStatus];
+
+export const V2PublicFareReportStatus = {
+  reported: "reported",
+  needs_review: "needs_review",
+} as const;
+
+export type V2PublicFareReportFreshness =
+  (typeof V2PublicFareReportFreshness)[keyof typeof V2PublicFareReportFreshness];
+
+export const V2PublicFareReportFreshness = {
+  current: "current",
+  recheck_due: "recheck_due",
+  unknown: "unknown",
+} as const;
+
+export type V2PublicFareReportTemporalClass =
+  (typeof V2PublicFareReportTemporalClass)[keyof typeof V2PublicFareReportTemporalClass];
+
+export const V2PublicFareReportTemporalClass = {
+  historical: "historical",
+  ongoing: "ongoing",
+} as const;
+
+export interface V2PublicFareReport {
+  id: string;
+  kind: V2PublicFareReportKind;
+  /**
+   * @maxLength 13
+   * @pattern ^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$
+   */
+  amount: string;
+  /** @pattern ^[A-Z]{3}$ */
+  currency: string;
+  scope: V2ActualFareScope;
+  basis: V2PublicFareReportBasis;
+  observedDate: string | null;
+  receivedAt: string;
+  oldestEvidenceDate: string | null;
+  newestEvidenceDate: string | null;
+  status: V2PublicFareReportStatus;
+  freshness: V2PublicFareReportFreshness;
+  temporalClass: V2PublicFareReportTemporalClass;
+  canBlock: boolean;
+}
+
+export interface V2PublicFarePage {
+  subjectId: string;
+  /** @maxItems 20 */
+  items: V2PublicFareReport[];
+  hasPendingReports: boolean;
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
+export type V2PublicLeadKind =
+  (typeof V2PublicLeadKind)[keyof typeof V2PublicLeadKind];
+
+export const V2PublicLeadKind = {
+  lead: "lead",
+} as const;
+
+export type V2PublicLeadPublicationStatus =
+  (typeof V2PublicLeadPublicationStatus)[keyof typeof V2PublicLeadPublicationStatus];
+
+export const V2PublicLeadPublicationStatus = {
+  details_needed: "details_needed",
+} as const;
+
+export type V2PublicLeadMissingDetailsItem =
+  (typeof V2PublicLeadMissingDetailsItem)[keyof typeof V2PublicLeadMissingDetailsItem];
+
+export const V2PublicLeadMissingDetailsItem = {
+  selected_fare: "selected_fare",
+  operating_days: "operating_days",
+  boarding_location: "boarding_location",
+} as const;
+
+export interface V2PublicLead {
+  kind: V2PublicLeadKind;
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  revision: number;
+  origin: V2City;
+  destination: V2City;
+  operatorReport: V2PublicOperatorReport;
+  reportedTime: V2PublicClockReport;
+  publicationStatus: V2PublicLeadPublicationStatus;
+  timedDepartureEligible: boolean;
+  contributionTargetEligible: boolean;
+  missingDetails: V2PublicLeadMissingDetailsItem[];
+}
+
+export interface V2PublicSearch {
+  /** @maxItems 20 */
+  items: V2PublicLead[];
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
+export interface V2PublicSubjectEnvelope {
+  subject: V2PublicLead;
+}
+
+export type V2RouteSafetyActionAction =
+  (typeof V2RouteSafetyActionAction)[keyof typeof V2RouteSafetyActionAction];
+
+export const V2RouteSafetyActionAction = {
+  report: "report",
+  block: "block",
+} as const;
+
+export type V2RouteSafetyActionReason =
+  (typeof V2RouteSafetyActionReason)[keyof typeof V2RouteSafetyActionReason];
+
+export const V2RouteSafetyActionReason = {
+  spam: "spam",
+  inaccurate: "inaccurate",
+  offensive: "offensive",
+  unsafe: "unsafe",
+  other: "other",
+} as const;
+
+export interface V2RouteSafetyAction {
+  action: V2RouteSafetyActionAction;
+  reason?: V2RouteSafetyActionReason;
+}
+
+export type V2RouteSafetyResultStatus =
+  (typeof V2RouteSafetyResultStatus)[keyof typeof V2RouteSafetyResultStatus];
+
+export const V2RouteSafetyResultStatus = {
+  reported: "reported",
+  blocked: "blocked",
+  unblocked: "unblocked",
+} as const;
+
+export interface V2RouteSafetyResult {
+  status: V2RouteSafetyResultStatus;
+}
+
+export interface V2RouteBlock {
+  id: string;
+  blockedAt: string;
+}
+
+export interface V2RouteBlocks {
+  /** @maxItems 200 */
+  blocks: V2RouteBlock[];
+}
+
+export type V2OwnRouteAvailability =
+  (typeof V2OwnRouteAvailability)[keyof typeof V2OwnRouteAvailability];
+
+export const V2OwnRouteAvailability = {
+  active: "active",
+  unavailable: "unavailable",
+} as const;
+
+export interface V2OwnRoute {
+  clientSubmissionId: string;
+  subjectId: string;
+  submittedAt: string;
+  origin: V2City;
+  destination: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  operator: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  departureTime: string;
+  availability: V2OwnRouteAvailability;
+  /** @minimum 1 */
+  currentLeadRevision?: number;
+}
+
+export interface V2OwnRoutes {
+  /** @maxItems 20 */
+  routes: V2OwnRoute[];
+  /**
+   * @maxLength 73
+   * @pattern ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+   */
+  nextCursor?: string;
+}
+
+export interface V2OwnRouteEnvelope {
+  route: V2OwnRoute;
+}
+
+export type V2RouteObservationTargetExisting = {
+  subjectId: string;
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+};
+
+export interface V2RouteObservationTarget {
+  existing: V2RouteObservationTargetExisting;
+}
+
+export type V2RoutePlaceObservationFieldKey =
+  (typeof V2RoutePlaceObservationFieldKey)[keyof typeof V2RoutePlaceObservationFieldKey];
+
+export const V2RoutePlaceObservationFieldKey = {
+  boardingpickup: "boarding.pickup",
+  alightingdropoff: "alighting.dropoff",
+} as const;
+
+export type V2RoutePlaceObservationScope = { [key: string]: unknown };
+
+export type V2RoutePlaceObservationKnowledgeBasis =
+  (typeof V2RoutePlaceObservationKnowledgeBasis)[keyof typeof V2RoutePlaceObservationKnowledgeBasis];
+
+export const V2RoutePlaceObservationKnowledgeBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+} as const;
+
+export interface V2RoutePlaceObservation {
+  fieldKey: V2RoutePlaceObservationFieldKey;
+  value: V2ActualPlace;
+  scope: V2RoutePlaceObservationScope;
+  knowledgeBasis?: V2RoutePlaceObservationKnowledgeBasis;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  observedDate?: string;
+  /** @maxItems 10 */
+  sources?: string[];
+}
+
+export type V2RouteObservationRequestSchemaVersion =
+  (typeof V2RouteObservationRequestSchemaVersion)[keyof typeof V2RouteObservationRequestSchemaVersion];
+
+export const V2RouteObservationRequestSchemaVersion = {
+  "10": "1.0",
+} as const;
+
+export type V2RouteObservationRequestEntrySurface =
+  (typeof V2RouteObservationRequestEntrySurface)[keyof typeof V2RouteObservationRequestEntrySurface];
+
+export const V2RouteObservationRequestEntrySurface = {
+  contribute_tab: "contribute_tab",
+  search_result: "search_result",
+  route_detail: "route_detail",
+  own_contribution: "own_contribution",
+} as const;
+
+export interface V2RouteObservationRequest {
+  schemaVersion: V2RouteObservationRequestSchemaVersion;
+  clientSubmissionId: string;
+  entrySurface: V2RouteObservationRequestEntrySurface;
+  target: V2RouteObservationTarget;
+  /**
+   * @minItems 1
+   * @maxItems 2
+   */
+  observations: V2RoutePlaceObservation[];
+}
+
+export type V2PlaceReportKind =
+  (typeof V2PlaceReportKind)[keyof typeof V2PlaceReportKind];
+
+export const V2PlaceReportKind = {
+  pickup: "pickup",
+  dropoff: "dropoff",
+} as const;
+
+export type V2PlaceReportBasis =
+  (typeof V2PlaceReportBasis)[keyof typeof V2PlaceReportBasis];
+
+export const V2PlaceReportBasis = {
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+  unprovided: "unprovided",
+  legacy_import: "legacy_import",
+} as const;
+
+export type V2PlaceReportStatus =
+  (typeof V2PlaceReportStatus)[keyof typeof V2PlaceReportStatus];
+
+export const V2PlaceReportStatus = {
+  saved: "saved",
+  reported: "reported",
+  needs_review: "needs_review",
+} as const;
+
+export type V2PlaceReportFreshness =
+  (typeof V2PlaceReportFreshness)[keyof typeof V2PlaceReportFreshness];
+
+export const V2PlaceReportFreshness = {
+  current: "current",
+  recheck_due: "recheck_due",
+  unknown: "unknown",
+} as const;
+
+export interface V2PlaceReport {
+  id: string;
+  kind: V2PlaceReportKind;
+  city: V2City;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /** @maxLength 1000 */
+  instructions: string | null;
+  basis: V2PlaceReportBasis;
+  observedDate: string | null;
+  receivedAt: string;
+  status: V2PlaceReportStatus;
+  freshness: V2PlaceReportFreshness;
+  canBlock: boolean;
+}
+
+export interface V2PlaceReportPage {
+  subjectId: string;
+  /** @maxItems 20 */
+  items: V2PlaceReport[];
+  hasPendingReports: boolean;
+  hasHiddenResults: boolean;
+  nextCursor?: string;
+}
+
 /**
  * Safe error with no raw payload, database message, token or private evidence
  */
 export type V2ErrorResponse = V2Error;
+
+/**
+ * Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.
+ */
+export type OptionalExpectedAccountHeaderParameter = string;
+
+/**
+ * JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
+ */
+export type BlockedContributorsHeaderParameter = string;
 
 /**
  * Expected signed-in account ID to reject a token/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.
@@ -1006,6 +1702,50 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListV2PlaceReportsParams = {
+  cursor?: string;
+};
+
+export type ListV2OwnPlaceReportsParams = {
+  cursor?: string;
+};
+
+export type ListV2FareReportsParams = {
+  cursor?: string;
+};
+
+export type SearchV2RoutesParams = {
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  originCityId?: number;
+  /**
+   * @minimum 1
+   * @maximum 999999999
+   */
+  destinationCityId?: number;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  fromCity?: string;
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  toCity?: string;
+  cursor?: string;
+};
+
+export type ListV2OwnRoutesParams = {
+  /**
+   * @maxLength 73
+   * @pattern ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+   */
+  cursor?: string;
+};
 
 export type ListV2CitiesParams = {
   /**
@@ -1029,6 +1769,15 @@ export type SearchJourneysParams = {
    * Filter by day of week, e.g. "Mon"
    */
   day?: string;
+};
+
+export type GetV2DepartureBoardParams = {
+  /**
+   * @minLength 1
+   * @maxLength 240
+   * @pattern ^(city:[1-9][0-9]*|legacy:.+)$
+   */
+  originKey?: string;
 };
 
 export type ListCitiesParams = {

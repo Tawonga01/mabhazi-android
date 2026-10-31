@@ -10,4 +10,6 @@ import type { V2LeadReceipt } from "./v2LeadReceipt";
 export interface V2ReceiptLookup {
   found: boolean;
   initialReceipt?: V2LeadReceipt;
+  /** @minimum 1 */
+  currentLeadRevision?: number;
 }

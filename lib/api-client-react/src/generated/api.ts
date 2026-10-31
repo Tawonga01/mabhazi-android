@@ -28,6 +28,7 @@ import type {
   DeleteAccountBody,
   DeleteAccountResult,
   ErrorEnvelope,
+  GetV2DepartureBoardParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   Journey,
@@ -38,6 +39,10 @@ import type {
   LegalSummary,
   ListCitiesParams,
   ListV2CitiesParams,
+  ListV2FareReportsParams,
+  ListV2OwnPlaceReportsParams,
+  ListV2OwnRoutesParams,
+  ListV2PlaceReportsParams,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
@@ -45,6 +50,7 @@ import type {
   RateJourneyBody,
   RateJourneyResult,
   SearchJourneysParams,
+  SearchV2RoutesParams,
   SubmitJourneyReportBody,
   SuccessEnvelope,
   SupportSummary,
@@ -56,10 +62,31 @@ import type {
   V2ActualJourneyRequest,
   V2Capabilities,
   V2Cities,
+  V2DepartureBoard,
   V2ErrorResponse,
   V2LeadReceipt,
   V2MinimumLeadRequest,
+  V2OwnRouteEnvelope,
+  V2OwnRoutes,
+  V2PickupInvitationReservation,
+  V2PickupQuestionEventRequest,
+  V2PickupQuestionEventResult,
+  V2PickupQuestionReservation,
+  V2PickupQuestionState,
+  V2PlaceReportPage,
+  V2PromptActivityRequest,
+  V2PromptActivityResult,
+  V2PromptPreferences,
+  V2PromptPreferencesRequest,
+  V2PublicFarePage,
+  V2PublicSearch,
+  V2PublicSubjectEnvelope,
   V2ReceiptLookup,
+  V2RouteBlocks,
+  V2RouteContributionContext,
+  V2RouteObservationRequest,
+  V2RouteSafetyAction,
+  V2RouteSafetyResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -72,7 +99,1452 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+ * @summary Read your optional question settings without recording activity
+ */
+export const getGetV2PromptPreferencesUrl = () => {
+  return `/api/v2/prompt-preferences`;
+};
+
+export const getV2PromptPreferences = async (
+  options?: RequestInit,
+): Promise<V2PromptPreferences> => {
+  return customFetch<V2PromptPreferences>(getGetV2PromptPreferencesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2PromptPreferencesQueryKey = () => {
+  return [`/api/v2/prompt-preferences`] as const;
+};
+
+export const getGetV2PromptPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2PromptPreferences>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2PromptPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>
+  > = ({ signal }) => getV2PromptPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2PromptPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2PromptPreferences>>
+>;
+export type GetV2PromptPreferencesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read your optional question settings without recording activity
+ */
+
+export function useGetV2PromptPreferences<
+  TData = Awaited<ReturnType<typeof getV2PromptPreferences>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PromptPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2PromptPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save your question settings with revision protection
+ */
+export const getSetV2PromptPreferencesUrl = () => {
+  return `/api/v2/prompt-preferences`;
+};
+
+export const setV2PromptPreferences = async (
+  v2PromptPreferencesRequest: V2PromptPreferencesRequest,
+  options?: RequestInit,
+): Promise<V2PromptPreferences> => {
+  return customFetch<V2PromptPreferences>(getSetV2PromptPreferencesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PromptPreferencesRequest),
+  });
+};
+
+export const getSetV2PromptPreferencesMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    TError,
+    { data: BodyType<V2PromptPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>,
+  TError,
+  { data: BodyType<V2PromptPreferencesRequest> },
+  TContext
+> => {
+  const mutationKey = ["setV2PromptPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    { data: BodyType<V2PromptPreferencesRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setV2PromptPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetV2PromptPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>
+>;
+export type SetV2PromptPreferencesMutationBody =
+  BodyType<V2PromptPreferencesRequest>;
+export type SetV2PromptPreferencesMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Save your question settings with revision protection
+ */
+export const useSetV2PromptPreferences = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setV2PromptPreferences>>,
+    TError,
+    { data: BodyType<V2PromptPreferencesRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setV2PromptPreferences>>,
+  TError,
+  { data: BodyType<V2PromptPreferencesRequest> },
+  TContext
+> => {
+  return useMutation(getSetV2PromptPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary Record foreground interaction at server time without revealing session identity
+ */
+export const getRecordV2PromptActivityUrl = () => {
+  return `/api/v2/prompt-activity`;
+};
+
+export const recordV2PromptActivity = async (
+  v2PromptActivityRequest: V2PromptActivityRequest,
+  options?: RequestInit,
+): Promise<V2PromptActivityResult> => {
+  return customFetch<V2PromptActivityResult>(getRecordV2PromptActivityUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PromptActivityRequest),
+  });
+};
+
+export const getRecordV2PromptActivityMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    TError,
+    { data: BodyType<V2PromptActivityRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>,
+  TError,
+  { data: BodyType<V2PromptActivityRequest> },
+  TContext
+> => {
+  const mutationKey = ["recordV2PromptActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    { data: BodyType<V2PromptActivityRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recordV2PromptActivity(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordV2PromptActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>
+>;
+export type RecordV2PromptActivityMutationBody =
+  BodyType<V2PromptActivityRequest>;
+export type RecordV2PromptActivityMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Record foreground interaction at server time without revealing session identity
+ */
+export const useRecordV2PromptActivity = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PromptActivity>>,
+    TError,
+    { data: BodyType<V2PromptActivityRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordV2PromptActivity>>,
+  TError,
+  { data: BodyType<V2PromptActivityRequest> },
+  TContext
+> => {
+  return useMutation(getRecordV2PromptActivityMutationOptions(options));
+};
+
+/**
+ * Requires explicit volunteered pickup knowledge and the displayed route revision/identity. Existing server-owned activity-session and rolling24h caps, preferences, dismissal and scoped unknown suppression apply atomically across devices. The highest-priority eligible task must be supported before reserving; unsupported tasks spend no invitation budget. Stable request retry returns the current owned state or original none. Reservation is not shown/opened/answered. Existing manual pickup questions and independent capture remain exempt. No UI or travel inference is implied.
+ * @summary Reserve at most one supported optional pickup invitation within account limits
+ */
+export const getReserveV2PickupInvitationUrl = () => {
+  return `/api/v2/pickup-invitations`;
+};
+
+export const reserveV2PickupInvitation = async (
+  v2PickupInvitationReservation: V2PickupInvitationReservation,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(getReserveV2PickupInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PickupInvitationReservation),
+  });
+};
+
+export const getReserveV2PickupInvitationMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    TError,
+    { data: BodyType<V2PickupInvitationReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+  TError,
+  { data: BodyType<V2PickupInvitationReservation> },
+  TContext
+> => {
+  const mutationKey = ["reserveV2PickupInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    { data: BodyType<V2PickupInvitationReservation> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reserveV2PickupInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReserveV2PickupInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>
+>;
+export type ReserveV2PickupInvitationMutationBody =
+  BodyType<V2PickupInvitationReservation>;
+export type ReserveV2PickupInvitationMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Reserve at most one supported optional pickup invitation within account limits
+ */
+export const useReserveV2PickupInvitation = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    TError,
+    { data: BodyType<V2PickupInvitationReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+  TError,
+  { data: BodyType<V2PickupInvitationReservation> },
+  TContext
+> => {
+  return useMutation(getReserveV2PickupInvitationMutationOptions(options));
+};
+
+/**
+ * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.
+ * @summary Start an optional manual pickup question for a displayed route
+ */
+export const getReserveV2PickupQuestionUrl = () => {
+  return `/api/v2/pickup-questions`;
+};
+
+export const reserveV2PickupQuestion = async (
+  v2PickupQuestionReservation: V2PickupQuestionReservation,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(getReserveV2PickupQuestionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PickupQuestionReservation),
+  });
+};
+
+export const getReserveV2PickupQuestionMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    TError,
+    { data: BodyType<V2PickupQuestionReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+  TError,
+  { data: BodyType<V2PickupQuestionReservation> },
+  TContext
+> => {
+  const mutationKey = ["reserveV2PickupQuestion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    { data: BodyType<V2PickupQuestionReservation> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reserveV2PickupQuestion(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReserveV2PickupQuestionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>
+>;
+export type ReserveV2PickupQuestionMutationBody =
+  BodyType<V2PickupQuestionReservation>;
+export type ReserveV2PickupQuestionMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Start an optional manual pickup question for a displayed route
+ */
+export const useReserveV2PickupQuestion = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+    TError,
+    { data: BodyType<V2PickupQuestionReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reserveV2PickupQuestion>>,
+  TError,
+  { data: BodyType<V2PickupQuestionReservation> },
+  TContext
+> => {
+  return useMutation(getReserveV2PickupQuestionMutationOptions(options));
+};
+
+/**
+ * Account/visibility/identity checked. Terminal or unavailable states expose no route/private task content. Use alongside the normal private contribution receipt after an uncertain answer response.
+ * @summary Read the current safe state of an owned supported pickup question
+ */
+export const getGetV2PickupQuestionUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}`;
+};
+
+export const getV2PickupQuestion = async (
+  invitationId: string,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(
+    getGetV2PickupQuestionUrl(invitationId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetV2PickupQuestionQueryKey = (invitationId: string) => {
+  return [`/api/v2/pickup-questions/${invitationId}`] as const;
+};
+
+export const getGetV2PickupQuestionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2PickupQuestion>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  invitationId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2PickupQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2PickupQuestionQueryKey(invitationId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2PickupQuestion>>
+  > = ({ signal }) =>
+    getV2PickupQuestion(invitationId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!invitationId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2PickupQuestion>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2PickupQuestionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2PickupQuestion>>
+>;
+export type GetV2PickupQuestionQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read the current safe state of an owned supported pickup question
+ */
+
+export function useGetV2PickupQuestion<
+  TData = Awaited<ReturnType<typeof getV2PickupQuestion>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  invitationId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2PickupQuestion>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2PickupQuestionQueryOptions(
+    invitationId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Feedback creates no route fact. Current Terms are not required for these controls. Server time, IANA timezone and existing prompts/1 suppression rules apply. Clients cannot record answered.
+ * @summary Record explicit shown/opened/skip/dismiss/unknown feedback
+ */
+export const getRecordV2PickupQuestionEventUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}/events`;
+};
+
+export const recordV2PickupQuestionEvent = async (
+  invitationId: string,
+  v2PickupQuestionEventRequest: V2PickupQuestionEventRequest,
+  options?: RequestInit,
+): Promise<V2PickupQuestionEventResult> => {
+  return customFetch<V2PickupQuestionEventResult>(
+    getRecordV2PickupQuestionEventUrl(invitationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2PickupQuestionEventRequest),
+    },
+  );
+};
+
+export const getRecordV2PickupQuestionEventMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    TError,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+  TError,
+  { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+  TContext
+> => {
+  const mutationKey = ["recordV2PickupQuestionEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> }
+  > = (props) => {
+    const { invitationId, data } = props ?? {};
+
+    return recordV2PickupQuestionEvent(invitationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordV2PickupQuestionEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>
+>;
+export type RecordV2PickupQuestionEventMutationBody =
+  BodyType<V2PickupQuestionEventRequest>;
+export type RecordV2PickupQuestionEventMutationError =
+  ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Record explicit shown/opened/skip/dismiss/unknown feedback
+ */
+export const useRecordV2PickupQuestionEvent = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+    TError,
+    { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordV2PickupQuestionEvent>>,
+  TError,
+  { invitationId: string; data: BodyType<V2PickupQuestionEventRequest> },
+  TContext
+> => {
+  return useMutation(getRecordV2PickupQuestionEventMutationOptions(options));
+};
+
+/**
+ * Uses the existing strict route-place body. The account, route identity, explicit invitation and matching pickup field/scope are checked before and after intake in one transaction. Compatible late independent answers remain valid. An independent old receipt or another invitation cannot be relinked. Current Terms apply. Use receipt lookup and safe question read on commit ambiguity; never generate a new submission key automatically.
+ * @summary Atomically save a typed pickup report and its question answer
+ */
+export const getSubmitV2PickupQuestionAnswerUrl = (invitationId: string) => {
+  return `/api/v2/pickup-questions/${invitationId}/answers`;
+};
+
+export const submitV2PickupQuestionAnswer = async (
+  invitationId: string,
+  v2RouteObservationRequest: V2RouteObservationRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(
+    getSubmitV2PickupQuestionAnswerUrl(invitationId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteObservationRequest),
+    },
+  );
+};
+
+export const getSubmitV2PickupQuestionAnswerMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    TError,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+  TError,
+  { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2PickupQuestionAnswer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> }
+  > = (props) => {
+    const { invitationId, data } = props ?? {};
+
+    return submitV2PickupQuestionAnswer(invitationId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2PickupQuestionAnswerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>
+>;
+export type SubmitV2PickupQuestionAnswerMutationBody =
+  BodyType<V2RouteObservationRequest>;
+export type SubmitV2PickupQuestionAnswerMutationError =
+  ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Atomically save a typed pickup report and its question answer
+ */
+export const useSubmitV2PickupQuestionAnswer = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+    TError,
+    { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2PickupQuestionAnswer>>,
+  TError,
+  { invitationId: string; data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2PickupQuestionAnswerMutationOptions(options));
+};
+
+/**
+ * Direct route-observations/1 evidence only. Current identity, assessment membership, original state, safety and moderation apply. No canonical boarding instruction, travel, timetable or confidence is inferred. No-store; removed live cursors require refresh.
+ * @summary Read assessed endpoint place reports for this exact public route
+ */
+export const getListV2PlaceReportsUrl = (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/subjects/${subjectId}/places?${stringifiedParams}`
+    : `/api/v2/subjects/${subjectId}/places`;
+};
+
+export const listV2PlaceReports = async (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: RequestInit,
+): Promise<V2PlaceReportPage> => {
+  return customFetch<V2PlaceReportPage>(
+    getListV2PlaceReportsUrl(subjectId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2PlaceReportsQueryKey = (
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+) => {
+  return [
+    `/api/v2/subjects/${subjectId}/places`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2PlaceReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2PlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2PlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListV2PlaceReportsQueryKey(subjectId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2PlaceReports>>
+  > = ({ signal }) =>
+    listV2PlaceReports(subjectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2PlaceReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2PlaceReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2PlaceReports>>
+>;
+export type ListV2PlaceReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read assessed endpoint place reports for this exact public route
+ */
+
+export function useListV2PlaceReports<
+  TData = Awaited<ReturnType<typeof listV2PlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2PlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2PlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2PlaceReportsQueryOptions(
+    subjectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Both account and original route receipt are bound. Original active same-identity reports are Saved, not assessed public facts. No other account reports, private source references or receipts are returned.
+ * @summary Read only your saved direct location reports for your original route
+ */
+export const getListV2OwnPlaceReportsUrl = (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/my-routes/${clientSubmissionId}/places?${stringifiedParams}`
+    : `/api/v2/my-routes/${clientSubmissionId}/places`;
+};
+
+export const listV2OwnPlaceReports = async (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: RequestInit,
+): Promise<V2PlaceReportPage> => {
+  return customFetch<V2PlaceReportPage>(
+    getListV2OwnPlaceReportsUrl(clientSubmissionId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2OwnPlaceReportsQueryKey = (
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+) => {
+  return [
+    `/api/v2/my-routes/${clientSubmissionId}/places`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2OwnPlaceReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListV2OwnPlaceReportsQueryKey(clientSubmissionId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2OwnPlaceReports>>
+  > = ({ signal }) =>
+    listV2OwnPlaceReports(clientSubmissionId, params, {
+      signal,
+      ...requestOptions,
+    });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientSubmissionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2OwnPlaceReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2OwnPlaceReports>>
+>;
+export type ListV2OwnPlaceReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read only your saved direct location reports for your original route
+ */
+
+export function useListV2OwnPlaceReports<
+  TData = Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  params?: ListV2OwnPlaceReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnPlaceReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2OwnPlaceReportsQueryOptions(
+    clientSubmissionId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated safety action without contribution Terms. Exact original report/current route, assessment and both author safety gates rechecked. Opaque reference confers no access.
+ * @summary Report a public location report or hide its anonymous contributor
+ */
+export const getPlaceV2SafetyUrl = (subjectId: string, placeId: string) => {
+  return `/api/v2/subjects/${subjectId}/places/${placeId}/safety`;
+};
+
+export const placeV2Safety = async (
+  subjectId: string,
+  placeId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getPlaceV2SafetyUrl(subjectId, placeId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteSafetyAction),
+    },
+  );
+};
+
+export const getPlaceV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    TError,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof placeV2Safety>>,
+  TError,
+  { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["placeV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, placeId, data } = props ?? {};
+
+    return placeV2Safety(subjectId, placeId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PlaceV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof placeV2Safety>>
+>;
+export type PlaceV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type PlaceV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a public location report or hide its anonymous contributor
+ */
+export const usePlaceV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof placeV2Safety>>,
+    TError,
+    { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof placeV2Safety>>,
+  TError,
+  { subjectId: string; placeId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getPlaceV2SafetyMutationOptions(options));
+};
+
+/**
+ * Authenticated safe context only. The structural identity key binds the displayed target; it never confers access or asserts travel, review or schedule approval. No-store. Recheck before saving after account/target changes.
+ * @summary Read the exact visible or owned route context before a typed contribution
+ */
+export const getGetV2RouteContributionContextUrl = (subjectId: string) => {
+  return `/api/v2/subjects/${subjectId}/contribution-context`;
+};
+
+export const getV2RouteContributionContext = async (
+  subjectId: string,
+  options?: RequestInit,
+): Promise<V2RouteContributionContext> => {
+  return customFetch<V2RouteContributionContext>(
+    getGetV2RouteContributionContextUrl(subjectId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetV2RouteContributionContextQueryKey = (subjectId: string) => {
+  return [`/api/v2/subjects/${subjectId}/contribution-context`] as const;
+};
+
+export const getGetV2RouteContributionContextQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2RouteContributionContext>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2RouteContributionContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetV2RouteContributionContextQueryKey(subjectId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2RouteContributionContext>>
+  > = ({ signal }) =>
+    getV2RouteContributionContext(subjectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2RouteContributionContext>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2RouteContributionContextQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2RouteContributionContext>>
+>;
+export type GetV2RouteContributionContextQueryError =
+  ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read the exact visible or owned route context before a typed contribution
+ */
+
+export function useGetV2RouteContributionContext<
+  TData = Awaited<ReturnType<typeof getV2RouteContributionContext>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2RouteContributionContext>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2RouteContributionContextQueryOptions(
+    subjectId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * One or two explicit endpoint places on an existing own/community-public lead. Server binds account, current Terms, visibility and safety. Same-identity revision advance is accepted; structural changes require reconfirmation. Scope is unscoped endpoint knowledge; no intermediate stops, travel, fare, calendar, approval or publication is inferred. Use the existing private receipt lookup after an uncertain response.
+ * @summary Save endpoint pickup or drop-off knowledge without creating an actual journey
+ */
+export const getSubmitV2RouteObservationsUrl = () => {
+  return `/api/v2/route-observations`;
+};
+
+export const submitV2RouteObservations = async (
+  v2RouteObservationRequest: V2RouteObservationRequest,
+  options?: RequestInit,
+): Promise<V2LeadReceipt> => {
+  return customFetch<V2LeadReceipt>(getSubmitV2RouteObservationsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2RouteObservationRequest),
+  });
+};
+
+export const getSubmitV2RouteObservationsMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2RouteObservations>>,
+    TError,
+    { data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitV2RouteObservations>>,
+  TError,
+  { data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitV2RouteObservations"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitV2RouteObservations>>,
+    { data: BodyType<V2RouteObservationRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitV2RouteObservations(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitV2RouteObservationsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitV2RouteObservations>>
+>;
+export type SubmitV2RouteObservationsMutationBody =
+  BodyType<V2RouteObservationRequest>;
+export type SubmitV2RouteObservationsMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Save endpoint pickup or drop-off knowledge without creating an actual journey
+ */
+export const useSubmitV2RouteObservations = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitV2RouteObservations>>,
+    TError,
+    { data: BodyType<V2RouteObservationRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitV2RouteObservations>>,
+  TError,
+  { data: BodyType<V2RouteObservationRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitV2RouteObservationsMutationOptions(options));
+};
+
+/**
+ * Paid experiences, quotes and advertised fares remain scoped reports, not a current ticket price or canonical service. Current-time assessment/evidence and both route/fare contributor safety gates apply. Opaque presentation IDs never expose observation, receipt, source or author identity. Unready/date-held evidence is signalled without an amount. Refresh when a live cursor is no longer available.
+ * @summary Read assessed dated fare reports for one visible route
+ */
+export const getListV2FareReportsUrl = (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/subjects/${subjectId}/fares?${stringifiedParams}`
+    : `/api/v2/subjects/${subjectId}/fares`;
+};
+
+export const listV2FareReports = async (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: RequestInit,
+): Promise<V2PublicFarePage> => {
+  return customFetch<V2PublicFarePage>(
+    getListV2FareReportsUrl(subjectId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListV2FareReportsQueryKey = (
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+) => {
+  return [
+    `/api/v2/subjects/${subjectId}/fares`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListV2FareReportsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2FareReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2FareReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListV2FareReportsQueryKey(subjectId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2FareReports>>
+  > = ({ signal }) =>
+    listV2FareReports(subjectId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2FareReports>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2FareReportsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2FareReports>>
+>;
+export type ListV2FareReportsQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read assessed dated fare reports for one visible route
+ */
+
+export function useListV2FareReports<
+  TData = Awaited<ReturnType<typeof listV2FareReports>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  params?: ListV2FareReportsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2FareReports>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2FareReportsQueryOptions(
+    subjectId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated safety exception without contribution Terms; resolves the opaque report reference privately and rechecks route, observation, assessment and contributor visibility. No private author ID is returned.
+ * @summary Report a fare or hide its anonymous contributor
+ */
+export const getFareV2SafetyUrl = (subjectId: string, fareId: string) => {
+  return `/api/v2/subjects/${subjectId}/fares/${fareId}/safety`;
+};
+
+export const fareV2Safety = async (
+  subjectId: string,
+  fareId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getFareV2SafetyUrl(subjectId, fareId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(v2RouteSafetyAction),
+    },
+  );
+};
+
+export const getFareV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    TError,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof fareV2Safety>>,
+  TError,
+  { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["fareV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, fareId, data } = props ?? {};
+
+    return fareV2Safety(subjectId, fareId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type FareV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof fareV2Safety>>
+>;
+export type FareV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type FareV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a fare or hide its anonymous contributor
+ */
+export const useFareV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof fareV2Safety>>,
+    TError,
+    { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof fareV2Safety>>,
+  TError,
+  { subjectId: string; fareId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getFareV2SafetyMutationOptions(options));
+};
+
+/**
+ * Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
  * @summary Save a typed actual-journey report without inferring a timetable
  */
 export const getSubmitV2ActualJourneyUrl = () => {
@@ -158,6 +1630,628 @@ export const useSubmitV2ActualJourney = <
 > => {
   return useMutation(getSubmitV2ActualJourneyMutationOptions(options));
 };
+
+/**
+ * Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * @summary Discover initial community route reports
+ */
+export const getSearchV2RoutesUrl = (params?: SearchV2RoutesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/search?${stringifiedParams}`
+    : `/api/v2/search`;
+};
+
+export const searchV2Routes = async (
+  params?: SearchV2RoutesParams,
+  options?: RequestInit,
+): Promise<V2PublicSearch> => {
+  return customFetch<V2PublicSearch>(getSearchV2RoutesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchV2RoutesQueryKey = (params?: SearchV2RoutesParams) => {
+  return [`/api/v2/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchV2RoutesQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchV2Routes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: SearchV2RoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchV2Routes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchV2RoutesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchV2Routes>>> = ({
+    signal,
+  }) => searchV2Routes(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchV2Routes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchV2RoutesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchV2Routes>>
+>;
+export type SearchV2RoutesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Discover initial community route reports
+ */
+
+export function useSearchV2Routes<
+  TData = Awaited<ReturnType<typeof searchV2Routes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: SearchV2RoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchV2Routes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchV2RoutesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Uses the same visibility and safety rules as Search. Public contextual contribution eligibility is enforced separately in the fenced writer. Canonical service projections remain a separate publication producer.
+ * @summary Recheck one currently visible public lead
+ */
+export const getGetV2SubjectUrl = (subjectId: string) => {
+  return `/api/v2/subjects/${subjectId}`;
+};
+
+export const getV2Subject = async (
+  subjectId: string,
+  options?: RequestInit,
+): Promise<V2PublicSubjectEnvelope> => {
+  return customFetch<V2PublicSubjectEnvelope>(getGetV2SubjectUrl(subjectId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2SubjectQueryKey = (subjectId: string) => {
+  return [`/api/v2/subjects/${subjectId}`] as const;
+};
+
+export const getGetV2SubjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2Subject>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2Subject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetV2SubjectQueryKey(subjectId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getV2Subject>>> = ({
+    signal,
+  }) => getV2Subject(subjectId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!subjectId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2Subject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2SubjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2Subject>>
+>;
+export type GetV2SubjectQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Recheck one currently visible public lead
+ */
+
+export function useGetV2Subject<
+  TData = Awaited<ReturnType<typeof getV2Subject>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  subjectId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2Subject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2SubjectQueryOptions(subjectId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Authenticated safety exception without current contribution Terms. Resolves the contributor privately; never returns an author ID. Same pending report reason and repeated block are idempotent.
+ * @summary Report a public route or hide its anonymous contributor's route reports
+ */
+export const getRouteV2SafetyUrl = (subjectId: string) => {
+  return `/api/v2/subjects/${subjectId}/safety`;
+};
+
+export const routeV2Safety = async (
+  subjectId: string,
+  v2RouteSafetyAction: V2RouteSafetyAction,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(getRouteV2SafetyUrl(subjectId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2RouteSafetyAction),
+  });
+};
+
+export const getRouteV2SafetyMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    TError,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof routeV2Safety>>,
+  TError,
+  { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  const mutationKey = ["routeV2Safety"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> }
+  > = (props) => {
+    const { subjectId, data } = props ?? {};
+
+    return routeV2Safety(subjectId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RouteV2SafetyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof routeV2Safety>>
+>;
+export type RouteV2SafetyMutationBody = BodyType<V2RouteSafetyAction>;
+export type RouteV2SafetyMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Report a public route or hide its anonymous contributor's route reports
+ */
+export const useRouteV2Safety = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof routeV2Safety>>,
+    TError,
+    { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof routeV2Safety>>,
+  TError,
+  { subjectId: string; data: BodyType<V2RouteSafetyAction> },
+  TContext
+> => {
+  return useMutation(getRouteV2SafetyMutationOptions(options));
+};
+
+/**
+ * @summary List this account's anonymous route-report contributor blocks
+ */
+export const getListV2RouteBlocksUrl = () => {
+  return `/api/v2/blocked-route-reporters`;
+};
+
+export const listV2RouteBlocks = async (
+  options?: RequestInit,
+): Promise<V2RouteBlocks> => {
+  return customFetch<V2RouteBlocks>(getListV2RouteBlocksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListV2RouteBlocksQueryKey = () => {
+  return [`/api/v2/blocked-route-reporters`] as const;
+};
+
+export const getListV2RouteBlocksQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2RouteBlocks>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListV2RouteBlocksQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>
+  > = ({ signal }) => listV2RouteBlocks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2RouteBlocksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2RouteBlocks>>
+>;
+export type ListV2RouteBlocksQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary List this account's anonymous route-report contributor blocks
+ */
+
+export function useListV2RouteBlocks<
+  TData = Awaited<ReturnType<typeof listV2RouteBlocks>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listV2RouteBlocks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2RouteBlocksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Unblock a route-report contributor using this account's private block reference
+ */
+export const getUnblockV2RouteReporterUrl = (blockId: string) => {
+  return `/api/v2/blocked-route-reporters/${blockId}`;
+};
+
+export const unblockV2RouteReporter = async (
+  blockId: string,
+  options?: RequestInit,
+): Promise<V2RouteSafetyResult> => {
+  return customFetch<V2RouteSafetyResult>(
+    getUnblockV2RouteReporterUrl(blockId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getUnblockV2RouteReporterMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    TError,
+    { blockId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+  TError,
+  { blockId: string },
+  TContext
+> => {
+  const mutationKey = ["unblockV2RouteReporter"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    { blockId: string }
+  > = (props) => {
+    const { blockId } = props ?? {};
+
+    return unblockV2RouteReporter(blockId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnblockV2RouteReporterMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>
+>;
+
+export type UnblockV2RouteReporterMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Unblock a route-report contributor using this account's private block reference
+ */
+export const useUnblockV2RouteReporter = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+    TError,
+    { blockId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unblockV2RouteReporter>>,
+  TError,
+  { blockId: string },
+  TContext
+> => {
+  return useMutation(getUnblockV2RouteReporterMutationOptions(options));
+};
+
+/**
+ * Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.
+ * @summary List this account's submitted community routes
+ */
+export const getListV2OwnRoutesUrl = (params?: ListV2OwnRoutesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/my-routes?${stringifiedParams}`
+    : `/api/v2/my-routes`;
+};
+
+export const listV2OwnRoutes = async (
+  params?: ListV2OwnRoutesParams,
+  options?: RequestInit,
+): Promise<V2OwnRoutes> => {
+  return customFetch<V2OwnRoutes>(getListV2OwnRoutesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListV2OwnRoutesQueryKey = (params?: ListV2OwnRoutesParams) => {
+  return [`/api/v2/my-routes`, ...(params ? [params] : [])] as const;
+};
+
+export const getListV2OwnRoutesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listV2OwnRoutes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: ListV2OwnRoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnRoutes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListV2OwnRoutesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listV2OwnRoutes>>> = ({
+    signal,
+  }) => listV2OwnRoutes(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listV2OwnRoutes>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListV2OwnRoutesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listV2OwnRoutes>>
+>;
+export type ListV2OwnRoutesQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary List this account's submitted community routes
+ */
+
+export function useListV2OwnRoutes<
+  TData = Awaited<ReturnType<typeof listV2OwnRoutes>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: ListV2OwnRoutesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listV2OwnRoutes>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListV2OwnRoutesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Recheck an owned submitted route before adding details
+ */
+export const getGetV2OwnRouteUrl = (clientSubmissionId: string) => {
+  return `/api/v2/my-routes/${clientSubmissionId}`;
+};
+
+export const getV2OwnRoute = async (
+  clientSubmissionId: string,
+  options?: RequestInit,
+): Promise<V2OwnRouteEnvelope> => {
+  return customFetch<V2OwnRouteEnvelope>(
+    getGetV2OwnRouteUrl(clientSubmissionId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetV2OwnRouteQueryKey = (clientSubmissionId: string) => {
+  return [`/api/v2/my-routes/${clientSubmissionId}`] as const;
+};
+
+export const getGetV2OwnRouteQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2OwnRoute>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2OwnRoute>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2OwnRouteQueryKey(clientSubmissionId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getV2OwnRoute>>> = ({
+    signal,
+  }) => getV2OwnRoute(clientSubmissionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!clientSubmissionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2OwnRoute>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2OwnRouteQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2OwnRoute>>
+>;
+export type GetV2OwnRouteQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Recheck an owned submitted route before adding details
+ */
+
+export function useGetV2OwnRoute<
+  TData = Awaited<ReturnType<typeof getV2OwnRoute>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  clientSubmissionId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2OwnRoute>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2OwnRouteQueryOptions(
+    clientSubmissionId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Discover the enabled minimum-lead intake contract
@@ -2442,6 +4536,107 @@ export const useDeleteMabhaziAccount = <
 > => {
   return useMutation(getDeleteMabhaziAccountMutationOptions(options));
 };
+
+/**
+ * Origins come from the same moderation and account/device-safe rows as the board. A community clock or legacy schedule is not a canonical timed departure. No countdown or daily recurrence is inferred. An unavailable explicit origin never silently switches cities. No-store; old journey/city APIs are unchanged.
+ * @summary Read visible route origins and their reported schedules from one snapshot
+ */
+export const getGetV2DepartureBoardUrl = (
+  params?: GetV2DepartureBoardParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/v2/departure-board?${stringifiedParams}`
+    : `/api/v2/departure-board`;
+};
+
+export const getV2DepartureBoard = async (
+  params?: GetV2DepartureBoardParams,
+  options?: RequestInit,
+): Promise<V2DepartureBoard> => {
+  return customFetch<V2DepartureBoard>(getGetV2DepartureBoardUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetV2DepartureBoardQueryKey = (
+  params?: GetV2DepartureBoardParams,
+) => {
+  return [`/api/v2/departure-board`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetV2DepartureBoardQueryOptions = <
+  TData = Awaited<ReturnType<typeof getV2DepartureBoard>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: GetV2DepartureBoardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2DepartureBoard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetV2DepartureBoardQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getV2DepartureBoard>>
+  > = ({ signal }) =>
+    getV2DepartureBoard(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getV2DepartureBoard>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetV2DepartureBoardQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getV2DepartureBoard>>
+>;
+export type GetV2DepartureBoardQueryError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Read visible route origins and their reported schedules from one snapshot
+ */
+
+export function useGetV2DepartureBoard<
+  TData = Awaited<ReturnType<typeof getV2DepartureBoard>>,
+  TError = ErrorType<V2ErrorResponse>,
+>(
+  params?: GetV2DepartureBoardParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getV2DepartureBoard>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetV2DepartureBoardQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Search known cities (OSM-seeded reference data)

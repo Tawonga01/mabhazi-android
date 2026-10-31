@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -126,7 +127,7 @@ export function UgcSafetyActions({
       >
         <Feather name="flag" size={compact ? 12 : 14} color={colors.mutedForeground} />
         {!compact ? (
-          <Text style={[styles.buttonText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+          <Text style={[styles.buttonText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
             Report
           </Text>
         ) : null}
@@ -143,11 +144,8 @@ export function UgcSafetyActions({
           <View style={[styles.dialog, { backgroundColor: colors.background }]}>
             <View style={styles.dialogHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  Safety options
-                </Text>
-                <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Help keep Mabhazi welcoming by reporting objectionable {targetLabel} content.
+                <Text style={[styles.title, { color: colors.foreground, fontFamily: ui.type.bold }]}>
+                  Report {targetLabel}
                 </Text>
               </View>
               <TouchableOpacity
@@ -162,7 +160,7 @@ export function UgcSafetyActions({
             {!isAuthenticated ? (
               <View style={styles.signInBlock}>
                 <Feather name="lock" size={18} color={colors.mutedForeground} />
-                <Text style={[styles.signInText, { color: configurationError ? colors.destructive : colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.signInText, { color: configurationError ? colors.destructive : colors.mutedForeground, fontFamily: ui.type.regular }]}>
                   {configurationError || "Sign in to send a report or block a contributor."}
                 </Text>
                 {configurationError ? null : (
@@ -180,13 +178,13 @@ export function UgcSafetyActions({
                         });
                     }}
                   >
-                    <Text style={[styles.primaryButtonText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                    <Text style={[styles.primaryButtonText, { color: colors.primaryForeground, fontFamily: ui.type.semibold }]}>
                       Sign in
                     </Text>
                   </TouchableOpacity>
                 )}
                 {error ? (
-                  <Text style={[styles.error, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.error, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                     {error}
                   </Text>
                 ) : null}
@@ -194,13 +192,13 @@ export function UgcSafetyActions({
             ) : success ? (
               <View style={styles.successBlock}>
                 <Feather name="check-circle" size={22} color="#16A34A" />
-                <Text style={[styles.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.successText, { color: "#16A34A", fontFamily: ui.type.semibold }]}>
                   {success}
                 </Text>
               </View>
             ) : (
               <>
-                <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.fieldLabel, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
                   What&apos;s wrong?
                 </Text>
                 <ScrollView
@@ -228,7 +226,7 @@ export function UgcSafetyActions({
                           size={15}
                           color={selected ? colors.primary : colors.mutedForeground}
                         />
-                        <Text style={[styles.reasonText, { color: colors.foreground, fontFamily: selected ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
+                        <Text style={[styles.reasonText, { color: colors.foreground, fontFamily: selected ? ui.type.semibold : ui.type.regular }]}>
                           {option.label}
                         </Text>
                       </TouchableOpacity>
@@ -236,7 +234,7 @@ export function UgcSafetyActions({
                   })}
                 </ScrollView>
                 <TextInput
-                  style={[styles.details, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+                  style={[styles.details, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: ui.type.regular }]}
                   value={details}
                   onChangeText={setDetails}
                   placeholder="Add details (optional)"
@@ -247,7 +245,7 @@ export function UgcSafetyActions({
                   textAlignVertical="top"
                 />
                 {error ? (
-                  <Text style={[styles.error, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.error, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                     {error}
                   </Text>
                 ) : null}
@@ -262,7 +260,7 @@ export function UgcSafetyActions({
                   ) : (
                     <>
                       <Feather name="send" size={14} color={colors.primaryForeground} />
-                      <Text style={[styles.primaryButtonText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                      <Text style={[styles.primaryButtonText, { color: colors.primaryForeground, fontFamily: ui.type.semibold }]}>
                         Send report
                       </Text>
                     </>
@@ -280,7 +278,7 @@ export function UgcSafetyActions({
                     ) : (
                       <>
                         <Feather name="user-x" size={14} color={colors.mutedForeground} />
-                        <Text style={[styles.blockText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                        <Text style={[styles.blockText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
                           Block {targetUserName || "this contributor"} on this device
                         </Text>
                       </>
@@ -295,7 +293,7 @@ export function UgcSafetyActions({
                 style={[styles.secondaryButton, { borderColor: colors.border }]}
                 onPress={close}
               >
-                <Text style={[styles.secondaryButtonText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.secondaryButtonText, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
                   Done
                 </Text>
               </TouchableOpacity>
@@ -309,16 +307,16 @@ export function UgcSafetyActions({
 
 const styles = StyleSheet.create({
   compactButton: {
-    minWidth: 28,
-    minHeight: 28,
+    minWidth: 44,
+    minHeight: 44,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: 0,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 6,
   },
   button: {
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 10,
@@ -327,36 +325,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
   },
-  buttonText: { fontSize: 12 },
+  buttonText: { fontSize: 14 },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.55)",
     justifyContent: "center",
     padding: 20,
   },
-  dialog: { maxHeight: "88%", borderRadius: 20, padding: 20, gap: 13 },
+  dialog: {alignSelf: 'center', width: "100%", maxWidth: 450,  maxHeight: "88%", borderRadius: 26, padding: 20, gap: 13 },
   dialogHeader: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  title: { fontSize: 19, marginBottom: 6 },
-  subtitle: { fontSize: 13, lineHeight: 19 },
-  close: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  fieldLabel: { fontSize: 13 },
+  title: { fontSize: 23, marginBottom: 6 },
+  subtitle: { fontSize: 14, lineHeight: 21 },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  fieldLabel: { fontSize: 14 },
   reasons: { maxHeight: 225 },
   reason: {
-    minHeight: 40,
+    minHeight: 48,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 11,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
-  reasonText: { fontSize: 13, flex: 1 },
+  reasonText: { fontSize: 14, flex: 1 },
   details: {
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     minHeight: 74,
     padding: 10,
-    fontSize: 13,
+    fontSize: 16,
   },
   primaryButton: {
     minHeight: 44,
@@ -367,9 +365,9 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingHorizontal: 12,
   },
-  primaryButtonText: { fontSize: 14 },
+  primaryButtonText: { fontSize: 16 },
   blockButton: {
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: "row",
@@ -378,18 +376,18 @@ const styles = StyleSheet.create({
     gap: 7,
     paddingHorizontal: 10,
   },
-  blockText: { fontSize: 12 },
+  blockText: { fontSize: 14 },
   secondaryButton: {
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 11,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   secondaryButtonText: { fontSize: 14 },
-  error: { fontSize: 12, textAlign: "center" },
+  error: { fontSize: 14, textAlign: "center" },
   signInBlock: { alignItems: "center", gap: 10, paddingVertical: 14 },
-  signInText: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  signInText: { fontSize: 14, textAlign: "center", lineHeight: 21 },
   successBlock: { alignItems: "center", gap: 10, paddingVertical: 20 },
-  successText: { fontSize: 13, lineHeight: 19, textAlign: "center" },
+  successText: { fontSize: 14, lineHeight: 21, textAlign: "center" },
 });

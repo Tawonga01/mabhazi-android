@@ -17,11 +17,25 @@ tags:
   - name: Legal
     description: Public privacy, terms, support, and account deletion surfaces.
 paths:
+  /v2/prompt-preferences: {"get":{"operationId":"getV2PromptPreferences","summary":"Read your optional question settings without recording activity","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"responses":{"200":{"description":"Authenticated account controls only; no-store","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PromptPreferences"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}},"post":{"operationId":"setV2PromptPreferences","summary":"Save your question settings with revision protection","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PromptPreferencesRequest"}}}},"responses":{"200":{"description":"Authenticated account controls only; no-store","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PromptPreferences"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/prompt-activity: {"post":{"operationId":"recordV2PromptActivity","summary":"Record foreground interaction at server time without revealing session identity","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PromptActivityRequest"}}}},"responses":{"200":{"description":"Authenticated account controls only; no-store","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PromptActivityResult"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/pickup-invitations: {"post":{"operationId":"reserveV2PickupInvitation","summary":"Reserve at most one supported optional pickup invitation within account limits","description":"Requires explicit volunteered pickup knowledge and the displayed route revision/identity. Existing server-owned activity-session and rolling24h caps, preferences, dismissal and scoped unknown suppression apply atomically across devices. The highest-priority eligible task must be supported before reserving; unsupported tasks spend no invitation budget. Stable request retry returns the current owned state or original none. Reservation is not shown/opened/answered. Existing manual pickup questions and independent capture remain exempt. No UI or travel inference is implied.","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupInvitationReservation"}}}},"responses":{"200":{"description":"Account-bound result; saving responds only after COMMIT","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionState"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/pickup-questions: {"post":{"operationId":"reserveV2PickupQuestion","summary":"Start an optional manual pickup question for a displayed route","description":"User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionReservation"}}}},"responses":{"200":{"description":"Account-bound result; saving responds only after COMMIT","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionState"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/pickup-questions/{invitationId}: {"get":{"operationId":"getV2PickupQuestion","summary":"Read the current safe state of an owned supported pickup question","description":"Account/visibility/identity checked. Terminal or unavailable states expose no route/private task content. Use alongside the normal private contribution receipt after an uncertain answer response.","parameters":[{"name":"invitationId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"responses":{"200":{"description":"Account-bound result; saving responds only after COMMIT","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionState"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/pickup-questions/{invitationId}/events: {"post":{"operationId":"recordV2PickupQuestionEvent","summary":"Record explicit shown/opened/skip/dismiss/unknown feedback","description":"Feedback creates no route fact. Current Terms are not required for these controls. Server time, IANA timezone and existing prompts/1 suppression rules apply. Clients cannot record answered.","parameters":[{"name":"invitationId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionEventRequest"}}}},"responses":{"200":{"description":"Account-bound result; saving responds only after COMMIT","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PickupQuestionEventResult"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/pickup-questions/{invitationId}/answers: {"post":{"operationId":"submitV2PickupQuestionAnswer","summary":"Atomically save a typed pickup report and its question answer","description":"Uses the existing strict route-place body. The account, route identity, explicit invitation and matching pickup field/scope are checked before and after intake in one transaction. Compatible late independent answers remain valid. An independent old receipt or another invitation cannot be relinked. Current Terms apply. Use receipt lookup and safe question read on commit ambiguity; never generate a new submission key automatically.","parameters":[{"name":"invitationId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteObservationRequest"}}}},"responses":{"200":{"description":"Account-bound result; saving responds only after COMMIT","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2LeadReceipt"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"428":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/subjects/{subjectId}/places: {"get":{"operationId":"listV2PlaceReports","summary":"Read assessed endpoint place reports for this exact public route","description":"Direct route-observations/1 evidence only. Current identity, assessment membership, original state, safety and moderation apply. No canonical boarding instruction, travel, timetable or confidence is inferred. No-store; removed live cursors require refresh.","parameters":[{"name":"subjectId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"cursor","in":"query","schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/OptionalExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"}],"responses":{"200":{"description":"Current scoped location reports, without private evidence identities","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PlaceReportPage"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/my-routes/{clientSubmissionId}/places: {"get":{"operationId":"listV2OwnPlaceReports","summary":"Read only your saved direct location reports for your original route","description":"Both account and original route receipt are bound. Original active same-identity reports are Saved, not assessed public facts. No other account reports, private source references or receipts are returned.","parameters":[{"name":"clientSubmissionId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"cursor","in":"query","schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"}],"responses":{"200":{"description":"Current scoped location reports, without private evidence identities","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PlaceReportPage"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/subjects/{subjectId}/places/{placeId}/safety: {"post":{"operationId":"placeV2Safety","summary":"Report a public location report or hide its anonymous contributor","description":"Authenticated safety action without contribution Terms. Exact original report/current route, assessment and both author safety gates rechecked. Opaque reference confers no access.","parameters":[{"name":"subjectId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"placeId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteSafetyAction"}}}},"responses":{"200":{"description":"Current scoped location reports, without private evidence identities","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteSafetyResult"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/subjects/{subjectId}/contribution-context: {"get":{"operationId":"getV2RouteContributionContext","summary":"Read the exact visible or owned route context before a typed contribution","description":"Authenticated safe context only. The structural identity key binds the displayed target; it never confers access or asserts travel, review or schedule approval. No-store. Recheck before saving after account/target changes.","parameters":[{"name":"subjectId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"}],"responses":{"200":{"description":"Safe route context and identity","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteContributionContext"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"428":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/route-observations: {"post":{"operationId":"submitV2RouteObservations","summary":"Save endpoint pickup or drop-off knowledge without creating an actual journey","description":"One or two explicit endpoint places on an existing own/community-public lead. Server binds account, current Terms, visibility and safety. Same-identity revision advance is accepted; structural changes require reconfirmation. Scope is unscoped endpoint knowledge; no intermediate stops, travel, fare, calendar, approval or publication is inferred. Use the existing private receipt lookup after an uncertain response.","parameters":[{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/AuthorizationSessionHeader"},{"$ref":"#/components/parameters/SessionCookie"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteObservationRequest"}}}},"responses":{"200":{"description":"Committed private receipt or identical historical replay","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2LeadReceipt"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"413":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"428":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/subjects/{subjectId}/fares: {"get":{"operationId":"listV2FareReports","summary":"Read assessed dated fare reports for one visible route","description":"Paid experiences, quotes and advertised fares remain scoped reports, not a current ticket price or canonical service. Current-time assessment/evidence and both route/fare contributor safety gates apply. Opaque presentation IDs never expose observation, receipt, source or author identity. Unready/date-held evidence is signalled without an amount. Refresh when a live cursor is no longer available.","parameters":[{"name":"subjectId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"cursor","in":"query","schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/BlockedContributorsHeader"},{"$ref":"#/components/parameters/OptionalExpectedAccountHeader"}],"responses":{"200":{"description":"At most twenty scoped reported amounts with independent pending/hidden states","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2PublicFarePage"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
+  /v2/subjects/{subjectId}/fares/{fareId}/safety: {"post":{"operationId":"fareV2Safety","summary":"Report a fare or hide its anonymous contributor","description":"Authenticated safety exception without contribution Terms; resolves the opaque report reference privately and rechecks route, observation, assessment and contributor visibility. No private author ID is returned.","parameters":[{"name":"subjectId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"fareId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"$ref":"#/components/parameters/ExpectedAccountHeader"},{"$ref":"#/components/parameters/BlockedContributorsHeader"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteSafetyAction"}}}},"responses":{"200":{"description":"Safety action saved","content":{"application/json":{"schema":{"$ref":"#/components/schemas/V2RouteSafetyResult"}}}},"400":{"$ref":"#/components/responses/V2Error"},"401":{"$ref":"#/components/responses/V2Error"},"403":{"$ref":"#/components/responses/V2Error"},"404":{"$ref":"#/components/responses/V2Error"},"409":{"$ref":"#/components/responses/V2Error"},"415":{"$ref":"#/components/responses/V2Error"},"422":{"$ref":"#/components/responses/V2Error"},"503":{"$ref":"#/components/responses/V2Error"}}}}
   /v2/actual-journeys:
     post:
       operationId: submitV2ActualJourney
       summary: Save a typed actual-journey report without inferring a timetable
-      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. This capability permits no intended subject or an exact owned community lead until public canonical target discovery is implemented. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
+      description: Authenticated public accounts can report actual clocks, named operator/places and scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports require an exact currently visible lead and revision; other surfaces retain the existing own-lead boundary. Device and account contributor blocks and moderation are rechecked transactionally. Save is durable intake, not travel verification, service matching or publication. Reuse the account-scoped receipt lookup after an uncertain response.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -46,6 +60,175 @@ paths:
         '415': {$ref: '#/components/responses/V2Error'}
         '422': {$ref: '#/components/responses/V2Error'}
         '428': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/search:
+    get:
+      operationId: searchV2Routes
+      summary: Discover initial community route reports
+      description: Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+      parameters:
+        - name: originCityId
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 999999999}
+        - name: destinationCityId
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 999999999}
+        - name: fromCity
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 80}
+        - name: toCity
+          in: query
+          schema: {type: string, minLength: 1, maxLength: 80}
+        - name: cursor
+          in: query
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/BlockedContributorsHeader'
+        - $ref: '#/components/parameters/OptionalExpectedAccountHeader'
+      responses:
+        '200':
+          description: Public reports without private evidence or attribution
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2PublicSearch'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/subjects/{subjectId}:
+    get:
+      operationId: getV2Subject
+      summary: Recheck one currently visible public lead
+      description: Uses the same visibility and safety rules as Search. Public contextual contribution eligibility is enforced separately in the fenced writer. Canonical service projections remain a separate publication producer.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/BlockedContributorsHeader'
+        - $ref: '#/components/parameters/OptionalExpectedAccountHeader'
+      responses:
+        '200':
+          description: Current safe public subject projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2PublicSubjectEnvelope'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/subjects/{subjectId}/safety:
+    post:
+      operationId: routeV2Safety
+      summary: Report a public route or hide its anonymous contributor's route reports
+      description: Authenticated safety exception without current contribution Terms. Resolves the contributor privately; never returns an author ID. Same pending report reason and repeated block are idempotent.
+      parameters:
+        - name: subjectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/V2RouteSafetyAction'}
+      responses:
+        '200':
+          description: Safety action saved
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteSafetyResult'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '415': {$ref: '#/components/responses/V2Error'}
+        '422': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/blocked-route-reporters:
+    get:
+      operationId: listV2RouteBlocks
+      summary: List this account's anonymous route-report contributor blocks
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      responses:
+        '200':
+          description: Private opaque block references, not contributor identities
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteBlocks'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/blocked-route-reporters/{blockId}:
+    delete:
+      operationId: unblockV2RouteReporter
+      summary: Unblock a route-report contributor using this account's private block reference
+      parameters:
+        - name: blockId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+      responses:
+        '200':
+          description: Unblock is idempotent and scoped to the authenticated account
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2RouteSafetyResult'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '403': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/my-routes:
+    get:
+      operationId: listV2OwnRoutes
+      summary: List this account's submitted community routes
+      description: Private keyset pagination over owned initial route receipts. Submitted is not review or publication status. Erased attribution is excluded and retired routes cannot accept follow-up.
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: cursor
+          in: query
+          schema: {type: string, maxLength: 73, pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'}
+      responses:
+        '200':
+          description: Up to twenty owned submitted routes, newest first
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2OwnRoutes'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
+        '503': {$ref: '#/components/responses/V2Error'}
+  /v2/my-routes/{clientSubmissionId}:
+    get:
+      operationId: getV2OwnRoute
+      summary: Recheck an owned submitted route before adding details
+      parameters:
+        - $ref: '#/components/parameters/ExpectedAccountHeader'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+        - name: clientSubmissionId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Owned original context and separate live availability
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/V2OwnRouteEnvelope'}
+        '400': {$ref: '#/components/responses/V2Error'}
+        '401': {$ref: '#/components/responses/V2Error'}
+        '404': {$ref: '#/components/responses/V2Error'}
+        '409': {$ref: '#/components/responses/V2Error'}
         '503': {$ref: '#/components/responses/V2Error'}
   /v2/capabilities:
     get:
@@ -732,6 +915,54 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /v2/departure-board:
+    get:
+      operationId: getV2DepartureBoard
+      tags: [contributions]
+      summary: Read visible route origins and their reported schedules from one snapshot
+      description: Origins come from the same moderation and account/device-safe rows as the board. A community clock or legacy schedule is not a canonical timed departure. No countdown or daily recurrence is inferred. An unavailable explicit origin never silently switches cities. No-store; old journey/city APIs are unchanged.
+      parameters:
+        - name: originKey
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 240
+            pattern: '^(city:[1-9][0-9]*|legacy:.+)$'
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Visible available origins and selected route reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2DepartureBoard'
+        '400':
+          description: Invalid query or safety context
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ErrorResponse'
+        '401':
+          description: Sign in again with the expected account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ErrorResponse'
+        '409':
+          description: Active account changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ErrorResponse'
+        '503':
+          description: Board temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/V2ErrorResponse'
+
   /cities:
     get:
       operationId: listCities
@@ -903,6 +1134,16 @@ paths:
 
 components:
   parameters:
+    OptionalExpectedAccountHeader:
+      name: X-Mabhazi-Account
+      in: header
+      description: Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.
+      schema: {type: string, minLength: 1, maxLength: 200}
+    BlockedContributorsHeader:
+      name: X-Mabhazi-Blocked-Contributors
+      in: header
+      description: JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
+      schema: {type: string, maxLength: 10000}
     ExpectedAccountHeader:
       name: X-Mabhazi-Account
       in: header
@@ -925,6 +1166,54 @@ components:
         type: string
 
   schemas:
+    V2PromptQuestionType: {"type":"string","enum":["identify_service","clarify_time_basis","operating_days","pickup_place","fare_paid","fare_advertised","complete_pattern","confirm_current_fact","resolve_conflict_context"]}
+    V2PromptPreferences: {"type":"object","additionalProperties":false,"required":["policyVersion","revision","invitationsEnabled","disabledTypes","dismissedUntil"],"properties":{"policyVersion":{"type":"string","enum":["prompts/1"]},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"invitationsEnabled":{"type":"boolean"},"disabledTypes":{"type":"array","maxItems":9,"uniqueItems":true,"items":{"$ref":"#/components/schemas/V2PromptQuestionType"}},"dismissedUntil":{"type":"string","nullable":true,"description":"Server dismissal expiry; null when no dismissal is recorded."}}}
+    V2PromptPreferencesRequest: {"type":"object","additionalProperties":false,"required":["expectedRevision","invitationsEnabled","disabledTypes"],"properties":{"expectedRevision":{"type":"integer","minimum":1,"maximum":9007199254740991},"invitationsEnabled":{"type":"boolean"},"disabledTypes":{"type":"array","maxItems":9,"uniqueItems":true,"items":{"$ref":"#/components/schemas/V2PromptQuestionType"}}}}
+    V2PromptActivityRequest: {"type":"object","additionalProperties":false,"properties":{}}
+    V2PromptActivityResult: {"type":"object","additionalProperties":false,"required":["recorded"],"properties":{"recorded":{"type":"boolean","enum":[true]}}}
+    V2DepartureOrigin:
+      type: object
+      required: [key, name, cityId, hasCommunityReports, hasLegacyRoutes]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 240 }
+        name: { type: string, minLength: 1 }
+        cityId: { type: integer, nullable: true, minimum: 1 }
+        hasCommunityReports: { type: boolean }
+        hasLegacyRoutes: { type: boolean }
+    V2DepartureEntry:
+      type: object
+      required: [key, kind, originKey, destination, timedDepartureEligible]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [community, legacy] }
+        originKey: { type: string }
+        subjectId: { type: string, format: uuid }
+        journeyId: { type: integer, minimum: 1 }
+        destination: { type: string, minLength: 1 }
+        operator: { type: string, nullable: true }
+        reportedTime: { type: string, nullable: true, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$' }
+        scheduledDays: { type: string, nullable: true }
+        pickupPoint: { type: string }
+        countdownEligible: { type: boolean, description: Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. }
+        nextDepartureAt: { type: string, format: date-time }
+        scheduleTimezone: { type: string, enum: [Africa/Harare] }
+        timedDepartureEligible:
+          type: boolean
+          description: False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate.
+    V2DepartureBoard:
+      type: object
+      required: [origins, selectedOriginKey, selectionUnavailable, hasHiddenRoutes, entries]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        origins:
+          type: array
+          items: { $ref: '#/components/schemas/V2DepartureOrigin' }
+        selectedOriginKey: { type: string, nullable: true }
+        selectionUnavailable: { type: boolean }
+        hasHiddenRoutes: { type: boolean }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/V2DepartureEntry' }
     HealthStatus:
       type: object
       properties:
@@ -1493,6 +1782,11 @@ components:
           items:
             $ref: "#/components/schemas/ProposedAssociation"
 
+    V2PickupInvitationReservation: {"type":"object","additionalProperties":false,"required":["clientRequestId","subjectId","entrySurface","declaredContext","expectedRevision","identityKey"],"properties":{"clientRequestId":{"type":"string","format":"uuid"},"subjectId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["search_result","route_detail"]},"declaredContext":{"type":"array","minItems":1,"maxItems":3,"uniqueItems":true,"items":{"type":"string","enum":["knows_route","at_stop","travelled"]}},"expectedRevision":{"type":"integer","minimum":1,"maximum":9007199254740991},"identityKey":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+    V2PickupQuestionReservation: {"type":"object","additionalProperties":false,"required":["clientRequestId","subjectId","entrySurface","declaredContext"],"properties":{"clientRequestId":{"type":"string","format":"uuid"},"subjectId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["search_result","route_detail","own_contribution","contribute_tab"]},"declaredContext":{"type":"array","minItems":1,"maxItems":3,"uniqueItems":true,"items":{"type":"string","enum":["knows_route","at_stop","travelled"]}}}}
+    V2PickupQuestionState: {"oneOf":[{"type":"object","additionalProperties":false,"required":["status"],"properties":{"status":{"type":"string","enum":["none","unavailable","expired","reconfirm_identity","obsolete","suppressed","skip","dismiss","unknown","answered"]}}},{"type":"object","additionalProperties":false,"required":["status","invitationId","questionKey","formSchemaId","expiresAt","route"],"properties":{"status":{"type":"string","enum":["offered","opened"]},"invitationId":{"type":"string","format":"uuid"},"questionKey":{"type":"string","enum":["pickup_place"]},"formSchemaId":{"type":"string","enum":["boarding-pickup/1"]},"expiresAt":{"type":"string","format":"date-time"},"route":{"$ref":"#/components/schemas/V2RouteContributionContext"}}}]}
+    V2PickupQuestionEventRequest: {"type":"object","additionalProperties":false,"required":["clientEventId","outcome","timezone"],"properties":{"clientEventId":{"type":"string","format":"uuid"},"outcome":{"type":"string","enum":["shown","opened","skip","dismiss","unknown"]},"timezone":{"type":"string","minLength":1,"maxLength":100}}}
+    V2PickupQuestionEventResult: {"type":"object","additionalProperties":false,"required":["eventId"],"properties":{"eventId":{"type":"string","format":"uuid"}}}
     V2Capabilities:
       type: object
       additionalProperties: false
@@ -1501,6 +1795,12 @@ components:
         schemaVersion: {type: string, enum: ['1.0']}
         minimumLeadEnabled: {type: boolean}
         actualJourneyEnabled: {type: boolean}
+        fareReportsEnabled: {type: boolean}
+        routeObservationsEnabled: {type: boolean}
+        placeReportsEnabled: {type: boolean}
+        pickupQuestionsEnabled: {type: boolean}
+        pickupInvitationsEnabled: {type: boolean}
+        promptControlsEnabled: {type: boolean}
     V2City:
       type: object
       additionalProperties: false
@@ -1553,7 +1853,7 @@ components:
       properties:
         schemaVersion: {type: string, enum: ['1.0']}
         clientSubmissionId: {type: string, format: uuid}
-        entrySurface: {type: string, enum: [contribute_tab]}
+        entrySurface: {type: string, enum: [contribute_tab, search_empty]}
         target: {$ref: '#/components/schemas/V2MinimumLeadTarget'}
         observations:
           type: array
@@ -1573,6 +1873,7 @@ components:
         associationStatus: {type: string, enum: [unresolved]}
         publicationStatus: {type: string, enum: [pending]}
         replayed: {type: boolean}
+        targetAdvanced: {type: boolean}
     V2ReceiptLookup:
       type: object
       additionalProperties: false
@@ -1580,6 +1881,7 @@ components:
       properties:
         found: {type: boolean}
         initialReceipt: {$ref: '#/components/schemas/V2LeadReceipt'}
+        currentLeadRevision: {type: integer, minimum: 1}
     V2Error:
       type: object
       additionalProperties: false
@@ -1609,6 +1911,26 @@ components:
     V2ActualFareObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["fare.paid","fare.quoted","fare.advertised"]},"value":{"type":"object","additionalProperties":false,"required":["amount","currency"],"properties":{"amount":{"type":"string","pattern":"^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$","maxLength":13},"currency":{"type":"string","pattern":"^[A-Z]{3}$"}}},"scope":{"$ref":"#/components/schemas/V2ActualFareScope"},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"observedDateEnd":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveFrom":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"effectiveTo":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
     V2ActualObservation: {"oneOf":[{"$ref":"#/components/schemas/V2ActualClockObservation"},{"$ref":"#/components/schemas/V2ActualOperatorObservation"},{"$ref":"#/components/schemas/V2ActualPlaceObservation"},{"$ref":"#/components/schemas/V2ActualFareObservation"}]}
     V2ActualJourneyRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_empty","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2ActualTarget"},"observations":{"type":"array","minItems":1,"maxItems":20,"items":{"$ref":"#/components/schemas/V2ActualObservation"}},"actualContext":{"$ref":"#/components/schemas/V2ActualContext"}}}
+    V2PublicOperatorReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate"],"properties":{"value":{"type":"string","minLength":1,"maxLength":120},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}}}
+    V2PublicClockReport: {"type":"object","additionalProperties":false,"required":["value","support","freshness","submittedAt","observedDate","basis"],"properties":{"value":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"support":{"type":"string","enum":["reported"]},"freshness":{"type":"string","enum":["unknown"]},"submittedAt":{"type":"string","format":"date-time"},"observedDate":{"type":["string","null"],"pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"basis":{"type":"string","enum":["unspecified","scheduled","actual"]}}}
+    V2PublicFareReport: {"type":"object","additionalProperties":false,"required":["id","kind","amount","currency","scope","basis","observedDate","receivedAt","oldestEvidenceDate","newestEvidenceDate","status","freshness","temporalClass","canBlock"],"properties":{"id":{"type":"string","format":"uuid"},"kind":{"type":"string","enum":["paid","quoted","advertised"]},"amount":{"type":"string","pattern":"^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$","maxLength":13},"currency":{"type":"string","pattern":"^[A-Z]{3}$"},"scope":{"$ref":"#/components/schemas/V2ActualFareScope"},"basis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided","legacy_import"]},"observedDate":{"anyOf":[{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},{"type":"null"}]},"receivedAt":{"type":"string","format":"date-time"},"oldestEvidenceDate":{"anyOf":[{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},{"type":"null"}]},"newestEvidenceDate":{"anyOf":[{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},{"type":"null"}]},"status":{"type":"string","enum":["reported","needs_review"]},"freshness":{"type":"string","enum":["current","recheck_due","unknown"]},"temporalClass":{"type":"string","enum":["historical","ongoing"]},"canBlock":{"type":"boolean"}}}
+    V2PublicFarePage: {"type":"object","additionalProperties":false,"required":["subjectId","items","hasPendingReports","hasHiddenResults"],"properties":{"subjectId":{"type":"string","format":"uuid"},"items":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2PublicFareReport"}},"hasPendingReports":{"type":"boolean"},"hasHiddenResults":{"type":"boolean"},"nextCursor":{"type":"string","format":"uuid"}}}
+    V2PublicLead: {"type":"object","additionalProperties":false,"required":["kind","subjectId","revision","origin","destination","operatorReport","reportedTime","publicationStatus","timedDepartureEligible","contributionTargetEligible","missingDetails"],"properties":{"kind":{"type":"string","enum":["lead"]},"subjectId":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operatorReport":{"$ref":"#/components/schemas/V2PublicOperatorReport"},"reportedTime":{"$ref":"#/components/schemas/V2PublicClockReport"},"publicationStatus":{"type":"string","enum":["details_needed"]},"timedDepartureEligible":{"type":"boolean","enum":[false]},"contributionTargetEligible":{"type":"boolean","enum":[true]},"missingDetails":{"type":"array","uniqueItems":true,"items":{"type":"string","enum":["selected_fare","operating_days","boarding_location"]}}}}
+    V2PublicSearch: {"type":"object","additionalProperties":false,"required":["items","hasHiddenResults"],"properties":{"items":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2PublicLead"}},"hasHiddenResults":{"type":"boolean"},"nextCursor":{"type":"string","format":"uuid"}}}
+    V2PublicSubjectEnvelope: {"type":"object","additionalProperties":false,"required":["subject"],"properties":{"subject":{"$ref":"#/components/schemas/V2PublicLead"}}}
+    V2RouteSafetyAction: {"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string","enum":["report","block"]},"reason":{"type":"string","enum":["spam","inaccurate","offensive","unsafe","other"]}}}
+    V2RouteSafetyResult: {"type":"object","additionalProperties":false,"required":["status"],"properties":{"status":{"type":"string","enum":["reported","blocked","unblocked"]}}}
+    V2RouteBlock: {"type":"object","additionalProperties":false,"required":["id","blockedAt"],"properties":{"id":{"type":"string","format":"uuid"},"blockedAt":{"type":"string","format":"date-time"}}}
+    V2RouteBlocks: {"type":"object","additionalProperties":false,"required":["blocks"],"properties":{"blocks":{"type":"array","maxItems":200,"items":{"$ref":"#/components/schemas/V2RouteBlock"}}}}
+    V2OwnRoute: {"type":"object","additionalProperties":false,"required":["clientSubmissionId","subjectId","submittedAt","origin","destination","operator","departureTime","availability"],"properties":{"clientSubmissionId":{"type":"string","format":"uuid"},"subjectId":{"type":"string","format":"uuid"},"submittedAt":{"type":"string","format":"date-time"},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operator":{"type":"string","minLength":1,"maxLength":120},"departureTime":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"},"availability":{"type":"string","enum":["active","unavailable"]},"currentLeadRevision":{"type":"integer","minimum":1}}}
+    V2OwnRoutes: {"type":"object","additionalProperties":false,"required":["routes"],"properties":{"routes":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2OwnRoute"}},"nextCursor":{"type":"string","maxLength":73,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}}}
+    V2OwnRouteEnvelope: {"type":"object","additionalProperties":false,"required":["route"],"properties":{"route":{"$ref":"#/components/schemas/V2OwnRoute"}}}
+    V2RouteContributionContext: {"type":"object","additionalProperties":false,"required":["subjectId","revision","identityKey","origin","destination","operatorName","departureTime"],"properties":{"subjectId":{"type":"string","format":"uuid"},"revision":{"type":"integer","minimum":1,"maximum":9007199254740991},"identityKey":{"type":"string","pattern":"^[0-9a-f]{64}$"},"origin":{"$ref":"#/components/schemas/V2City"},"destination":{"$ref":"#/components/schemas/V2City"},"operatorName":{"type":"string","minLength":1,"maxLength":120},"departureTime":{"type":"string","pattern":"^([01][0-9]|2[0-3]):[0-5][0-9]$"}}}
+    V2RouteObservationTarget: {"type":"object","additionalProperties":false,"required":["existing"],"properties":{"existing":{"type":"object","additionalProperties":false,"required":["subjectId","expectedRevision","identityKey"],"properties":{"subjectId":{"type":"string","format":"uuid"},"expectedRevision":{"type":"integer","minimum":1,"maximum":9007199254740991},"identityKey":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}}}
+    V2RoutePlaceObservation: {"type":"object","additionalProperties":false,"required":["fieldKey","value","scope"],"properties":{"fieldKey":{"type":"string","enum":["boarding.pickup","alighting.dropoff"]},"value":{"$ref":"#/components/schemas/V2ActualPlace"},"scope":{"type":"object","additionalProperties":false,"required":[],"properties":{}},"knowledgeBasis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided"]},"observedDate":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},"sources":{"type":"array","maxItems":10,"uniqueItems":true,"items":{"type":"string","format":"uuid"}}}}
+    V2RouteObservationRequest: {"type":"object","additionalProperties":false,"required":["schemaVersion","clientSubmissionId","entrySurface","target","observations"],"properties":{"schemaVersion":{"type":"string","enum":["1.0"]},"clientSubmissionId":{"type":"string","format":"uuid"},"entrySurface":{"type":"string","enum":["contribute_tab","search_result","route_detail","own_contribution"]},"target":{"$ref":"#/components/schemas/V2RouteObservationTarget"},"observations":{"type":"array","minItems":1,"maxItems":2,"items":{"$ref":"#/components/schemas/V2RoutePlaceObservation"}}}}
+    V2PlaceReport: {"type":"object","additionalProperties":false,"required":["id","kind","city","name","instructions","basis","observedDate","receivedAt","status","freshness","canBlock"],"properties":{"id":{"type":"string","format":"uuid"},"kind":{"type":"string","enum":["pickup","dropoff"]},"city":{"$ref":"#/components/schemas/V2City"},"name":{"type":"string","minLength":1,"maxLength":200},"instructions":{"type":"string","nullable":true,"maxLength":1000},"basis":{"type":"string","enum":["travelled","saw_operating","observed_sign","operator_statement","heard_from_other","unprovided","legacy_import"]},"observedDate":{"anyOf":[{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},{"type":"null"}]},"receivedAt":{"type":"string","format":"date-time"},"status":{"type":"string","enum":["saved","reported","needs_review"]},"freshness":{"type":"string","enum":["current","recheck_due","unknown"]},"canBlock":{"type":"boolean"}}}
+    V2PlaceReportPage: {"type":"object","additionalProperties":false,"required":["subjectId","items","hasPendingReports","hasHiddenResults"],"properties":{"subjectId":{"type":"string","format":"uuid"},"items":{"type":"array","maxItems":20,"items":{"$ref":"#/components/schemas/V2PlaceReport"}},"hasPendingReports":{"type":"boolean"},"hasHiddenResults":{"type":"boolean"},"nextCursor":{"type":"string","format":"uuid"}}}
   responses:
     V2Error:
       description: Safe error with no raw payload, database message, token or private evidence

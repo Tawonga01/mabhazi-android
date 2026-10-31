@@ -1,0 +1,13 @@
+# Account prompt controls — 0037
+
+Three narrow backend facades expose the existing prompts/1 account controls. No new table, policy threshold, invitation delivery, client privilege, retention schedule or background-location history is introduced.
+
+- `GET /api/v2/prompt-preferences`: authenticated current account only; enabled, disabled registry keys, revision, policy version and dismissal expiry. Missing rows use the existing defaults without writing or touching activity.
+- `POST /api/v2/prompt-preferences`: strict complete state plus expected revision. A matching desired-state retry returns current state without another revision; a stale different choice conflicts. No automatic conflict retry/overwrite. Existing dismissal, unknown suppression, session and reservation budget survive opt-out/re-enable. No contribution Terms requirement; remains available during intake pause.
+- `POST /api/v2/prompt-activity`: strict empty object. Server-owned activity/session only; no client clock/session, route/position or knowledge context. Response is only `recorded: true`. No invitation/event/fact is created and a live session's reservation is not reset.
+
+Authentication, expected-account assertions, JSON write origins and no-store are enforced by the API. Capability `promptControlsEnabled` fails closed if any facade is missing or not executable, independently of the intake switch. Generic prompt primitives remain owner-only; mobile/hosted client roles receive no execution rights. Account deletion clears existing linked preference/session rows; pending deletion denies all operations.
+
+This boundary prepares subsequent mobile settings and actual foreground-activity wiring. The mobile client must signal meaningful foreground interaction/resume, throttle harmless network noise, stop on background/sign-out/account changes, retain no private activity history and never block manual capture on telemetry failure. An idle heartbeat must not simulate user activity. Invitation selection, declaration, global/type opt-out, account/session/rolling caps and field cooldowns still require the separately gated unsolicited flow. Manual help remains available under the established exemption. No new UI/APK or phone acceptance is implied by API validation.
+
+`scripts/preview-apply-0037.sql` checks the exact0036 ledger, guarded primitive/function bodies and privileges, preserves existing data/functions, applies atomically and rejects drift on retry. Hosted activation requires action-time permission for three restricted execution grants; production is excluded. Tests exercise fresh/repeat/populated upgrades, role/erasure, idempotency/concurrency, cooldown/budget and real restricted-role HTTP boundaries.

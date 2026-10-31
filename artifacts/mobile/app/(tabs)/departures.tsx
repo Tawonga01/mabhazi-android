@@ -1,527 +1,91 @@
-import React, { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
-import { Feather } from "@/components/VectorIcon";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useColors } from "@/hooks/useColors";
-import { useSearchJourneys, useListCities } from "@workspace/api-client-react";
-import { filterBlockedContributors, useBlockedContributors } from "@/hooks/useBlockedContributors";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function parseDepMins(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function fmt12(t: string): string {
-  const [hStr, mStr] = t.split(":");
-  const h = parseInt(hStr || "0", 10);
-  const m = (mStr || "0").padStart(2, "0");
-  const ampm = h < 12 ? "AM" : "PM";
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${m} ${ampm}`;
-}
-
-interface DepStatus {
-  label: string;
-  minsUntil: number;
-  isDeparted: boolean;
-  isBoarding: boolean;
-  isNext: boolean;
-}
-
-function getStatus(depTime: string): Omit<DepStatus, "isNext"> {
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-  const depMins = parseDepMins(depTime);
-  const diff = depMins - nowMins;
-
-  if (diff < 0) {
-    return { label: "tmrw", minsUntil: diff + 1440, isDeparted: true, isBoarding: false };
-  }
-  if (diff <= 10) {
-    return { label: diff === 0 ? "Now" : `${diff}m`, minsUntil: diff, isDeparted: false, isBoarding: true };
-  }
-  if (diff < 60) {
-    return { label: `${diff}m`, minsUntil: diff, isDeparted: false, isBoarding: false };
-  }
-  const hrs = Math.floor(diff / 60);
-  const mins = diff % 60;
-  return {
-    label: mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m`,
-    minsUntil: diff,
-    isDeparted: false,
-    isBoarding: false,
-  };
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const COL_TIME = 80;
-const COL_OP = 82;
-const COL_IN = 62;
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, AppState, FlatList, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useFocusEffect, router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getV2DepartureBoard, type V2DepartureEntry } from '@workspace/api-client-react';
+import { useAuth } from '@/lib/auth';
+import { useBlockedContributors } from '@/hooks/useBlockedContributors';
+import { useCaptureEntry } from '@/lib/capture-context';
+import { publicSafetyHeaders } from '@/lib/use-public-routes';
+import { boundedRequest } from '@/lib/use-capture';
+import { Feather } from '@/components/VectorIcon';
+import { CaptureButton, CaptureInput, CapturePickerModal, captureStyles } from '@/components/capture/CapturePrimitives';
+import { ui } from '@/constants/ui';
+import { departureClock, departureCountdown } from '@/lib/departure-board-model';
 
 export default function DeparturesScreen() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const {
-    blockedContributorIds,
-    isLoading: isBlockedContributorsLoading,
-    error: blockedContributorsError,
-  } = useBlockedContributors();
-
-  const [fromCity, setFromCity] = useState("Harare");
-  const [pickerOpen, setPickerOpen] = useState(false);
-
-  const { data: journeyData, isLoading } = useSearchJourneys(
-    { fromCity },
-    { query: { enabled: !!fromCity } as any },
-  );
-
-  const { data: citiesData } = useListCities({} as any);
-
-  const cities = citiesData?.cities ?? [];
-  const rawJourneys = (journeyData?.journeys ?? []) as Array<{
-    id: number;
-    toCity: string;
-    departureTime: string;
-    busCompany: string;
-    pickupPoint: string;
-    contributorId?: string | null;
-  }>;
-  const visibleJourneys =
-    !isBlockedContributorsLoading && !blockedContributorsError
-      ? filterBlockedContributors(rawJourneys, blockedContributorIds)
-      : [];
-
-  // Sort: upcoming first, then tomorrow's (already departed)
-  const sorted = useMemo(() => {
-    const now = new Date();
-    const nowMins = now.getHours() * 60 + now.getMinutes();
-    return [...visibleJourneys].sort((a, b) => {
-      const aM = parseDepMins(a.departureTime);
-      const bM = parseDepMins(b.departureTime);
-      const aGone = aM < nowMins;
-      const bGone = bM < nowMins;
-      if (aGone !== bGone) return aGone ? 1 : -1;
-      return aM - bM;
-    });
-  }, [visibleJourneys]);
-
-  // Attach status and mark the first upcoming as "next"
-  const rows = useMemo(() => {
-    let nextMarked = false;
-    return sorted.map((j) => {
-      const s = getStatus(j.departureTime);
-      const isNext = !nextMarked && !s.isDeparted;
-      if (isNext) nextMarked = true;
-      return { ...j, status: { ...s, isNext } as DepStatus };
-    });
-  }, [sorted]);
-
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.select({
-    ios: insets.bottom + 90,
-    web: insets.bottom + 100,
-    default: insets.bottom + 20,
-  });
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-
-      {/* ── Header ── */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: topPad + 8 }]}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerLabel}>Departures from</Text>
-            <TouchableOpacity
-              style={styles.cityBtn}
-              onPress={() => { Haptics.selectionAsync(); setPickerOpen(true); }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cityBtnText} numberOfLines={1}>{fromCity}</Text>
-              <Feather name="chevron-down" size={20} color="rgba(255,255,255,0.85)" />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.livePill, { backgroundColor: "rgba(255,255,255,0.14)" }]}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>Schedule</Text>
-          </View>
-        </View>
+  const auth=useAuth(), owner=auth.user?.id??null, safety=useBlockedContributors(), capture=useCaptureEntry(), insets=useSafeAreaInsets();
+  const [originKey,setOriginKey]=useState<string|undefined>(),[pickerOpen,setPickerOpen]=useState(false),[search,setSearch]=useState('');
+  const [focused,setFocused]=useState(true),[active,setActive]=useState(AppState.currentState!=='background'&&AppState.currentState!=='inactive'),[,tick]=useState(0);
+  useFocusEffect(useCallback(()=>{setFocused(true);return()=>setFocused(false);},[]));
+  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>setActive(state==='active'));return()=>subscription.remove();},[]);
+  const safetyKey=JSON.stringify([...safety.blockedContributorIds].sort());
+  const ready=!auth.isLoading&&safety.isReady;
+  const query=useQuery({queryKey:['departure-board',owner,safetyKey,originKey],enabled:ready&&focused&&active,
+    queryFn:({signal})=>boundedRequest(inner=>getV2DepartureBoard(originKey?{originKey}:{},{signal:inner,headers:publicSafetyHeaders(owner,safety.blockedContributorIds)}),signal),
+    retry:false,staleTime:0,refetchOnWindowFocus:false,refetchOnReconnect:true});
+  useEffect(()=>{if(!ready||!focused||!active)return;const timer=setInterval(()=>void query.refetch(),60000);return()=>clearInterval(timer);},[ready,focused,active,query.refetch]);
+  useEffect(()=>{if(!focused||!active)return;const timer=setInterval(()=>tick(n=>n+1),1000);return()=>clearInterval(timer);},[focused,active]);
+  // Anchor to the actual server instant and a monotonic duration. A phone set
+  // to another timezone or an incorrect wall clock cannot move the departure.
+  const anchor=useMemo(()=>({server:Date.parse(query.data?.generatedAt??''),elapsed:performance.now()}),[query.data]);
+  const now=anchor.server+Math.max(0,performance.now()-anchor.elapsed);
+  // A stale/failed response never becomes an empty board or another city.
+  const data=!ready||query.isError?undefined:query.data;
+  const selected=data?.origins.find(c=>c.key===data.selectedOriginKey);
+  const origins=data?.origins??[], items=data?.entries??[], busy=!ready||!data&&query.isFetching;
+  const countdown=(item:V2DepartureEntry)=>item.countdownEligible?departureCountdown(item.nextDepartureAt,now):null;
+  const nextKey=items.find(item=>countdown(item)!==null)?.key;
+  const filtered=origins.filter(c=>c.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  function openPicker(){setSearch('');setPickerOpen(true);}
+  function closePicker(){Keyboard.dismiss();setPickerOpen(false);}
+  function openRoute(row:V2DepartureEntry){
+    if(row.kind==='community'&&row.subjectId)capture.open({kind:'public_route',subjectId:row.subjectId});
+    else if(row.kind==='legacy'&&row.journeyId)router.push({pathname:'/journey/[id]',params:{id:String(row.journeyId)}});
+  }
+  return <View style={s.screen}>
+    <View style={[s.header,{paddingTop:(Platform.OS==='web'?67:insets.top)+12}]}>
+      <View style={{flex:1,gap:4}}><Text style={s.kicker}>Departures from</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Choose departure city" accessibilityState={{disabled:busy||!origins.length}} disabled={busy||!origins.length} onPress={openPicker} style={s.cityButton}>
+          <Text style={s.city} numberOfLines={2}>{selected?.name??(busy?'Loading cities…':'Choose a city')}</Text><Feather name="chevron-down" size={22} color="#DDE7F1"/>
+        </Pressable>
       </View>
-
-      {/* ── Column headers ── */}
-      <View style={[styles.colHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.colLabel, { width: COL_TIME, color: colors.mutedForeground }]}>TIME</Text>
-        <Text style={[styles.colLabel, styles.colDestLabel, { color: colors.mutedForeground }]}>DESTINATION</Text>
-        <Text style={[styles.colLabel, { width: COL_OP, color: colors.mutedForeground }]}>OPERATOR</Text>
-        <Text style={[styles.colLabel, { width: COL_IN, color: colors.mutedForeground, textAlign: "right" }]}>IN</Text>
-      </View>
-
-      {/* ── Body ── */}
-      {isBlockedContributorsLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Loading safety settings…
-          </Text>
-        </View>
-      ) : blockedContributorsError ? (
-        <View style={styles.centered}>
-          <Feather name="alert-triangle" size={48} color={colors.destructive} />
-          <Text style={[styles.emptyTitle, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-            Block settings unavailable
-          </Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {blockedContributorsError}
-          </Text>
-        </View>
-      ) : isLoading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Loading departures…
-          </Text>
-        </View>
-      ) : rows.length === 0 ? (
-        <View style={styles.centered}>
-          <Feather name="inbox" size={48} color={colors.border} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            No departures from {fromCity}
-          </Text>
-          <Text style={[styles.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Select another city using the dropdown above
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={{ paddingBottom: bottomPad }}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => {
-            const { status } = item;
-            const rowBg = status.isNext
-              ? `${colors.primary}10`
-              : index % 2 === 0
-              ? colors.background
-              : colors.card;
-
-            return (
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  router.push({
-                    pathname: "/(tabs)",
-                    params: { fromCity, toCity: item.toCity },
-                  });
-                }}
-                style={[
-                  styles.row,
-                  {
-                    backgroundColor: rowBg,
-                    borderBottomColor: colors.border,
-                    borderLeftColor: status.isNext ? colors.accent : "transparent",
-                  },
-                ]}
-              >
-                {/* Time */}
-                <View style={{ width: COL_TIME }}>
-                  <Text
-                    style={[
-                      styles.timeText,
-                      {
-                        color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_700Bold",
-                      },
-                    ]}
-                  >
-                    {fmt12(item.departureTime)}
-                  </Text>
-                </View>
-
-                {/* Destination */}
-                <View style={styles.colDest}>
-                  <Text
-                    style={[
-                      styles.destText,
-                      {
-                        color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_700Bold",
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.toCity}
-                  </Text>
-                </View>
-
-                {/* Operator + pickup */}
-                <View style={{ width: COL_OP }}>
-                  <Text
-                    style={[
-                      styles.opText,
-                      {
-                        color: status.isDeparted ? colors.mutedForeground : colors.foreground,
-                        fontFamily: "Inter_500Medium",
-                      },
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {item.busCompany}
-                  </Text>
-                  <View style={styles.pickupRow}>
-                    <Feather name="map-pin" size={9} color={colors.mutedForeground} />
-                    <Text
-                      style={[styles.pickupText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
-                      numberOfLines={1}
-                    >
-                      {item.pickupPoint}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Countdown badge + tap hint */}
-                <View style={{ width: COL_IN, alignItems: "flex-end", gap: 4 }}>
-                  {status.isBoarding ? (
-                    <View style={[styles.badge, { backgroundColor: "#22C55E" }]}>
-                      <Text style={[styles.badgeText, { color: "#fff", fontFamily: "Inter_700Bold" }]}>
-                        {status.label}
-                      </Text>
-                    </View>
-                  ) : status.isDeparted ? (
-                    <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
-                      <Text style={[styles.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                        tmrw
-                      </Text>
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.badge,
-                        {
-                          backgroundColor: status.isNext ? colors.accent : colors.secondary,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.badgeText,
-                          {
-                            color: status.isNext ? "#fff" : colors.foreground,
-                            fontFamily: "Inter_600SemiBold",
-                          },
-                        ]}
-                      >
-                        {status.label}
-                      </Text>
-                    </View>
-                  )}
-                  <Feather name="chevron-right" size={11} color={colors.mutedForeground} style={{ opacity: 0.5 }} />
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      )}
-
-      {/* ── City picker modal ── */}
-      {pickerOpen ? <Modal
-        visible={pickerOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setPickerOpen(false)}
-      >
-        <TouchableOpacity
-          style={styles.pickerBackdrop}
-          activeOpacity={1}
-          onPress={() => setPickerOpen(false)}
-        >
-          <View style={[styles.pickerSheet, { backgroundColor: colors.card, paddingBottom: Platform.OS === "ios" ? insets.bottom : 24 }]}>
-            <View style={styles.grabberWrap}>
-              <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-            </View>
-            <View style={[styles.pickerHead, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.pickerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Select departure city
-              </Text>
-              <TouchableOpacity
-                style={[styles.pickerClose, { backgroundColor: colors.secondary }]}
-                onPress={() => setPickerOpen(false)}
-              >
-                <Feather name="x" size={16} color={colors.foreground} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              {cities.length === 0 ? (
-                <View style={styles.pickerEmpty}>
-                  <ActivityIndicator color={colors.primary} />
-                </View>
-              ) : (
-                cities.map((city) => {
-                  const active = city === fromCity;
-                  return (
-                    <TouchableOpacity
-                      key={city}
-                      style={[
-                        styles.cityRow,
-                        {
-                          borderBottomColor: colors.border,
-                          backgroundColor: active ? `${colors.primary}0D` : "transparent",
-                        },
-                      ]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setPickerOpen(false);
-                        requestAnimationFrame(() => setFromCity(city));
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <View style={[styles.cityDot, { backgroundColor: active ? colors.primary : colors.border }]} />
-                      <Text
-                        style={[
-                          styles.cityRowText,
-                          {
-                            color: active ? colors.primary : colors.foreground,
-                            fontFamily: active ? "Inter_600SemiBold" : "Inter_400Regular",
-                          },
-                        ]}
-                      >
-                        {city}
-                      </Text>
-                      {active && <Feather name="check" size={16} color={colors.primary} />}
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal> : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Refresh departure board" disabled={busy||query.isFetching} onPress={()=>void query.refetch()} style={s.refresh}><View style={[s.dot,{backgroundColor:nextKey?'#4DE097':'#B6C5D8'}]}/><Text style={s.schedule}>{nextKey?'Schedule':'Reports'}</Text></Pressable>
     </View>
-  );
+    {selected&&items.length?<View style={s.boardHead}><View style={s.columns}><Text style={[s.column,s.timeColumn]}>TIME</Text><Text style={[s.column,s.destinationColumn]}>DESTINATION</Text><Text style={[s.column,s.operatorColumn]}>OPERATOR</Text><Text style={[s.column,s.inColumn,{textAlign:'right'}]}>IN</Text></View></View>:null}
+    {safety.error?<State title="Safety settings could not load."><CaptureButton title="Try safety settings again" secondary onPress={()=>void safety.retryBlockedContributors().catch(()=>undefined)}/></State>:
+      busy?<View style={s.state}><ActivityIndicator color="#24476A" accessibilityLabel="Loading departure board"/></View>:
+      query.isError?<State title="The departure board could not load."><CaptureButton title="Try departure board again" secondary onPress={()=>void query.refetch()}/></State>:
+      data?.selectionUnavailable?<State title="This city's routes are no longer available."><CaptureButton title="Choose another city" secondary onPress={openPicker}/></State>:
+      !items.length?<State title={data?.hasHiddenRoutes?'Routes are hidden by your settings.':'No routes available yet.'}>{!data?.hasHiddenRoutes?<CaptureButton title="Add a route" onPress={()=>capture.open({kind:'route',entrySurface:'contribute_tab'})}/>:null}</State>:
+      <FlatList data={items} keyExtractor={row=>row.key} contentContainerStyle={{paddingBottom:insets.bottom+(Platform.OS==='web'?100:20)}}
+        renderItem={({item,index})=><Pressable accessibilityRole="button" accessibilityLabel={'Open departure report '+(item.operator??'operator unknown')+' '+(item.reportedTime??'time unknown')} onPress={()=>openRoute(item)} style={[s.row,{backgroundColor:item.key===nextKey?'#E4E9EE':index%2?'#FFFFFF':'#F1F4F8'},item.key===nextKey&&s.nextRow]}>
+          <Text style={[s.timeColumn,s.time]}>{departureClock(item.reportedTime)}</Text>
+          <View style={[s.destinationColumn,{gap:6}]}><Text style={s.destination}>{item.destination}</Text>{item.kind==='community'?<Text style={s.note}>Details needed</Text>:!countdown(item)?<Text style={s.note}>{item.scheduledDays??'Days not confirmed'}</Text>:null}</View>
+          <View style={[s.operatorColumn,{gap:6}]}><Text style={s.operator}>{item.operator??'Operator unknown'}</Text>{item.pickupPoint?<View style={s.pickup}><Feather name="map-pin" size={13} color="#74808E"/><Text style={s.pickupText} numberOfLines={1}>{item.pickupPoint}</Text></View>:null}</View>
+          <View style={s.inColumn}>{countdown(item)?<View accessibilityLabel={'Departs in '+countdown(item)} style={[s.badge,item.key===nextKey?s.nextBadge:s.laterBadge]}><Text style={[s.countdown,item.key===nextKey&&s.nextCountdown]}>{countdown(item)}</Text></View>:<Text accessibilityLabel="Departure countdown unavailable" style={s.unavailable}>—</Text>}<Feather name="chevron-right" size={16} color="#AEB9C5"/></View>
+        </Pressable>}/>
+    }
+    {data?.hasHiddenRoutes&&items.length?<Text style={s.hidden}>Some routes are hidden by your settings.</Text>:null}
+    {pickerOpen?<CapturePickerModal title="Departure city" closeLabel="Close departure cities" onClose={closePicker} input={<CaptureInput accessibilityLabel="Search available departure cities" placeholder="Search available cities" value={search} onChangeText={setSearch} maxLength={80} autoFocus returnKeyType="search"/>}>
+      {!filtered.length?<Text style={captureStyles.note}>No available city matches.</Text>:null}
+      {filtered.map(city=><Pressable accessibilityRole="button" accessibilityLabel={'Departures from '+city.name} accessibilityState={{selected:city.key===data?.selectedOriginKey}} key={city.key} onPress={()=>{closePicker();setOriginKey(city.key);}} style={s.cityChoice}>
+        <View style={{flex:1,gap:5}}><Text style={captureStyles.reviewValue}>{city.name}</Text>{origins.filter(c=>c.name.toLocaleLowerCase()===city.name.toLocaleLowerCase()).length>1?<Text style={captureStyles.note}>{city.hasCommunityReports?'Route reports':'Reported schedules'}</Text>:null}</View>{city.key===data?.selectedOriginKey?<Feather name="check" size={20} color="#24476A"/>:null}
+      </Pressable>)}
+    </CapturePickerModal>:null}
+  </View>;
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 12 },
-  headerRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
-  headerLeft: { flex: 1, marginRight: 12 },
-  headerLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.65)",
-    marginBottom: 4,
-  },
-  cityBtn: { flexDirection: "row", alignItems: "center", gap: 8 },
-  cityBtnText: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#fff", flexShrink: 1 },
-  livePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 14,
-    alignSelf: "flex-end",
-  },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ADE80" },
-  liveText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" },
-  colHeader: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-  },
-  colLabel: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  colDestLabel: { flex: 1, paddingHorizontal: 8 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderLeftWidth: 3,
-  },
-  timeText: { fontSize: 14 },
-  colDest: { flex: 1, paddingHorizontal: 8 },
-  destText: { fontSize: 14 },
-  pickupRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
-  pickupText: { fontSize: 11, flex: 1 },
-  opText: { fontSize: 12, lineHeight: 17 },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  badgeText: { fontSize: 11 },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 40,
-  },
-  emptyTitle: { fontSize: 18, textAlign: "center", marginTop: 12 },
-  emptyText: { fontSize: 14, textAlign: "center" },
-  pickerBackdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  pickerSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "70%",
-    overflow: "hidden",
-    ...Platform.select({
-      ios: { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16 },
-      android: { elevation: 16 },
-    }),
-  },
-  grabberWrap: { alignItems: "center", paddingTop: 12, paddingBottom: 4 },
-  grabber: { width: 40, height: 4, borderRadius: 2 },
-  pickerHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    borderBottomWidth: 1,
-  },
-  pickerTitle: { fontSize: 17 },
-  pickerClose: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  pickerEmpty: { padding: 40, alignItems: "center" },
-  cityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  cityDot: { width: 8, height: 8, borderRadius: 4 },
-  cityRowText: { flex: 1, fontSize: 16 },
+function State({title,children}:{title:string;children?:React.ReactNode}){return <View style={s.state}><Text accessibilityRole="alert" style={s.stateTitle}>{title}</Text>{children}</View>;}
+const s=StyleSheet.create({
+ screen:{flex:1,backgroundColor:'#F1F4F8'},header:{backgroundColor:'#203D60',paddingHorizontal:18,paddingBottom:18,flexDirection:'row',alignItems:'flex-end',gap:12},
+ kicker:{fontFamily:ui.type.regular,fontSize:14,lineHeight:21,color:'#BAC8D8'},cityButton:{minHeight:44,flexDirection:'row',alignItems:'center',gap:12},city:{fontFamily:ui.type.bold,fontSize:28,lineHeight:35,color:'#FFFFFF',flexShrink:1},
+ refresh:{minHeight:44,borderRadius:24,paddingHorizontal:12,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:7,backgroundColor:'#FFFFFF18'},dot:{height:7,width:7,borderRadius:4},schedule:{fontFamily:ui.type.semibold,fontSize:14,lineHeight:21,color:'#FFFFFF'},
+ boardHead:{backgroundColor:'#FFFFFF',borderBottomWidth:1,borderColor:'#D0D9E4'},columns:{flexDirection:'row',alignItems:'center',paddingHorizontal:14,paddingVertical:10,gap:8},column:{fontFamily:ui.type.semibold,fontSize:11,lineHeight:17,letterSpacing:0.6,color:'#6C7B8C'},
+ timeColumn:{width:88,flexShrink:0},destinationColumn:{flex:1.12,minWidth:0},operatorColumn:{flex:1,minWidth:0},inColumn:{width:64,alignItems:'flex-end',gap:6,flexShrink:0},
+ row:{minHeight:90,paddingVertical:15,paddingHorizontal:14,borderBottomWidth:1,borderColor:'#CCD6E1',flexDirection:'row',alignItems:'center',gap:8},
+ nextRow:{borderLeftWidth:3,borderLeftColor:'#FF7B18',paddingLeft:11},time:{fontFamily:ui.type.bold,fontSize:17,lineHeight:24,color:'#111D2D'},destination:{fontFamily:ui.type.semibold,fontSize:17,lineHeight:24,color:'#111D2D'},operator:{fontFamily:ui.type.medium,fontSize:15,lineHeight:21,color:'#111D2D'},
+ note:{fontFamily:ui.type.regular,fontSize:14,lineHeight:20,color:'#6C7B8C'},pickup:{flexDirection:'row',alignItems:'center',gap:3},pickupText:{fontFamily:ui.type.regular,fontSize:14,lineHeight:20,color:'#74808E',flexShrink:1},
+ badge:{minHeight:34,borderRadius:10,paddingHorizontal:7,paddingVertical:7,alignItems:'center',justifyContent:'center',width:64,maxWidth:64},nextBadge:{backgroundColor:'#FF7B18',paddingHorizontal:4},laterBadge:{backgroundColor:'#EDF0FA'},countdown:{fontFamily:ui.type.semibold,fontSize:14,lineHeight:18,color:'#111D2D'},nextCountdown:{color:'#FFFFFF'},unavailable:{fontFamily:ui.type.regular,fontSize:17,lineHeight:24,color:'#6C7B8C'},
+ state:{flex:1,alignItems:'center',justifyContent:'center',padding:24,gap:16},stateTitle:{fontFamily:ui.type.medium,fontSize:18,lineHeight:26,textAlign:'center',color:'#172D46'},hidden:{paddingHorizontal:18,paddingVertical:12,fontSize:14,lineHeight:21,color:'#617186'},cityChoice:{minHeight:56,flexDirection:'row',alignItems:'center',gap:12,paddingVertical:14,borderBottomWidth:1,borderColor:'#DFE5ED'}
 });

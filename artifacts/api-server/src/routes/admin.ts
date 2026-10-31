@@ -86,11 +86,18 @@ function sendAdminLogin(res: Response, status = 401): void {
   res.status(status).type("html").send(`<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Mabhazi Admin Login</title>
-<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F0F4F8}
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#F4F6F9}
 .box{background:#fff;border-radius:16px;padding:48px;text-align:center;max-width:360px;width:calc(100% - 40px);box-shadow:0 12px 36px rgba(30,58,95,.12)}
-h1{color:#1E3A5F;font-size:22px;margin:0 0 8px}p{color:#64748B;margin:0 0 24px}
+h1{color:#102744;font-size:22px;margin:0 0 8px}p{color:#64748B;margin:0 0 24px}
 input{width:100%;padding:12px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:12px}
-button{width:100%;padding:13px;background:#F97316;color:#fff;border:0;border-radius:10px;font-size:15px;cursor:pointer;font-weight:600}</style></head>
+button{width:100%;padding:13px;background:#FF9B45;color:#172D46;border:0;border-radius:10px;font-size:15px;cursor:pointer;font-weight:600}
+body{color:#172D46;font-family:system-ui,sans-serif}button,input,select,textarea{font-family:inherit;font-size:16px;min-height:44px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #A65315;outline-offset:3px}
+.badge,.tab-btn.active{background:#FF9B45;color:#172D46}.tab-btn{min-height:44px;font-size:14px}
+th{font-size:14px;text-transform:none;letter-spacing:0}td{font-size:14px}.pill,.route-tag{font-size:14px}.del-btn{min-height:44px;font-size:14px}
+table{display:block;overflow-x:auto}h1{letter-spacing:-.025em}
+@media(max-width:600px){.topbar{padding:16px;flex-wrap:wrap}.topbar h1{font-size:23px}.tabs{flex-wrap:wrap}.box{padding:24px}}
+</style></head>
 <body><main class="box"><h1>🚌 Mabhazi Admin</h1><p>Sign in to continue.</p>
 <form method="post" action="/api/admin/login"><input name="secret" type="password" autocomplete="current-password" placeholder="Admin secret" required autofocus/>
 <button type="submit">Access Dashboard</button></form></main></body></html>`);
@@ -533,7 +540,15 @@ router.get("/admin/abuse-reports", requireAdmin, async (req: Request, res: Respo
   const enrichedReports = await Promise.all(
     reports.map(async (report) => {
       let targetPreview: string | null = null;
-      if (report.targetType === "journey") {
+      if (report.targetType === "place_report") {
+        const place=await db.execute(sql`SELECT (c.city->>'name')||' · '||c.field_key||' · '||(c.original_value->>'name') AS preview FROM public.v2_place_report_refs ref JOIN public.v2_observations o ON o.id=ref.observation_id CROSS JOIN LATERAL public.v2_api_place_report_context(o.original_subject_id) c WHERE c.place_ref=ref.id AND c.place_ref::text=${report.targetId} LIMIT 1`);
+        targetPreview=String(place.rows[0]?.preview??'Location report no longer available');
+      } else if (report.targetType === "fare_report") {
+        const fare=await db.execute(sql`SELECT (origin->>'name')||' → '||(destination->>'name')||' · '||field_key||' '||(original_value->>'currency')||' '||(original_value->>'amount') AS preview FROM public.v2_fare_report_context WHERE fare_ref::text=${report.targetId} LIMIT 1`);
+        targetPreview=String(fare.rows[0]?.preview??'Fare report no longer available');
+      } else if (report.targetType === "transport_subject") {
+        targetPreview = "Community route report · " + report.targetId;
+      } else if (report.targetType === "journey") {
         const targetId = Number(report.targetId);
         if (!Number.isSafeInteger(targetId) || targetId <= 0) {
           targetPreview = "Invalid route target";
@@ -613,17 +628,26 @@ router.patch(
       if (report.status !== "pending") return { kind: "already-reviewed" as const };
 
       const targetType = report.targetType;
-      if (!["comment", "journey", "user"].includes(targetType)) {
+      if (!["comment", "journey", "user", "transport_subject", "fare_report", "place_report"].includes(targetType)) {
         return { kind: "invalid-target" as const };
       }
       const actionMatchesTarget =
         action === "dismiss" ||
-        (targetType === "comment" && action === "remove_content") ||
-        (targetType === "journey" && action === "remove_route") ||
+        (["comment","fare_report","place_report"].includes(targetType) && action === "remove_content") ||
+        (["journey","transport_subject"].includes(targetType) && action === "remove_route") ||
         (targetType === "user" && action === "hide_user");
       if (!actionMatchesTarget) return { kind: "incompatible-action" as const };
 
-      if (action !== "dismiss" && targetType !== "user") {
+      if(targetType==='place_report' && action==='remove_content') {
+        const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_place(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
+        if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
+      } else if(targetType==='fare_report' && action==='remove_content') {
+        const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_fare(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
+        if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
+      } else if(targetType==='transport_subject' && action==='remove_route') {
+        const hidden=await tx.execute(sql`SELECT public.v2_api_hide_reported_lead(${id},${typeof body.notes==='string'?body.notes.slice(0,2000):''}) hidden`);
+        if(!hidden.rows[0]?.hidden)return {kind:'already-reviewed' as const};
+      } else if (action !== "dismiss" && targetType !== "user") {
         const targetId = Number(report.targetId);
         if (!Number.isSafeInteger(targetId) || targetId <= 0) {
           return { kind: "invalid-target" as const };
@@ -756,15 +780,15 @@ function buildDashboardHtml(): string {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:#F0F4F8;color:#1E293B;min-height:100vh}
-.topbar{background:#1E3A5F;padding:16px 32px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
+body{font-family:'Inter',sans-serif;background:#F4F6F9;color:#1E293B;min-height:100vh}
+.topbar{background:#102744;padding:16px 32px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10}
 .topbar h1{color:#fff;font-size:20px;font-weight:700}
 .badge{background:#F97316;color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
 .content{padding:28px 32px;max-width:1400px;margin:0 auto}
 .section-title{font-size:13px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px;margin-top:32px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:8px}
 .card{background:#fff;border-radius:16px;padding:20px;border:1px solid #E2E8F0}
-.card .num{font-size:32px;font-weight:700;color:#1E3A5F}
+.card .num{font-size:32px;font-weight:700;color:#102744}
 .card .lbl{font-size:13px;color:#64748B;margin-top:4px}
 .card.accent .num{color:#F97316}
 .card.green .num{color:#22C55E}
@@ -790,7 +814,7 @@ tr:hover td{background:#F8FAFC}
 .city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
 .city-card{background:#fff;border-radius:16px;border:1px solid #E2E8F0;overflow:hidden;transition:box-shadow .15s}
 .city-card:hover{box-shadow:0 4px 20px rgba(30,58,95,.10)}
-.city-card-header{background:#1E3A5F;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.city-card-header{background:#102744;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
 .city-card-name{color:#fff;font-size:17px;font-weight:700;display:flex;align-items:center;gap:8px}
 .city-card-total{color:rgba(255,255,255,.7);font-size:13px}
 .city-card-body{padding:16px 20px;display:flex;flex-direction:column;gap:14px}
@@ -808,7 +832,7 @@ tr:hover td{background:#F8FAFC}
 .days-pills{display:flex;flex-wrap:wrap;gap:6px}
 .city-stats-row{display:flex;gap:16px}
 .city-stat{display:flex;flex-direction:column;align-items:center;background:#F8FAFC;border-radius:10px;padding:10px 16px;flex:1}
-.city-stat-num{font-size:20px;font-weight:700;color:#1E3A5F}
+.city-stat-num{font-size:20px;font-weight:700;color:#102744}
 .city-stat-lbl{font-size:11px;color:#94A3B8;margin-top:2px}
 .city-stat-num.accent{color:#F97316}
 .city-stat-num.green{color:#22C55E}
@@ -827,6 +851,13 @@ tr:hover td{background:#F8FAFC}
 .del-btn:hover{background:#DC2626;color:#fff;border-color:#DC2626}
 .del-btn:disabled{opacity:0.4;cursor:not-allowed}
 .route-tag{display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;background:#EFF6FF;color:#1D4ED8}
+
+body{color:#172D46;font-family:system-ui,sans-serif}button,input,select,textarea{font-family:inherit;font-size:16px;min-height:44px}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #A65315;outline-offset:3px}
+.badge,.tab-btn.active{background:#FF9B45;color:#172D46}.tab-btn{min-height:44px;font-size:14px}
+th{font-size:14px;text-transform:none;letter-spacing:0}td{font-size:14px}.pill,.route-tag{font-size:14px}.del-btn{min-height:44px;font-size:14px}
+table{display:block;overflow-x:auto}h1{letter-spacing:-.025em}
+@media(max-width:600px){.topbar{padding:16px;flex-wrap:wrap}.topbar h1{font-size:23px}.tabs{flex-wrap:wrap}.box{padding:24px}}
 </style>
 </head>
 <body>
@@ -845,7 +876,7 @@ tr:hover td{background:#F8FAFC}
 <div id="modal-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:100;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:20px;padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
     <div style="font-size:32px;text-align:center;margin-bottom:12px">🗑️</div>
-    <h2 style="font-size:20px;font-weight:700;color:#1E3A5F;text-align:center;margin-bottom:8px">Delete this route?</h2>
+    <h2 style="font-size:20px;font-weight:700;color:#102744;text-align:center;margin-bottom:8px">Delete this route?</h2>
     <p style="font-size:14px;color:#64748B;text-align:center;line-height:1.6;margin-bottom:8px" id="modal-route-desc"></p>
     <p style="font-size:13px;color:#DC2626;text-align:center;margin-bottom:24px">This permanently removes the route and all its ratings. It cannot be undone.</p>
     <div style="display:flex;gap:12px">
@@ -858,7 +889,7 @@ tr:hover td{background:#F8FAFC}
 <div id="tab-analytics" class="content">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <div class="section-title" style="margin:0">Overview</div>
-    <button onclick="load()" style="padding:8px 18px;background:#1E3A5F;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
+    <button onclick="load()" style="padding:8px 18px;background:#102744;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
   </div>
   <div class="cards" id="cards"><div class="loading">Loading…</div></div>
 
@@ -884,7 +915,7 @@ tr:hover td{background:#F8FAFC}
 <div id="tab-routes" class="content" style="display:none">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <div class="section-title" style="margin:0">All Routes in Database</div>
-    <button onclick="loadRoutes()" style="padding:8px 18px;background:#1E3A5F;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
+    <button onclick="loadRoutes()" style="padding:8px 18px;background:#102744;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
   </div>
   <p style="font-size:13px;color:#94A3B8;margin-bottom:20px">Click <strong>Delete</strong> on any row to permanently erase that route and all associated ratings.</p>
   <table id="routesTable"><tr><td class="loading">Loading…</td></tr></table>
@@ -910,7 +941,7 @@ tr:hover td{background:#F8FAFC}
 <div id="tab-moderation" class="content" style="display:none">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
     <div class="section-title" style="margin:0">UGC safety reports</div>
-    <button onclick="loadReports()" style="padding:8px 18px;background:#1E3A5F;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
+    <button onclick="loadReports()" style="padding:8px 18px;background:#102744;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">↻ Refresh</button>
   </div>
   <p style="font-size:13px;color:#94A3B8;margin-bottom:20px">
     Review in-app reports and remove objectionable routes/comments or hide a contributor&apos;s public content. Actions are retained with the report for auditability.
@@ -1063,7 +1094,7 @@ async function load() {
 
   // Volume chart
   const vol = d.volumeByDay;
-  cssBarV(document.getElementById('volumeChart'), vol.map(v => v.date.slice(5)), vol.map(v => v.count), '#1E3A5FCC');
+  cssBarV(document.getElementById('volumeChart'), vol.map(v => v.date.slice(5)), vol.map(v => v.count), '#102744CC');
 
   // Routes chart
   const routes = d.topRoutes;
@@ -1228,13 +1259,15 @@ async function loadReports() {
         const target =
           report.targetType === 'user' ? 'Contributor ' + report.targetId :
           report.targetType === 'comment' ? 'Comment #' + report.targetId :
+          report.targetType === 'place_report' ? 'Location report ' + report.targetId :
+          report.targetType === 'fare_report' ? 'Fare report ' + report.targetId :
           'Route #' + report.targetId;
         const primaryAction = report.targetType === 'user'
           ? 'hide_user'
-          : report.targetType === 'journey' ? 'remove_route' : 'remove_content';
+          : ['journey','transport_subject'].includes(report.targetType) ? 'remove_route' : 'remove_content';
         const primaryLabel = report.targetType === 'user'
           ? 'Hide user content'
-          : report.targetType === 'journey' ? 'Remove route' : 'Remove content';
+          : ['journey','transport_subject'].includes(report.targetType) ? 'Remove route' : 'Remove content';
         return '<tr id="report-' + report.id + '">' +
           '<td class="ts">' + esc(fmt(report.createdAt)) + '</td>' +
           '<td><strong>' + esc(target) + '</strong><br><span class="ts">' + esc(report.targetType) + '</span><br><span style="display:block;max-width:260px;white-space:normal;margin-top:4px">' + esc(report.targetPreview || '—') + '</span></td>' +
