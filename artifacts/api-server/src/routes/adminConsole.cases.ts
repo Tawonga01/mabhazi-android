@@ -7,6 +7,7 @@ import { renderAdminConsole } from './adminConsoleView';
 type Context = {admin: pg.Client; base: string; accounts: string[]; tokens: string[]; leadBody: () => Record<string,unknown>};
 export function registerAdminConsoleTests(context: () => Context) {
   const owner = randomUUID(), token = randomBytes(32).toString('hex'), prefix = 'Console '+randomUUID();
+  const reviewer = randomUUID(), reviewerToken = randomBytes(32).toString('hex');
   let subject: string;
   const query = (text: string, values: unknown[] = []) => context().admin.query(text,values);
   async function page(queryString = '', sid: string | null = token, headers: Record<string,string> = {}) {
@@ -36,14 +37,16 @@ export function registerAdminConsoleTests(context: () => Context) {
     assert.ok(result.html.includes('Read-only catalogue'));assert.ok(!result.html.includes('Apply correction'));
   });
   test('named console: reviewer-only access does not imply owner console authority',async()=>{
-    await query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','test_scope')",[context().accounts[2]]);
-    assert.equal((await page('',context().tokens[2])).status,403);
+    await query('INSERT INTO users(id) VALUES($1)',[reviewer]);
+    await query('INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval \'1 day\')',[reviewerToken,{user:{id:reviewer},access_token:'synthetic-test-token',expires_at:Math.floor(Date.now()/1000)+3600}]);
+    await query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','test_scope')",[reviewer]);
+    assert.equal((await page('',reviewerToken)).status,403);
   });
   test('named console: catalogue reads current community records with literal search and bounded pages',async()=>{
     for (let i=0;i<22;i++) {
       const input=context().leadBody() as {target:{newLead:{operator:{name:string}}}};
       input.target.newLead.operator.name=prefix+' '+i;
-      const saved=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'Content-Type':'application/json'},body:JSON.stringify(input)});
+      const saved=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify(input)});
       assert.equal(saved.status,200);const value=await saved.json() as {subjectId:string};if(i===0)subject=value.subjectId;
     }
     const result=await page('?q='+encodeURIComponent(prefix));assert.equal(result.status,200);
@@ -87,5 +90,7 @@ export function registerAdminConsoleTests(context: () => Context) {
     await query('DELETE FROM users WHERE id=$1',[owner]);
     assert.equal((await page()).status,401);
     await query('DELETE FROM sessions WHERE sid=$1',[token]);
+    await query('DELETE FROM users WHERE id=$1',[reviewer]);
+    await query('DELETE FROM sessions WHERE sid=$1',[reviewerToken]);
   });
 }
