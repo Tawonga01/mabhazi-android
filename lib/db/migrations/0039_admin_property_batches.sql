@@ -87,18 +87,23 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtext(actor));
  UPDATE public.v2_transport_guard SET toggle=NOT toggle WHERE id;
  PERFORM public.v2_admin_require(actor);
- IF request IS NULL OR input IS NULL OR jsonb_typeof(input)<>'object' OR input-ARRAY['operation','reason','items']<>'{}'::jsonb
-  OR NOT input?&ARRAY['operation','reason','items'] OR jsonb_typeof(input->'items')<>'array'
+ IF request IS NULL OR input IS NULL OR jsonb_typeof(input)<>'object' OR input-ARRAY['operation','reason','items','expiresAt']<>'{}'::jsonb
+  OR NOT input?&ARRAY['operation','reason','items','expiresAt'] OR jsonb_typeof(input->'items')<>'array'
+  OR jsonb_typeof(input->'expiresAt') IS DISTINCT FROM 'number' OR (input->>'expiresAt')!~'^[1-9][0-9]{0,15}$'
   OR jsonb_array_length(input->'items') NOT BETWEEN 1 AND 2000
   OR COALESCE(input->>'operation','') NOT IN('approve','reverse') OR COALESCE(input->>'reason','') NOT IN('reports_reviewed','evidence_checked','operator_checked','decision_incorrect','evidence_changed')
   THEN RAISE EXCEPTION 'v2_admin_request_invalid' USING ERRCODE='23514';END IF;
- operation:=input->>'operation';reason:=input->>'reason';digest:=public.v2_assessment_hash(jsonb_build_array(actor,input));
+ operation:=input->>'operation';reason:=input->>'reason';digest:=public.v2_assessment_hash(jsonb_build_array(actor,input-'expiresAt'));
  SELECT * INTO prior FROM public.v2_admin_batches WHERE id=request;
  IF FOUND THEN
   IF prior.actor_user_id IS DISTINCT FROM actor OR prior.request_digest IS DISTINCT FROM digest
    THEN RAISE EXCEPTION 'v2_admin_request_conflict' USING ERRCODE='23514';END IF;
   RETURN public.v2_api_admin_batch_receipt(actor,request);
  END IF;
+ -- Check expiry only after the same lock/receipt lookup used by an in-flight
+ -- identical command. A racing lost acknowledgement cannot become a new save.
+ IF (input->>'expiresAt')::numeric/1000<=extract(epoch FROM clock_timestamp())
+  THEN RAISE EXCEPTION 'v2_admin_preview_expired' USING ERRCODE='23514';END IF;
  IF (SELECT count(DISTINCT x->>'routeId') FROM jsonb_array_elements(input->'items') x)>100
   OR (SELECT count(*) FROM jsonb_array_elements(input->'items'))<>(SELECT count(DISTINCT jsonb_build_array(x->'routeId',x->'fieldKey',x->'observationId')) FROM jsonb_array_elements(input->'items') x)
   THEN RAISE EXCEPTION 'v2_admin_request_invalid' USING ERRCODE='23514';END IF;

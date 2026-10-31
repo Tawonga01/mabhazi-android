@@ -38,7 +38,7 @@ export function registerAdminBatchTests(context:()=>Context){
    subjectRevision:String(s.revision),observationRevision:o?String(o.observation_revision):null,targetRevision:o?String(o.target_revision):null,
    assessmentId:o?.assessment_id??null,caseRevision:'0'};
  }
- const apply=async(items:unknown[],request=randomUUID(),operation='approve',reason='reports_reviewed')=>(await q('SELECT v2_api_admin_property_batch($1,$2,$3) r',[context().other,request,{operation,reason,items}])).rows[0].r;
+ const apply=async(items:unknown[],request=randomUUID(),operation='approve',reason='reports_reviewed')=>(await q('SELECT v2_api_admin_property_batch($1,$2,$3) r',[context().other,request,{operation,reason,items,expiresAt:Date.now()+300000}])).rows[0].r;
  async function invalid(sql:string,values:unknown[],codes=['23514']){
   await q('SAVEPOINT invalid_admin_batch');
   try{await assert.rejects(q(sql,values),(error:unknown)=>{assert.ok(error instanceof Error&&'code' in error);assert.ok(codes.includes(String(error.code)),String(error.code)+': '+error.message);return true;});}
@@ -127,5 +127,11 @@ export function registerAdminBatchTests(context:()=>Context){
   const newer=await apply([{...await item(f,'route.origin'),caseRevision:String(await revision())}]);assert.equal(newer.items[0].outcome,'approved');
   const old=await apply([{...await item(f,'route.origin'),caseRevision:String(await revision()),reviewId:first.items[0].reviewId}],randomUUID(),'reverse','decision_incorrect');
   assert.equal(old.items[0].outcome,'newer_decision_kept');assert.equal(old.items[0].reviewId,null);
+ });
+ test('admin batches: expiry is checked under the receipt lock after exact replay',async()=>{
+  const f=await fixture(),i=await item(f),id=randomUUID(),r=await apply([i],id);
+  const body={operation:'approve',reason:'reports_reviewed',items:[i],expiresAt:Date.now()-1};
+  assert.deepEqual((await q('SELECT v2_api_admin_property_batch($1,$2,$3) r',[context().other,id,body])).rows[0].r,r);
+  await invalid('SELECT v2_api_admin_property_batch($1,$2,$3)',[context().other,randomUUID(),body]);
  });
 }
