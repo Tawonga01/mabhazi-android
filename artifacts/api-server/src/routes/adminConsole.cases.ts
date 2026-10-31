@@ -14,7 +14,8 @@ export function registerAdminConsoleTests(context: () => Context) {
     return {status:response.status,html:await response.text(),headers:response.headers};
   }
   test('named console: guests and legacy shared-secret sessions cannot open private records',async()=>{
-    for (const headers of [{},{'X-Admin-Secret':process.env.ADMIN_SECRET!}]) {
+    const attempts: Record<string,string>[] = [{},{'X-Admin-Secret':process.env.ADMIN_SECRET!}];
+    for (const headers of attempts) {
       const result=await page('',null,headers);assert.equal(result.status,401);
       assert.ok(result.html.includes('Continue with Google'));assert.ok(!result.html.includes('<table>'));
       assert.equal(result.headers.get('cache-control'),'private, no-store');
