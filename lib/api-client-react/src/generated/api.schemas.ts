@@ -582,6 +582,41 @@ export interface ProposedAssociationsEnvelope {
   proposals: ProposedAssociation[];
 }
 
+export type V2PickupInvitationReservationEntrySurface =
+  (typeof V2PickupInvitationReservationEntrySurface)[keyof typeof V2PickupInvitationReservationEntrySurface];
+
+export const V2PickupInvitationReservationEntrySurface = {
+  search_result: "search_result",
+  route_detail: "route_detail",
+} as const;
+
+export type V2PickupInvitationReservationDeclaredContextItem =
+  (typeof V2PickupInvitationReservationDeclaredContextItem)[keyof typeof V2PickupInvitationReservationDeclaredContextItem];
+
+export const V2PickupInvitationReservationDeclaredContextItem = {
+  knows_route: "knows_route",
+  at_stop: "at_stop",
+  travelled: "travelled",
+} as const;
+
+export interface V2PickupInvitationReservation {
+  clientRequestId: string;
+  subjectId: string;
+  entrySurface: V2PickupInvitationReservationEntrySurface;
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  declaredContext: V2PickupInvitationReservationDeclaredContextItem[];
+  /**
+   * @minimum 1
+   * @maximum 9007199254740991
+   */
+  expectedRevision: number;
+  /** @pattern ^[0-9a-f]{64}$ */
+  identityKey: string;
+}
+
 export type V2PickupQuestionReservationEntrySurface =
   (typeof V2PickupQuestionReservationEntrySurface)[keyof typeof V2PickupQuestionReservationEntrySurface];
 
@@ -705,6 +740,7 @@ export interface V2Capabilities {
   routeObservationsEnabled?: boolean;
   placeReportsEnabled?: boolean;
   pickupQuestionsEnabled?: boolean;
+  pickupInvitationsEnabled?: boolean;
   promptControlsEnabled?: boolean;
 }
 

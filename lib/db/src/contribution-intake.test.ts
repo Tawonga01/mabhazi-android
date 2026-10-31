@@ -1,3 +1,4 @@
+import {registerPickupInvitationTests} from './pickup-invitation.cases';
 import {registerPromptControlTests} from './prompt-controls.cases';
 import {registerPickupQuestionTests} from './pickup-question.cases';
 import { registerRouteObservationTests } from './route-observations.cases';
@@ -428,6 +429,21 @@ before(async () => {
    ["GRANT EXECUTE ON FUNCTION v2_prompt_touch(varchar) TO mabhazi_api",'controls_dependency_changed'],
    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'controls_preview_hash_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(controlsApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  // Exact populated0037 ->0038 supported invitation seam; repeat/CRLF and drift fail closed.
+  const invitationApply=await readFile(new URL('../scripts/preview-apply-0038.sql',import.meta.url),'utf8');
+  const invitationBefore=await promptSnapshot();
+  await db.query('BEGIN');await db.query("CREATE FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) RETURNS jsonb LANGUAGE sql AS 'SELECT NULL::jsonb'");await assert.rejects(()=>db.query(invitationApply),/invitation_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(invitationApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0038_pickup_invitation_api.sql\n';
+  await db.query(invitationApply);assert.deepEqual(await promptSnapshot(),invitationBefore);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) TO PUBLIC",'invitation_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) SECURITY INVOKER",'invitation_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[]) SET search_path=public",'invitation_function_fence_changed'],
+   ["GRANT EXECUTE ON FUNCTION v2_prompt_eligible(uuid,varchar,text[]) TO mabhazi_api",'invitation_dependency_changed'],
+   ["ALTER FUNCTION v2_prompt_read(varchar,uuid) SECURITY DEFINER",'invitation_dependency_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'invitation_preview_baseline_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0038_pickup_invitation_api.sql'",'invitation_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(invitationApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
@@ -823,3 +839,5 @@ registerRouteObservationTests(() => ({ db, connectionString, user, other, origin
 registerPickupQuestionTests(() => ({db,user,other,origin,destination}));
 
 registerPromptControlTests(() => ({db,user,other,connectionString}));
+
+registerPickupInvitationTests(()=>({db,user,other,origin,destination}));

@@ -15,5 +15,6 @@ export interface V2Capabilities {
   routeObservationsEnabled?: boolean;
   placeReportsEnabled?: boolean;
   pickupQuestionsEnabled?: boolean;
+  pickupInvitationsEnabled?: boolean;
   promptControlsEnabled?: boolean;
 }

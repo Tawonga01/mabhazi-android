@@ -156,6 +156,130 @@ export const RecordV2PromptActivityResponse = zod.object({
 });
 
 /**
+ * Requires explicit volunteered pickup knowledge and the displayed route revision/identity. Existing server-owned activity-session and rolling24h caps, preferences, dismissal and scoped unknown suppression apply atomically across devices. The highest-priority eligible task must be supported before reserving; unsupported tasks spend no invitation budget. Stable request retry returns the current owned state or original none. Reservation is not shown/opened/answered. Existing manual pickup questions and independent capture remain exempt. No UI or travel inference is implied.
+ * @summary Reserve at most one supported optional pickup invitation within account limits
+ */
+export const reserveV2PickupInvitationHeaderXMabhaziAccountMax = 256;
+
+export const reserveV2PickupInvitationHeaderXMabhaziBlockedContributorsMax = 10000;
+
+export const ReserveV2PickupInvitationHeader = zod.object({
+  "X-Mabhazi-Account": zod
+    .string()
+    .min(1)
+    .max(reserveV2PickupInvitationHeaderXMabhaziAccountMax)
+    .describe(
+      "Expected signed-in account ID to reject a token\/account switch during a pending operation. The server actor always comes from the authenticated session, never this assertion.",
+    ),
+  "X-Mabhazi-Blocked-Contributors": zod
+    .string()
+    .max(reserveV2PickupInvitationHeaderXMabhaziBlockedContributorsMax)
+    .optional()
+    .describe(
+      "JSON string array of already-held device-local contributor block IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.",
+    ),
+  Authorization: zod
+    .string()
+    .optional()
+    .describe("Opaque session token — Bearer <sid>."),
+});
+
+export const reserveV2PickupInvitationBodyDeclaredContextMax = 3;
+
+export const reserveV2PickupInvitationBodyExpectedRevisionMax = 9007199254740991;
+
+export const reserveV2PickupInvitationBodyIdentityKeyRegExp = new RegExp(
+  "^[0-9a-f]{64}$",
+);
+
+export const ReserveV2PickupInvitationBody = zod.object({
+  clientRequestId: zod.string().uuid(),
+  subjectId: zod.string().uuid(),
+  entrySurface: zod.enum(["search_result", "route_detail"]),
+  declaredContext: zod
+    .array(zod.enum(["knows_route", "at_stop", "travelled"]))
+    .min(1)
+    .max(reserveV2PickupInvitationBodyDeclaredContextMax),
+  expectedRevision: zod
+    .number()
+    .min(1)
+    .max(reserveV2PickupInvitationBodyExpectedRevisionMax),
+  identityKey: zod
+    .string()
+    .regex(reserveV2PickupInvitationBodyIdentityKeyRegExp),
+});
+
+export const reserveV2PickupInvitationResponseTwoRouteRevisionMax = 9007199254740991;
+
+export const reserveV2PickupInvitationResponseTwoRouteIdentityKeyRegExp =
+  new RegExp("^[0-9a-f]{64}$");
+export const reserveV2PickupInvitationResponseTwoRouteOriginIdMax = 999999999;
+
+export const reserveV2PickupInvitationResponseTwoRouteDestinationIdMax = 999999999;
+
+export const reserveV2PickupInvitationResponseTwoRouteOperatorNameMax = 120;
+
+export const reserveV2PickupInvitationResponseTwoRouteDepartureTimeRegExp =
+  new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+
+export const ReserveV2PickupInvitationResponse = zod.union([
+  zod.object({
+    status: zod.enum([
+      "none",
+      "unavailable",
+      "expired",
+      "reconfirm_identity",
+      "obsolete",
+      "suppressed",
+      "skip",
+      "dismiss",
+      "unknown",
+      "answered",
+    ]),
+  }),
+  zod.object({
+    status: zod.enum(["offered", "opened"]),
+    invitationId: zod.string().uuid(),
+    questionKey: zod.enum(["pickup_place"]),
+    formSchemaId: zod.enum(["boarding-pickup/1"]),
+    expiresAt: zod.coerce.date(),
+    route: zod.object({
+      subjectId: zod.string().uuid(),
+      revision: zod
+        .number()
+        .min(1)
+        .max(reserveV2PickupInvitationResponseTwoRouteRevisionMax),
+      identityKey: zod
+        .string()
+        .regex(reserveV2PickupInvitationResponseTwoRouteIdentityKeyRegExp),
+      origin: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(reserveV2PickupInvitationResponseTwoRouteOriginIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      destination: zod.object({
+        id: zod
+          .number()
+          .min(1)
+          .max(reserveV2PickupInvitationResponseTwoRouteDestinationIdMax),
+        name: zod.string(),
+        placeType: zod.string(),
+      }),
+      operatorName: zod
+        .string()
+        .min(1)
+        .max(reserveV2PickupInvitationResponseTwoRouteOperatorNameMax),
+      departureTime: zod
+        .string()
+        .regex(reserveV2PickupInvitationResponseTwoRouteDepartureTimeRegExp),
+    }),
+  }),
+]);
+
+/**
  * User-initiated only. Requires explicit volunteered context for the displayed subject; route interest is not travel. Supports pickup_place/prompts/1 on visible own/community-public leads only. Exact request retries retain the same question or none result. Manual help does not spend unsolicited invitation budgets. No UI exposure or answered event is inferred.
  * @summary Start an optional manual pickup question for a displayed route
  */
@@ -2200,6 +2324,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   routeObservationsEnabled: zod.boolean().optional(),
   placeReportsEnabled: zod.boolean().optional(),
   pickupQuestionsEnabled: zod.boolean().optional(),
+  pickupInvitationsEnabled: zod.boolean().optional(),
   promptControlsEnabled: zod.boolean().optional(),
 });
 

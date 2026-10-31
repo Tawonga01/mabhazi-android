@@ -1,3 +1,4 @@
+import {registerPickupInvitationApiTests} from './pickupInvitationsV2.cases';
 import {registerPromptControlApiTests} from './promptControlsV2.cases';
 import {registerDepartureBoardTests} from './departureBoardV2.cases';
 import {registerPickupQuestionApiTests} from './pickupQuestionsV2.cases';
@@ -56,7 +57,7 @@ async function request(path: string, input?: unknown, account: number | null = 0
 }
 test('minimum API: capability defaults off and does not write legacy or v2', async () => {
   delete process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED;
-  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false,fareReportsEnabled:false,routeObservationsEnabled:false,placeReportsEnabled:false,pickupQuestionsEnabled:false,promptControlsEnabled:true});
+  assert.deepEqual((await request('/v2/capabilities')).value,{schemaVersion:'1.0',minimumLeadEnabled:false,actualJourneyEnabled:false,fareReportsEnabled:false,routeObservationsEnabled:false,placeReportsEnabled:false,pickupQuestionsEnabled:false,pickupInvitationsEnabled:false,promptControlsEnabled:true});
   assert.equal((await request('/v2/contributions',body())).status,503);
   process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED='true';
   assert.equal((await request('/v2/capabilities')).value.minimumLeadEnabled,true);
@@ -250,3 +251,5 @@ registerPickupQuestionApiTests(()=>({admin,cities,accounts,tokens,request,leadBo
 registerDepartureBoardTests(()=>({admin,cities,accounts,request,leadBody:body}));
 
 registerPromptControlApiTests(()=>({admin,accounts,request}));
+
+registerPickupInvitationApiTests(()=>({admin,cities,accounts,tokens,request,leadBody:body}));

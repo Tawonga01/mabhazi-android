@@ -1,6 +1,6 @@
 import {Router,type IRouter,type Response} from 'express';
 import {pool} from '@workspace/db';
-import {ReserveV2PickupQuestionBody,GetV2PickupQuestionParams,GetV2PickupQuestionResponse,RecordV2PickupQuestionEventBody} from '@workspace/api-zod';
+import {ReserveV2PickupInvitationBody,ReserveV2PickupQuestionBody,GetV2PickupQuestionParams,GetV2PickupQuestionResponse,RecordV2PickupQuestionEventBody} from '@workspace/api-zod';
 import {parseRouteObservations} from '../lib/routeObservations';
 import {saveIntake} from '../lib/minimumLead';
 import {parseBlockedIds} from './routeSafetyV2';
@@ -16,6 +16,12 @@ export async function pickupQuestionsEnabled(){
  const {rows}=await pool.query("SELECT bool_and(CASE WHEN to_regprocedure(s) IS NULL THEN false ELSE has_function_privilege(current_user,s,'EXECUTE') END) ready FROM unnest($1::text[]) s",[signatures]);
  return rows[0]?.ready===true;
 }
+export async function pickupInvitationsEnabled(){
+ if(!await pickupQuestionsEnabled())return false;
+ const signature='public.v2_api_pickup_invitation_reserve(varchar,uuid,uuid,bigint,text,text[],text,varchar[])';
+ const {rows}=await pool.query("SELECT CASE WHEN to_regprocedure($1) IS NULL THEN false ELSE has_function_privilege(current_user,$1,'EXECUTE') END ready",[signature]);
+ return rows[0]?.ready===true;
+}
 function failure(res:Response,error:unknown,write=false){
  const {message,code}=error as {message?:string;code?:string};
  if(message==='v2_prompt_account_unavailable'||message==='v2_intake_account_missing')return fail(res,401,'AUTH_REQUIRED','Sign in again before continuing.');
@@ -24,12 +30,13 @@ function failure(res:Response,error:unknown,write=false){
  if(message==='v2_route_identity_changed'||message==='v2_prompt_identity_reconfirmation_required')return fail(res,409,'TARGET_IDENTITY_CHANGED','The route changed. Review it before saving again.');
  if(['v2_intake_idempotency_conflict','v2_prompt_request_conflict','v2_prompt_event_conflict','v2_prompt_independent_receipt_conflict'].includes(message??''))return fail(res,409,'IDEMPOTENCY_CONFLICT','This reference was used for different answers. Check its saved result.');
  if(['v2_prompt_no_longer_offered','v2_prompt_event_already_recorded','v2_prompt_invitation_expired'].includes(message??''))return fail(res,409,'QUESTION_CHANGED','This question changed. Your draft is kept.');
+ if(message==='v2_prompt_target_changed')return fail(res,409,'TARGET_CHANGED','The route changed. Refresh it before opening a question.');
  if(message==='v2_intake_source_forbidden')return fail(res,403,'FORBIDDEN','One selected source is not available to this account.');
  if(['23514','23503','22007','22008','22P02'].includes(code??''))return fail(res,422,'INVALID_QUESTION_REQUEST','Check the question, route and answers.');
  return fail(res,503,write?'SAVE_UNCONFIRMED':'TEMPORARILY_UNAVAILABLE',write?'Saving could not be confirmed. Check the receipt before retrying.':'Questions are temporarily unavailable.');
 }
 router.use((req,res,next)=>{
- if(!/^\/pickup-questions(?:\/[^/]+(?:\/(?:events|answers))?)?$/.test(req.path)){next();return;}
+ if(req.path!=='/pickup-invitations'&&!/^\/pickup-questions(?:\/[^/]+(?:\/(?:events|answers))?)?$/.test(req.path)){next();return;}
  res.setHeader('Cache-Control','no-store');
  if(!req.isAuthenticated()){fail(res,401,'AUTH_REQUIRED','Sign in before continuing.');return;}
  if(req.get('X-Mabhazi-Account')!==req.user.id){fail(res,409,'ACCOUNT_CHANGED','The active account changed. Reopen your own draft.');return;}
@@ -39,6 +46,18 @@ router.use((req,res,next)=>{
   if(req.headers.origin&&!isAllowedOrigin(req.headers.origin)||!req.headers.authorization?.startsWith('Bearer ')&&!req.headers.origin){fail(res,403,'ORIGIN_REJECTED','The sign-in origin is not allowed.');return;}
  }
  next();
+});
+router.post('/pickup-invitations',async(req,res)=>{
+ if(!req.isAuthenticated())return;
+ if(Object.keys(req.query).length){fail(res,400,'INVALID_QUERY','Choose the route and knowledge in the request body.');return;}
+ const shape=ReserveV2PickupInvitationBody.extend({expectedRevision:ReserveV2PickupInvitationBody.shape.expectedRevision.int().max(Number.MAX_SAFE_INTEGER)}).strict();
+ const parsed=shape.safeParse(req.body);
+ if(!parsed.success||new Set(parsed.success?parsed.data.declaredContext:[]).size!==(parsed.success?parsed.data.declaredContext.length:0)){fail(res,422,'INVALID_QUESTION_REQUEST','Declare how you know the displayed route.');return;}
+ try{
+  if(!await pickupInvitationsEnabled()){fail(res,503,'CAPABILITY_UNAVAILABLE','Optional pickup invitations are not available yet.');return;}
+  const b=parsed.data,{rows}=await pool.query('SELECT public.v2_api_pickup_invitation_reserve($1,$2,$3,$4,$5,$6::text[],$7,$8::varchar[]) result',[req.user.id,b.clientRequestId,b.subjectId,b.expectedRevision,b.identityKey,b.declaredContext,b.entrySurface,parseBlockedIds(req.get('X-Mabhazi-Blocked-Contributors'))]);
+  res.json(GetV2PickupQuestionResponse.parse(rows[0]?.result));
+ }catch(error){failure(res,error);}
 });
 router.post('/pickup-questions',async(req,res)=>{
  if(!req.isAuthenticated())return;

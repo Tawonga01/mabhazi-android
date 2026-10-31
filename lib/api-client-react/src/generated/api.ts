@@ -68,6 +68,7 @@ import type {
   V2MinimumLeadRequest,
   V2OwnRouteEnvelope,
   V2OwnRoutes,
+  V2PickupInvitationReservation,
   V2PickupQuestionEventRequest,
   V2PickupQuestionEventResult,
   V2PickupQuestionReservation,
@@ -345,6 +346,94 @@ export const useRecordV2PromptActivity = <
   TContext
 > => {
   return useMutation(getRecordV2PromptActivityMutationOptions(options));
+};
+
+/**
+ * Requires explicit volunteered pickup knowledge and the displayed route revision/identity. Existing server-owned activity-session and rolling24h caps, preferences, dismissal and scoped unknown suppression apply atomically across devices. The highest-priority eligible task must be supported before reserving; unsupported tasks spend no invitation budget. Stable request retry returns the current owned state or original none. Reservation is not shown/opened/answered. Existing manual pickup questions and independent capture remain exempt. No UI or travel inference is implied.
+ * @summary Reserve at most one supported optional pickup invitation within account limits
+ */
+export const getReserveV2PickupInvitationUrl = () => {
+  return `/api/v2/pickup-invitations`;
+};
+
+export const reserveV2PickupInvitation = async (
+  v2PickupInvitationReservation: V2PickupInvitationReservation,
+  options?: RequestInit,
+): Promise<V2PickupQuestionState> => {
+  return customFetch<V2PickupQuestionState>(getReserveV2PickupInvitationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(v2PickupInvitationReservation),
+  });
+};
+
+export const getReserveV2PickupInvitationMutationOptions = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    TError,
+    { data: BodyType<V2PickupInvitationReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+  TError,
+  { data: BodyType<V2PickupInvitationReservation> },
+  TContext
+> => {
+  const mutationKey = ["reserveV2PickupInvitation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    { data: BodyType<V2PickupInvitationReservation> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return reserveV2PickupInvitation(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReserveV2PickupInvitationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>
+>;
+export type ReserveV2PickupInvitationMutationBody =
+  BodyType<V2PickupInvitationReservation>;
+export type ReserveV2PickupInvitationMutationError = ErrorType<V2ErrorResponse>;
+
+/**
+ * @summary Reserve at most one supported optional pickup invitation within account limits
+ */
+export const useReserveV2PickupInvitation = <
+  TError = ErrorType<V2ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+    TError,
+    { data: BodyType<V2PickupInvitationReservation> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof reserveV2PickupInvitation>>,
+  TError,
+  { data: BodyType<V2PickupInvitationReservation> },
+  TContext
+> => {
+  return useMutation(getReserveV2PickupInvitationMutationOptions(options));
 };
 
 /**
