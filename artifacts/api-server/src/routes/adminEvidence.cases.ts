@@ -12,7 +12,9 @@ export function registerAdminEvidenceTests(context:()=>Context){
   const response=await fetch(context().base+'/admin-console'+path,{method:body===undefined?'GET':'POST',
    headers:{...(sid?{Authorization:'Bearer '+sid}:{}),'Content-Type':'application/json','X-Mabhazi-Account':owner,Origin:'https://api.mabhazi.com',...extra},
    ...(body===undefined?{}:{body:JSON.stringify(body)})});
-  return {status:response.status,value:await response.json(),headers:response.headers};
+  return {status:response.status,value:await response.json() as {
+    claims:any[];selection:unknown;missing:unknown[];digest:string;writable:boolean;
+  },headers:response.headers};
  }
  test('admin evidence: guest and ordinary identity cannot read a claim or preview a batch',async()=>{
   const selection={routeIds:[randomUUID()],fields:['operator.reported']};
