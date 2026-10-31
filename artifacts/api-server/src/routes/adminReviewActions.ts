@@ -1,7 +1,7 @@
 import {Router,type IRouter} from 'express';
 import {pool} from '@workspace/db';
 import {getOrigin} from '../lib/auth';
-import {validAdminId,readAdminClaims} from '../lib/adminEvidence';
+import {validAdminId,readAdminClaims,type AdminClaim} from '../lib/adminEvidence';
 import {readReviewPreview,createReviewPreview,type AdminReviewItem} from '../lib/adminReviewToken';
 
 // Mounted only after the named console guard. Each SQL facade checks current
@@ -66,7 +66,7 @@ router.post('/reverse-preview',async(req,res)=>{
   if(body.reviewIds&&(body.reviewIds as string[]).some(id=>!approved.some((i:Record<string,unknown>)=>i.reviewId===id))){res.status(422).json({code:'INVALID_REVERSAL',error:'Choose decisions from this batch.'});return;}
   const selected=approved.filter((i:Record<string,unknown>)=>!body.reviewIds||(body.reviewIds as string[]).includes(i.reviewId as string));
   const ids=[...new Set(selected.map((i:Record<string,unknown>)=>i.routeId as string))];
-  const data=ids.length?await readAdminClaims(req.user.id,ids as string[]):{claims:[]};
+  const data:{claims:AdminClaim[]}=ids.length?await readAdminClaims(req.user.id,ids as string[]):{claims:[]};
   const held=[],items:AdminReviewItem[]=[];
   for(const original of selected){
    const c=data.claims.find(c=>c.routeId===original.routeId&&c.field===original.fieldKey&&c.observationId===original.observationId);

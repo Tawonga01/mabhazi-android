@@ -90,12 +90,12 @@ router.use('/admin-console',async(req,res,next)=>{
   res.setHeader('Cache-Control','private, no-store');res.vary('Cookie');res.vary('Authorization');
   res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
   if(!req.isAuthenticated()){res.status(401).json({code:'AUTH_REQUIRED',error:'Sign in to administration.'});return;}
-  if(req.get('X-Mabhazi-Account')!==undefined&&req.get('X-Mabhazi-Account')!==req.user.id){res.status(409).json({code:'ACCOUNT_CHANGED',error:'Reopen the dashboard with your current account.'});return;}
   try{
     const {rows}=await pool.query(`SELECT 1 FROM public.v2_review_roles r JOIN public.users u ON u.id=r.user_id
       WHERE r.user_id=$1 AND r.role='administrator' AND r.revoked_at IS NULL
       AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=r.user_id)`,[req.user.id]);
     if(!rows.length){res.status(403).json({code:'ADMIN_REQUIRED',error:'Administrative access is required.'});return;}
+  if(req.get('X-Mabhazi-Account')!==undefined&&req.get('X-Mabhazi-Account')!==req.user.id){res.status(409).json({code:'ACCOUNT_CHANGED',error:'Reopen the dashboard with your current account.'});return;}
     next();
   }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Administration is temporarily unavailable.'});}
 });
