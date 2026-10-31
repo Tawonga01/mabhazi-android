@@ -154,7 +154,7 @@ BEGIN
      SELECT * INTO review_case FROM public.v2_review_cases WHERE id=thread.case_id;
      IF review_case.state='resolved' THEN result:='already_reviewed';detail:='already_reviewed';
      ELSE
-      IF review_case.revision IS DISTINCT FROM CASE WHEN (item->>'caseRevision')::bigint=0 THEN 1::bigint ELSE (item->>'caseRevision')::bigint END
+      IF review_case.revision IS DISTINCT FROM (CASE WHEN (item->>'caseRevision')::bigint=0 THEN 1::bigint ELSE (item->>'caseRevision')::bigint END)
        THEN RAISE EXCEPTION 'v2_admin_source_changed' USING ERRCODE='40001';END IF;
       SELECT array_agg(o.id ORDER BY o.id) INTO evidence FROM public.v2_observations o JOIN public.v2_observation_states s ON s.observation_id=o.id AND s.status='active'
        WHERE o.contribution_id=contribution AND o.original_subject_id=route;
