@@ -42,16 +42,17 @@ CREATE FUNCTION public.v2_admin_history_guard() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF TG_OP='UPDATE' AND pg_trigger_depth()>1 THEN
-  IF TG_TABLE_NAME='v2_admin_batches' AND OLD.actor_user_id IS NOT NULL AND NEW.actor_user_id IS NULL
-   AND to_jsonb(NEW)-ARRAY['actor_user_id','request_digest']=to_jsonb(OLD)-ARRAY['actor_user_id','request_digest']
-   THEN NEW.request_digest:=NULL;RETURN NEW;
-  ELSIF TG_TABLE_NAME='v2_admin_batch_items'
-   AND (NEW.observation_id IS NOT DISTINCT FROM OLD.observation_id OR NEW.observation_id IS NULL)
+  IF TG_TABLE_NAME='v2_admin_batches' THEN
+   IF OLD.actor_user_id IS NOT NULL AND NEW.actor_user_id IS NULL
+    AND to_jsonb(NEW)-ARRAY['actor_user_id','request_digest']=to_jsonb(OLD)-ARRAY['actor_user_id','request_digest']
+    THEN NEW.request_digest:=NULL;RETURN NEW;END IF;
+  ELSIF TG_TABLE_NAME='v2_admin_batch_items' THEN
+   IF (NEW.observation_id IS NOT DISTINCT FROM OLD.observation_id OR NEW.observation_id IS NULL)
    AND (NEW.contribution_id IS NOT DISTINCT FROM OLD.contribution_id OR NEW.contribution_id IS NULL)
    AND to_jsonb(NEW)-ARRAY['observation_id','contribution_id']=to_jsonb(OLD)-ARRAY['observation_id','contribution_id']
-   THEN RETURN NEW;
-  ELSIF TG_TABLE_NAME='v2_admin_core_threads' AND NEW.contribution_id IS NULL
-   AND to_jsonb(NEW)-'contribution_id'=to_jsonb(OLD)-'contribution_id' THEN RETURN NEW;
+   THEN RETURN NEW;END IF;
+  ELSIF TG_TABLE_NAME='v2_admin_core_threads' THEN
+   IF NEW.contribution_id IS NULL AND to_jsonb(NEW)-'contribution_id'=to_jsonb(OLD)-'contribution_id' THEN RETURN NEW;END IF;
   END IF;
  END IF;
  RAISE EXCEPTION 'v2_admin_history_immutable' USING ERRCODE='23514';
