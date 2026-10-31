@@ -1,4 +1,5 @@
 import {registerPickupInvitationTests} from './pickup-invitation.cases';
+import {registerAdminBatchTests} from './admin-batches.cases';
 import {registerPromptControlTests} from './prompt-controls.cases';
 import {registerPickupQuestionTests} from './pickup-question.cases';
 import { registerRouteObservationTests } from './route-observations.cases';
@@ -841,3 +842,4 @@ registerPickupQuestionTests(() => ({db,user,other,origin,destination}));
 registerPromptControlTests(() => ({db,user,other,connectionString}));
 
 registerPickupInvitationTests(()=>({db,user,other,origin,destination}));
+registerAdminBatchTests(()=>({db,user,other,origin,destination,corridor}));
