@@ -1,6 +1,8 @@
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { renderAdminConsole, renderConsoleAccess, type ConsoleRoute } from './adminConsoleView';
+import {readAdminClaims,parseAdminSelection,adminDigest,validAdminId} from '../lib/adminEvidence';
+import {getOrigin} from '../lib/auth';
 
 const router: IRouter = Router();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,6 +72,51 @@ router.get('/admin-console', async (req, res) => {
     // shared-secret administration, nor expose database error details.
     res.status(503).send(renderConsoleAccess('Administration is unavailable', 'Your records have not changed. Try opening the workspace again.', false));
   }
+});
+
+// Private JSON reads/previews are deliberately outside the public native API.
+// They share named authority, not the legacy shared-secret admin session.
+router.use('/admin-console',async(req,res,next)=>{
+  res.setHeader('Cache-Control','private, no-store');res.vary('Cookie');res.vary('Authorization');
+  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
+  if(!req.isAuthenticated()){res.status(401).json({code:'AUTH_REQUIRED',error:'Sign in to administration.'});return;}
+  try{
+    const {rows}=await pool.query(`SELECT 1 FROM public.v2_review_roles r JOIN public.users u ON u.id=r.user_id
+      WHERE r.user_id=$1 AND r.role='administrator' AND r.revoked_at IS NULL
+      AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=r.user_id)`,[req.user.id]);
+    if(!rows.length){res.status(403).json({code:'ADMIN_REQUIRED',error:'Administrative access is required.'});return;}
+    next();
+  }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Administration is temporarily unavailable.'});}
+});
+router.get('/admin-console/evidence',async(req,res)=>{
+  if(!req.isAuthenticated())return;
+  if(Object.keys(req.query).join(',')!=='record'||!validAdminId(req.query.record)){
+    res.status(400).json({code:'INVALID_RECORD',error:'Choose a route from the catalogue.'});return;
+  }
+  try{
+    const data=await readAdminClaims(req.user.id,[req.query.record]);
+    if(!data.routes.length){res.status(404).json({code:'RECORD_UNAVAILABLE',error:'This route is unavailable.'});return;}
+    res.json(data);
+  }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Evidence could not be checked.'});}
+});
+router.post('/admin-console/preview',async(req,res)=>{
+  if(!req.isAuthenticated())return;
+  if(req.get('X-Mabhazi-Account')!==req.user.id){res.status(409).json({code:'ACCOUNT_CHANGED',error:'Reopen the dashboard with your current account.'});return;}
+  if(!req.is('application/json')){res.status(415).json({code:'JSON_REQUIRED',error:'Submit the selection as JSON.'});return;}
+  if(req.headers.origin!==getOrigin(req)){res.status(403).json({code:'ORIGIN_REJECTED',error:'Reopen the private workspace.'});return;}
+  const input=parseAdminSelection(req.body);
+  if(!input||Object.keys(req.query).length){res.status(422).json({code:'INVALID_SELECTION',error:'Choose up to 100 routes and the properties to review.'});return;}
+  try{
+    const data=await readAdminClaims(req.user.id,input.routeIds);
+    if(data.routes.length!==input.routeIds.length){res.status(409).json({code:'SELECTION_CHANGED',error:'Some selected reports changed or are unavailable. Refresh the selection.'});return;}
+    const claims=data.claims.filter(c=>input.fields.includes(c.field as typeof input.fields[number]));
+    const missing=input.routeIds.flatMap(id=>input.fields.filter(f=>!claims.some(c=>c.routeId===id&&c.field===f)).map(field=>({routeId:id,field})));
+    res.json({selection:input,claims,missing,digest:adminDigest({actor:req.user.id,selection:input,claims:claims.map(c=>c.digest)}),
+      ready:claims.filter(c=>c.review==='pending'&&!c.attention).length,
+      held:claims.filter(c=>c.review==='pending'&&c.attention).length,
+      reviewed:claims.filter(c=>c.review!=='pending').length,
+      writable:false});
+  }catch(error){const large=(error as Error).message==='admin_selection_too_large';res.status(large?422:503).json({code:large?'SELECTION_TOO_LARGE':'ADMIN_UNAVAILABLE',error:large?'Choose fewer reports for this batch.':'The review preview could not load.'});}
 });
 
 export default router;
