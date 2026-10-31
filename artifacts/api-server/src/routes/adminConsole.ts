@@ -5,6 +5,8 @@ import {readAdminClaims,parseAdminSelection,adminDigest,validAdminId} from '../l
 import {getOrigin} from '../lib/auth';
 import adminReviewActions,{adminActionsEnabled} from './adminReviewActions';
 import {createReviewPreview,type AdminReviewItem} from '../lib/adminReviewToken';
+import {renderAdminWorkbench} from './adminWorkbenchView';
+import {adminWorkbenchClient} from './adminWorkbenchClient';
 
 const router: IRouter = Router();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,6 +44,12 @@ router.get('/admin-console', async (req, res) => {
     const record = typeof req.query.record === 'string' ? req.query.record : null;
     if (q.length > 120 || cursor !== null && !uuid.test(cursor) || record !== null && !uuid.test(record) || record !== null && cursor !== null) {
       res.status(400).send(renderConsoleAccess('Check the route search', 'Use a city, operator or a record link from the catalogue.', false)); return;
+    }
+    if(process.env.NAMED_ADMIN_CONSOLE_ENABLED==='true'){
+      const name=req.user.displayName||[req.user.firstName,req.user.lastName].filter(Boolean).join(' ')||'Administrator';
+      res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+      res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
+      res.send(renderAdminWorkbench(name,actor));return;
     }
     const result = await pool.query(`SELECT l.subject_id AS id,s.revision::text AS revision,s.lifecycle,
       origin.name AS origin,destination.name AS destination,
@@ -82,6 +90,7 @@ router.use('/admin-console',async(req,res,next)=>{
   res.setHeader('Cache-Control','private, no-store');res.vary('Cookie');res.vary('Authorization');
   res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
   if(!req.isAuthenticated()){res.status(401).json({code:'AUTH_REQUIRED',error:'Sign in to administration.'});return;}
+  if(req.get('X-Mabhazi-Account')!==undefined&&req.get('X-Mabhazi-Account')!==req.user.id){res.status(409).json({code:'ACCOUNT_CHANGED',error:'Reopen the dashboard with your current account.'});return;}
   try{
     const {rows}=await pool.query(`SELECT 1 FROM public.v2_review_roles r JOIN public.users u ON u.id=r.user_id
       WHERE r.user_id=$1 AND r.role='administrator' AND r.revoked_at IS NULL
@@ -89,6 +98,39 @@ router.use('/admin-console',async(req,res,next)=>{
     if(!rows.length){res.status(403).json({code:'ADMIN_REQUIRED',error:'Administrative access is required.'});return;}
     next();
   }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Administration is temporarily unavailable.'});}
+});
+router.get('/admin-console/ui.js',(_req,res)=>{
+  res.type('application/javascript');res.send(adminWorkbenchClient);
+});
+router.get('/admin-console/data',async(req,res)=>{
+  if(!req.isAuthenticated())return;
+  const keys=Object.keys(req.query),q=typeof req.query.q==='string'?req.query.q.trim():'',cursor=req.query.cursor;
+  const limit=req.query.limit===undefined?100:Number(req.query.limit);
+  if(keys.some(k=>!['q','cursor','limit'].includes(k))||req.query.q!==undefined&&typeof req.query.q!=='string'||q.length>120
+    ||cursor!==undefined&&!validAdminId(cursor)||req.query.limit!==undefined&&!['20','100'].includes(String(req.query.limit))||![20,100].includes(limit)){
+    res.status(400).json({code:'INVALID_QUERY',error:'Use a city, operator or route reference.'});return;
+  }
+  try{
+    const result=await pool.query(`SELECT l.subject_id id,s.revision::text revision,s.lifecycle,
+      origin.name origin,destination.name destination,coalesce(l.operator_name,op.display_name) operator,
+      lpad((l.reported_departure_seconds/3600)::text,2,'0')||':'||lpad(((l.reported_departure_seconds%3600)/60)::text,2,'0') departure,
+      EXISTS(SELECT 1 FROM public.v2_public_lead_reports p WHERE p.subject_id=l.subject_id) visible
+      FROM public.v2_leads l JOIN public.v2_subjects s ON s.id=l.subject_id AND s.kind='lead'
+      JOIN public.v2_contributions c ON c.id=l.initial_contribution_id AND c.original_subject_id=l.subject_id JOIN public.users author ON author.id=c.user_id
+      LEFT JOIN public.v2_corridors corridor ON corridor.id=l.corridor_id
+      LEFT JOIN public.cities origin ON origin.id=corridor.origin_city_id LEFT JOIN public.cities destination ON destination.id=corridor.destination_city_id
+      LEFT JOIN public.v2_operators op ON op.subject_id=l.operator_subject_id
+      WHERE l.intake_kind='community' AND NOT l.attribution_erased
+      AND strpos(lower(concat_ws(' ',origin.name,destination.name,coalesce(l.operator_name,op.display_name),l.subject_id::text,
+       lpad((l.reported_departure_seconds/3600)::text,2,'0')||':'||lpad(((l.reported_departure_seconds%3600)/60)::text,2,'0'))),lower($1))>0
+      AND ($2::uuid IS NULL OR l.subject_id>$2)
+      AND EXISTS(SELECT 1 FROM public.v2_review_roles r JOIN public.users u ON u.id=r.user_id WHERE r.user_id=$3
+       AND r.role='administrator' AND r.revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=r.user_id))
+      ORDER BY l.subject_id LIMIT $4`,[q,cursor??null,req.user.id,limit+1]);
+    const rows=result.rows.slice(0,limit),ids=rows.map(r=>r.id as string),data=ids.length?await readAdminClaims(req.user.id,ids):{claims:[],routes:[]};
+    if(data.routes.length!==ids.length){res.status(409).json({code:'CATALOGUE_CHANGED',error:'The route list changed. Refresh to continue.'});return;}
+    res.json({rows,claims:data.claims,hasMore:result.rows.length>limit,...(result.rows.length>limit?{nextCursor:ids.at(-1)}:{})});
+  }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Route records could not be checked.'});}
 });
 router.get('/admin-console/evidence',async(req,res)=>{
   if(!req.isAuthenticated())return;

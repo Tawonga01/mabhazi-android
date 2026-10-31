@@ -5,7 +5,7 @@ import type pg from 'pg';
 import {createReviewPreview} from '../lib/adminReviewToken';
 type Context={admin:pg.Client;base:string;accounts:string[];tokens:string[];leadBody:()=>Record<string,unknown>};
 export function registerAdminActionTests(context:()=>Context){
- const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string;
+ const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string;let firstBatch:string;
  const q=(sql:string,values:unknown[]=[])=>context().admin.query(sql,values);
  async function enabled<T>(fn:()=>Promise<T>){const previous=process.env.NAMED_ADMIN_CONSOLE_ENABLED;process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';try{return await fn();}finally{if(previous===undefined)delete process.env.NAMED_ADMIN_CONSOLE_ENABLED;else process.env.NAMED_ADMIN_CONSOLE_ENABLED=previous;}}
  async function call(path:string,body?:unknown,extra:Record<string,string>={},sid:string|null=token){
@@ -39,6 +39,7 @@ export function registerAdminActionTests(context:()=>Context){
   const original=(await q('SELECT payload FROM v2_contributions WHERE original_subject_id=$1',[route])).rows[0].payload;
   const [a,b]=await Promise.all([call('/actions',body),call('/actions',body)]);assert.equal(a.status,200);assert.equal(b.status,200);assert.deepEqual(a.value,b.value);
   assert.equal(a.value.items.length,2);assert.ok(a.value.items.every((i:any)=>i.outcome==='approved'));
+  firstBatch=body.clientRequestId;
   assert.equal((await q('SELECT count(*) FROM v2_admin_batches WHERE id=$1',[body.clientRequestId])).rows[0].count,'1');
   assert.deepEqual((await q('SELECT payload FROM v2_contributions WHERE original_subject_id=$1',[route])).rows[0].payload,original);
   assert.deepEqual((await call('/receipts/'+body.clientRequestId)).value,a.value);
@@ -78,6 +79,45 @@ export function registerAdminActionTests(context:()=>Context){
   const r=await fetch(context().base+'/admin/journeys/1',{method:'DELETE',headers:{'X-Admin-Secret':process.env.ADMIN_SECRET!,Origin:'https://api.mabhazi.com'}});
   assert.equal(r.status,410);assert.equal((await r.json() as {code:string}).code,'NAMED_ADMIN_REQUIRED');
   assert.equal((await q('SELECT count(*) FROM journeys')).rows[0].count,before);
+ }));
+ test('admin actions: history can reverse one exact property while preserving its neighbour and original receipt',async()=>enabled(async()=>{
+  const history=await call('/history');assert.equal(history.status,200);assert.ok(history.value.batches.some((b:any)=>b.id===firstBatch));
+  const original=(await call('/receipts/'+firstBatch)).value,one=original.items[0];
+  const p=await call('/reverse-preview',{batchId:firstBatch,reviewIds:[one.reviewId]});assert.equal(p.status,200);assert.equal(p.value.ready,1);
+  const r=await call('/actions',{clientRequestId:randomUUID(),previewToken:p.value.previewToken,reason:'decision_incorrect'});
+  assert.equal(r.status,200);assert.equal(r.value.items[0].outcome,'reversed');
+  assert.deepEqual((await call('/receipts/'+firstBatch)).value,original);
+  const claims=(await call('/evidence?record='+route)).value.claims;
+  assert.equal(claims.find((c:any)=>c.field===one.fieldKey).review,'pending');
+  assert.equal(claims.find((c:any)=>c.field===original.items[1].fieldKey).review,'approved');
+  const again=await call('/reverse-preview',{batchId:firstBatch,reviewIds:[one.reviewId]});assert.equal(again.value.ready,0);assert.equal(again.value.held.length,1);
+ }));
+ test('admin workbench: the actual page and application script are private, branded and constrained by CSP',async()=>enabled(async()=>{
+  const html=await fetch(context().base+'/admin-console',{headers:{Authorization:'Bearer '+token}});assert.equal(html.status,200);
+  const page=await html.text();assert.ok(page.includes('workbench-screen'));assert.ok(page.includes('data:image/png;base64,'));assert.ok(page.includes('/api/admin-console/ui.js'));
+  assert.match(html.headers.get('content-security-policy')??'',/script-src 'self'/);assert.match(html.headers.get('x-robots-tag')??'',/noindex/);
+  const script=await fetch(context().base+'/admin-console/ui.js',{headers:{Authorization:'Bearer '+token}});assert.equal(script.status,200);
+  assert.match(script.headers.get('content-type')??'',/javascript/);assert.ok((await script.text()).includes('mabhazi-admin-recovery'));
+  assert.equal((await call('/ui.js',undefined,{},null)).status,401);assert.equal((await call('/ui.js',undefined,{},context().tokens[0])).status,403);
+ }));
+ test('admin workbench: data pages retain typed evidence, support bounded searching and enforce account binding',async()=>enabled(async()=>{
+  const data=await call('/data?limit=20');assert.equal(data.status,200);assert.ok(data.value.rows.length>0&&data.value.rows.length<=20);
+  assert.ok(data.value.rows.every((r:any)=>data.value.claims.some((c:any)=>c.routeId===r.id)));assert.ok(data.value.claims.some((c:any)=>c.field==='route.origin'));
+  const one=await call('/data?limit=100&q='+route);assert.equal(one.status,200);assert.equal(one.value.rows.length,1);assert.equal(one.value.rows[0].id,route);
+  assert.equal((await call('/data?limit=100&q=does-not-exist')).value.rows.length,0);
+  for(const path of ['/data?limit=1000','/data?limit=20&limit=100','/data?cursor=invalid','/data?actor='+owner,'/history?cursor=invalid'])assert.equal((await call(path)).status,400,path);
+  for(const path of ['/data','/history','/evidence?record='+route]){
+   assert.equal((await call(path,undefined,{},null)).status,401);assert.equal((await call(path,undefined,{},context().tokens[0])).status,403);
+   assert.equal((await call(path,undefined,{'X-Mabhazi-Account':context().accounts[0]})).status,409);
+  }
+ }));
+ test('admin workbench: reversal previews reject foreign, empty and duplicate decisions without writes',async()=>enabled(async()=>{
+  const before=(await q('SELECT count(*) FROM v2_admin_batches')).rows[0].count;
+  for(const reviewIds of [[],[randomUUID()],[firstBatch,firstBatch]])assert.equal((await call('/reverse-preview',{batchId:firstBatch,reviewIds})).status,422);
+  assert.equal((await call('/reverse-preview',{batchId:randomUUID()})).status,404);
+  assert.equal((await call('/reverse-preview',{batchId:firstBatch,actor:owner})).status,422);
+  assert.equal((await call('/reverse-preview',{batchId:firstBatch},{Origin:'https://untrusted.example'})).status,403);
+  assert.equal((await q('SELECT count(*) FROM v2_admin_batches')).rows[0].count,before);
  }));
  test('admin actions: account erasure closes an old session and redacts receipt actor references',async()=>enabled(async()=>{
   await q('DELETE FROM users WHERE id=$1',[owner]);assert.equal((await call('/receipts/'+randomUUID())).status,401);

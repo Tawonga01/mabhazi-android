@@ -2,7 +2,7 @@ export type ConsoleRoute = {
   id: string; revision: string; lifecycle: string; origin: string | null;
   destination: string | null; operator: string | null; departure: string | null; visible: boolean;
 };
-const escape = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+export const escape = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const path = '/api/admin-console';
 const link = (query: Record<string,string>) => path+'?'+new URLSearchParams(query).toString();
 const clock = (value: string | null) => {
