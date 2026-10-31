@@ -70,9 +70,11 @@ const evidenceSql=`WITH authority AS MATERIALIZED (
 SELECT c.*,current_field.field_decision_id,
  CASE WHEN c.observation_id IS NOT NULL THEN public.v2_read_field(c.subject_id,c.field_key,c.scope_key) END field_read,
  d.assessment_id,d.invalidated,d.erased,d.review_blocked,d.dispute_status,d.next_recheck_at,
- resolution.review_id,resolution.chosen_observation_id,resolution.erased resolution_erased,
- review.action,review.evidence_erased,review.actor_erased,review_case.state case_state,
- coalesce(review_case.revision,0)::text case_revision
+ coalesce(core_review.id,resolution.review_id) review_id,resolution.chosen_observation_id,resolution.erased resolution_erased,
+ coalesce(core_review.action,review.action) action,coalesce(core_review.evidence_erased,review.evidence_erased,false) evidence_erased,
+ coalesce(core_review.actor_erased,review.actor_erased,false) actor_erased,coalesce(core_case.state,review_case.state) case_state,
+ coalesce(core_case.revision,review_case.revision,0)::text case_revision,
+ core_thread.contribution_id=c.contribution_id core_binding_valid
  FROM claims c
  LEFT JOIN public.v2_current_fields current_field ON current_field.subject_id=c.subject_id
   AND current_field.field_key=c.field_key AND current_field.scope_key=c.scope_key
@@ -82,6 +84,10 @@ SELECT c.*,current_field.field_decision_id,
  LEFT JOIN public.v2_review_cases review_case ON review_case.id=thread.case_id
  LEFT JOIN public.v2_review_decisions review ON review.id=review_case.last_decision_id
  LEFT JOIN public.v2_field_resolutions resolution ON resolution.review_id=review.id
+ LEFT JOIN public.v2_admin_core_threads core_thread ON core_thread.route_subject_id=c.route_id
+  AND core_thread.field_key=c.field_key AND c.observation_id IS NULL
+ LEFT JOIN public.v2_review_cases core_case ON core_case.id=core_thread.case_id
+ LEFT JOIN public.v2_review_decisions core_review ON core_review.id=core_case.last_decision_id
  ORDER BY c.route_id,c.field_key,c.submitted_at,c.observation_id NULLS FIRST LIMIT 2001`;
 
 export async function readAdminClaims(actor:string,routeIds:string[]):Promise<{claims:AdminClaim[];routes:string[]}> {
@@ -92,11 +98,11 @@ export async function readAdminClaims(actor:string,routeIds:string[]):Promise<{c
   const claims:AdminClaim[]=rows.map(r=>{
     const field=r.field_key,live=r.status==='active',core=field.startsWith('route.');
     const reviewed=r.case_state==='resolved'&&!r.evidence_erased&&!r.resolution_erased&&r.review_id;
-    const review=reviewed&&r.action==='accept'&&r.chosen_observation_id===r.observation_id?'approved':
+    const review=reviewed&&r.action==='accept'&&(core?r.core_binding_valid:r.chosen_observation_id===r.observation_id)?'approved':
       reviewed&&r.action==='reject'?'rejected':'pending';
-    // A field approval must use a fresh compatible assessment. Core payload
-    // assertions require their own adapter; do not counterfeit an observation.
-    const attention=!live?'Evidence is '+r.status:core?'Initial route assertion':
+    // The endpoint adapter reviews the immutable initial contribution. Other
+    // claims use the existing field assessment; no synthetic observations.
+    const attention=!live?'Evidence is '+r.status:core?null:
       !r.assessment_id?'Awaiting evidence processing':r.invalidated||r.erased?'Assessment changed':
       !['assessed','review_required'].includes(r.field_read?.status)?'Assessment needs refreshing':r.review_blocked?'Review is already open':
       r.dispute_status==='open'?'Conflicting evidence':r.next_recheck_at&&new Date(r.next_recheck_at).getTime()<=Date.now()?'Assessment needs refreshing':null;

@@ -26,6 +26,14 @@ import {
 } from "./adminAuth";
 
 const router: IRouter = Router();
+// Once named review is enabled, old shared-secret mutation paths cannot bypass
+// its actor, receipt, restoration and evidence contracts. Analytics stay read-only.
+router.use((req,res,next)=>{
+  if(process.env.NAMED_ADMIN_CONSOLE_ENABLED==='true'&&req.path.startsWith('/admin')&&!['GET','HEAD','OPTIONS'].includes(req.method)){
+    res.status(410).json({code:'NAMED_ADMIN_REQUIRED',error:'Use the named administrative workspace for changes.'});return;
+  }
+  next();
+});
 
 type AdminAuthMethod = "session" | "header";
 type AdminRequest = Request & { adminAuthMethod?: AdminAuthMethod };

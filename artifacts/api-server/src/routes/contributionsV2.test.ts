@@ -1,5 +1,6 @@
 import {registerAdminConsoleTests} from './adminConsole.cases';
 import {registerAdminEvidenceTests} from './adminEvidence.cases';
+import {registerAdminActionTests} from './adminActions.cases';
 import {registerPickupInvitationApiTests} from './pickupInvitationsV2.cases';
 import {registerPromptControlApiTests} from './promptControlsV2.cases';
 import {registerDepartureBoardTests} from './departureBoardV2.cases';
@@ -258,3 +259,4 @@ registerPickupInvitationApiTests(()=>({admin,cities,accounts,tokens,request,lead
 
 registerAdminConsoleTests(()=>({admin,base,accounts,tokens,leadBody:body}));
 registerAdminEvidenceTests(()=>({admin,base,accounts,tokens,cities,leadBody:body}));
+registerAdminActionTests(()=>({admin,base,accounts,tokens,leadBody:body}));

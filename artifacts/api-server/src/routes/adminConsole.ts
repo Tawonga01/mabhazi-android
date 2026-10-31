@@ -3,6 +3,8 @@ import { pool } from '@workspace/db';
 import { renderAdminConsole, renderConsoleAccess, type ConsoleRoute } from './adminConsoleView';
 import {readAdminClaims,parseAdminSelection,adminDigest,validAdminId} from '../lib/adminEvidence';
 import {getOrigin} from '../lib/auth';
+import adminReviewActions,{adminActionsEnabled} from './adminReviewActions';
+import {createReviewPreview,type AdminReviewItem} from '../lib/adminReviewToken';
 
 const router: IRouter = Router();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -111,12 +113,17 @@ router.post('/admin-console/preview',async(req,res)=>{
     if(data.routes.length!==input.routeIds.length){res.status(409).json({code:'SELECTION_CHANGED',error:'Some selected reports changed or are unavailable. Refresh the selection.'});return;}
     const claims=data.claims.filter(c=>input.fields.includes(c.field as typeof input.fields[number]));
     const missing=input.routeIds.flatMap(id=>input.fields.filter(f=>!claims.some(c=>c.routeId===id&&c.field===f)).map(field=>({routeId:id,field})));
+    const writable=await adminActionsEnabled();
+    const items:AdminReviewItem[]=claims.filter(c=>c.review==='pending'&&!c.attention).map(c=>({routeId:c.routeId,subjectId:c.subjectId,
+      contributionId:c.contributionId,observationId:c.observationId,fieldKey:c.field,subjectRevision:c.subjectRevision,
+      observationRevision:c.observationRevision,targetRevision:c.targetRevision,assessmentId:c.assessmentId,caseRevision:c.caseRevision}));
     res.json({selection:input,claims,missing,digest:adminDigest({actor:req.user.id,selection:input,claims:claims.map(c=>c.digest)}),
       ready:claims.filter(c=>c.review==='pending'&&!c.attention).length,
       held:claims.filter(c=>c.review==='pending'&&c.attention).length,
       reviewed:claims.filter(c=>c.review!=='pending').length,
-      writable:false});
+      writable,...(writable&&items.length?{previewToken:createReviewPreview(req.user.id,'approve',items,process.env.ADMIN_SECRET??'')}:{})});
   }catch(error){const large=(error as Error).message==='admin_selection_too_large';res.status(large?422:503).json({code:large?'SELECTION_TOO_LARGE':'ADMIN_UNAVAILABLE',error:large?'Choose fewer reports for this batch.':'The review preview could not load.'});}
 });
 
+router.use('/admin-console',adminReviewActions);
 export default router;

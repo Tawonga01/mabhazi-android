@@ -115,4 +115,17 @@ export function registerAdminBatchTests(context:()=>Context){
   await invalid("UPDATE v2_admin_batches SET reason_code='evidence_changed' WHERE id=$1",[r.id]);
   await invalid("DELETE FROM v2_admin_batch_items WHERE batch_id=$1",[r.id]);
  });
+ test('admin batches: 100 explicit reports share one receipt with independent endpoint decisions',async()=>{
+  const items=[];for(let n=0;n<100;n++){const f=await fixture();items.push(await item(f,'route.origin'));}
+  const r=await apply(items);assert.equal(r.items.length,100);assert.ok(r.items.every((x:any)=>x.outcome==='approved'));
+  assert.equal(new Set(r.items.map((x:any)=>x.reviewId)).size,100);
+ });
+ test('admin batches: an old reversal preserves a newer review of the same property',async()=>{
+  const f=await fixture(),first=await apply([await item(f,'route.origin')]);
+  const revision=async()=>(await q("SELECT c.revision FROM v2_admin_core_threads t JOIN v2_review_cases c ON c.id=t.case_id WHERE t.route_subject_id=$1 AND t.field_key='route.origin'",[f.subject])).rows[0].revision;
+  await apply([{...await item(f,'route.origin'),caseRevision:String(await revision()),reviewId:first.items[0].reviewId}],randomUUID(),'reverse','decision_incorrect');
+  const newer=await apply([{...await item(f,'route.origin'),caseRevision:String(await revision())}]);assert.equal(newer.items[0].outcome,'approved');
+  const old=await apply([{...await item(f,'route.origin'),caseRevision:String(await revision()),reviewId:first.items[0].reviewId}],randomUUID(),'reverse','decision_incorrect');
+  assert.equal(old.items[0].outcome,'newer_decision_kept');assert.equal(old.items[0].reviewId,null);
+ });
 }

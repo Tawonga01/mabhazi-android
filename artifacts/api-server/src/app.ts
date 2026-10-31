@@ -50,6 +50,14 @@ app.use(
 );
 app.use(website);
 app.use(cookieParser());
+app.use('/api/admin-console',express.json({limit:1048576,inflate:false}));
+const adminBodyErrors:ErrorRequestHandler=(error,_req,res,next)=>{
+  const status=(error as {status?:number}).status;
+  if(![400,413,415].includes(status??0)){next(error);return;}
+  res.setHeader('Cache-Control','private, no-store');
+  res.status(status!).json({code:status===413?'BODY_TOO_LARGE':'INVALID_JSON',error:'Submit a valid uncompressed review action within the selection limit.'});
+};
+app.use('/api/admin-console',adminBodyErrors);
 app.use('/api/v2', express.json({ limit: 65536, inflate: false }));
 const v2BodyErrors: ErrorRequestHandler = (error, _req, res, next) => {
   const status = (error as { status?: number }).status;
