@@ -18,7 +18,8 @@ CREATE TABLE public.v2_admin_core_actions(
  reversed_action_id uuid REFERENCES public.v2_admin_core_actions(id),
  outcome text NOT NULL CHECK(outcome IN('corrected','reversed','changed','unavailable','unsafe_dependencies','already_reversed','unchanged')),
  created_at timestamptz NOT NULL DEFAULT now(),
- CHECK((actor_user_id IS NULL AND request_digest IS NULL) OR (actor_user_id IS NOT NULL AND request_digest~'^[0-9a-f]{64}$')),
+ CHECK(((actor_user_id IS NULL OR contribution_id IS NULL) AND request_digest IS NULL)
+  OR (actor_user_id IS NOT NULL AND contribution_id IS NOT NULL AND request_digest IS NOT NULL AND request_digest~'^[0-9a-f]{64}$')),
  CHECK((operation='correct' AND reversed_action_id IS NULL) OR (operation='reverse' AND reversed_action_id IS NOT NULL))
 );
 CREATE INDEX v2_admin_core_actions_route_idx ON public.v2_admin_core_actions(route_subject_id,position);
@@ -184,7 +185,8 @@ BEGIN
  END IF;
  INSERT INTO public.v2_admin_core_actions(id,actor_user_id,contribution_id,route_subject_id,request_digest,operation,field_key,
   proposed_value,knowledge_basis,observed_date,reason_code,expected_revision,reversed_action_id,outcome)
- VALUES(request,actor,source,route,digest,operation,field,proposal,basis,observed,reason,(input->>'revision')::bigint,reverse_id,result);
+ VALUES(request,actor,source,route,CASE WHEN source IS NULL THEN NULL ELSE digest END,operation,field,
+  CASE WHEN source IS NULL THEN NULL ELSE proposal END,basis,CASE WHEN source IS NULL THEN NULL ELSE observed END,reason,(input->>'revision')::bigint,reverse_id,result);
  RETURN public.v2_api_admin_core_receipt(actor,request);
 END;$$;
 

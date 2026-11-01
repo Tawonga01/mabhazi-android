@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import type pg from 'pg';
 type Context={admin:pg.Client;base:string;accounts:string[];tokens:string[];leadBody:()=>Record<string,unknown>};
 export function registerAdminCoreApiTests(context:()=>Context){
- const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string;
+ const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string,submission:string;
  const q=(sql:string,values:unknown[]=[])=>context().admin.query(sql,values);
  async function enabled<T>(fn:()=>Promise<T>){const a=process.env.NAMED_ADMIN_CONSOLE_ENABLED,b=process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED;
   process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED='true';
@@ -18,7 +18,7 @@ export function registerAdminCoreApiTests(context:()=>Context){
   await q("INSERT INTO sessions(sid,sess,expire) VALUES($1,$2,now()+interval '1 day')",[token,{user:{id:owner},access_token:'synthetic',expires_at:Math.floor(Date.now()/1000)+3600}]);
   await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','test_bootstrap')",[owner]);
   const saved=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify(context().leadBody())});
-  assert.equal(saved.status,200);route=(await saved.json() as any).subjectId;
+  assert.equal(saved.status,200);const receipt=await saved.json() as any;route=receipt.subjectId;submission=receipt.clientSubmissionId;
   assert.equal((await call('/'+route)).status,503);
   await enabled(async()=>{const r=await call('/'+route);assert.equal(r.status,200);assert.equal(r.value.current['departure.reported'].time,'00:00');assert.equal(Number(r.value.dependencies),0);assert.match(r.headers.get('cache-control')??'',/no-store/);});
  });
@@ -37,6 +37,11 @@ export function registerAdminCoreApiTests(context:()=>Context){
   const state=await call('/'+route);assert.equal(state.value.current['departure.reported'].time,'08:00');assert.equal(state.value.original['departure.reported'].time,'00:00');
   assert.equal(state.value.history.length,1);
  }));
+ test('core API: saved city choices resolve by exact ID and ambiguous city requests are rejected',async()=>enabled(async()=>{
+  const state=(await call('/'+route)).value,id=state.original['route.origin'].cityId;
+  const found=await call('/cities?id='+id);assert.equal(found.status,200);assert.equal(found.value.cities.length,1);assert.equal(found.value.cities[0].id,id);
+  assert.equal((await call('/cities?id='+id+'&q=city')).status,400);assert.equal((await call('/cities?id='+id+'&unexpected=1')).status,400);
+ }));
  test('core API: supported public readers share corrected values/provenance while old readers withhold the original',async()=>enabled(async()=>{
   const modern={'X-Mabhazi-Route-Display':'reviewed-core/1'};
   const old=await fetch(context().base+'/v2/subjects/'+route);assert.equal(old.status,404);
@@ -54,6 +59,10 @@ export function registerAdminCoreApiTests(context:()=>Context){
   const entry=(await board.json() as any).entries.find((i:any)=>i.subjectId===route);assert.ok(entry);assert.equal(entry.reportedTime,'08:00');
   assert.equal(entry.countdownEligible,false);assert.equal(entry.nextDepartureAt,undefined);assert.deepEqual(entry.coreCorrections,displayed.coreCorrections);
   const unknown=await fetch(context().base+'/v2/subjects/'+route,{headers:{'X-Mabhazi-Route-Display':'future'}});assert.equal(unknown.status,400);
+  const owned=await fetch(context().base+'/v2/my-routes/'+submission,{headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0]}});
+  assert.equal(owned.status,200);const own=(await owned.json() as any).route;assert.equal(own.departureTime,'00:00');assert.equal(own.availability,'unavailable');assert.equal(own.currentLeadRevision,undefined);
+  const safety=await fetch(context().base+'/v2/subjects/'+route+'/safety',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[1],'X-Mabhazi-Account':context().accounts[1],'Content-Type':'application/json'},body:JSON.stringify({action:'report',reason:'inaccurate'})});
+  assert.equal(safety.status,200);assert.equal((await safety.json() as any).status,'reported');
  }));
  test('core API: stale proposal returns an unchanged receipt and reversal preserves original evidence',async()=>enabled(async()=>{
   const preview=await call('/preview',{...proposal(),value:{time:'09:00',basis:'scheduled'}});
@@ -62,7 +71,7 @@ export function registerAdminCoreApiTests(context:()=>Context){
   assert.equal((await call('/actions',{clientRequestId:randomUUID(),previewToken:preview.value.previewToken})).value.outcome,'changed');
   const state=(await call('/'+route)).value,clock=state.history.find((a:any)=>a.field==='departure.reported'&&a.outcome==='corrected');
   const reverse=await call('/preview',{...proposal(),operation:'reverse',value:null,basis:'unprovided',observedDate:null,reason:'decision_incorrect',reversedActionId:clock.id});
-  assert.equal(reverse.status,200);assert.equal((await call('/actions',{clientRequestId:randomUUID(),previewToken:reverse.value.previewToken})).value.outcome,'reversed');
+  assert.equal(reverse.status,200);assert.equal(reverse.value.after.time,'00:00');assert.equal((await call('/actions',{clientRequestId:randomUUID(),previewToken:reverse.value.previewToken})).value.outcome,'reversed');
   const current=(await call('/'+route)).value.current;assert.equal(current['departure.reported'].time,'00:00');assert.equal(current['operator.reported'].name,'Core corrected operator');
  }));
  test('core API: role revocation denies the open editor and receipt recovery',async()=>enabled(async()=>{

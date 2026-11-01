@@ -34,6 +34,9 @@ async function state(actor:string,id:string){
    +(CASE WHEN r.operator_subject_id IS NULL THEN 0 ELSE 1 END)
    +(SELECT count(*) FROM public.v2_association_links a WHERE a.from_subject_id=r.subject_id OR a.to_subject_id=r.subject_id)
    +(SELECT count(*) FROM public.v2_observation_targets t JOIN public.v2_observations o ON o.id=t.observation_id WHERE o.original_subject_id=r.subject_id AND t.assignment_id IS NOT NULL) dependencies,
+  EXISTS(SELECT 1 FROM public.v2_public_reviewed_lead_reports p WHERE p.subject_id=r.subject_id) public_visible,
+  (SELECT count(*) FROM public.v2_jobs j WHERE j.subject_id=r.subject_id AND j.kind IN('assess','refresh_tasks') AND j.state IN('pending','leased')) pending_work,
+  (SELECT count(*) FROM public.v2_jobs j WHERE j.subject_id=r.subject_id AND j.kind IN('assess','refresh_tasks') AND j.state='failed') failed_work,
   coalesce((SELECT jsonb_agg(x.receipt ORDER BY x.position DESC) FROM (SELECT a.position,public.v2_api_admin_core_receipt($1,a.id) receipt
    FROM public.v2_admin_core_actions a WHERE a.route_subject_id=r.subject_id ORDER BY a.position DESC LIMIT 20) x),'[]'::jsonb) history,
   coalesce((SELECT jsonb_agg(jsonb_build_object('id',c.id,'name',c.name) ORDER BY c.name,c.id) FROM public.cities c
@@ -51,10 +54,11 @@ router.get('/receipts/:requestId',async(req,res)=>{
 });
 router.get('/cities',async(req,res)=>{
  if(!req.isAuthenticated())return;
- if(Object.keys(req.query).some(k=>k!=='q')||typeof req.query.q!=='string'||req.query.q.trim().length<1||req.query.q.length>120){res.status(400).json({code:'INVALID_QUERY',error:'Type a city name.'});return;}
- try{const {rows}=await pool.query(`SELECT c.id,c.name FROM public.cities c WHERE strpos(lower(c.name),lower($1))>0
+ const id=req.query.id,q=req.query.q,byId=typeof id==='string'&&/^[1-9][0-9]{0,9}$/.test(id)&&Number(id)<=2147483647;
+ if(Object.keys(req.query).some(k=>!['q','id'].includes(k))||(id!==undefined?!(byId&&q===undefined):typeof q!=='string'||q.trim().length<1||q.length>120)){res.status(400).json({code:'INVALID_QUERY',error:'Choose a registered city or type its name.'});return;}
+ try{const {rows}=await pool.query(`SELECT c.id,c.name FROM public.cities c WHERE CASE WHEN $3::integer IS NOT NULL THEN c.id=$3 ELSE strpos(lower(c.name),lower($1))>0 END
   AND EXISTS(SELECT 1 FROM public.v2_review_roles r JOIN public.users u ON u.id=r.user_id WHERE r.user_id=$2 AND r.role='administrator'
-   AND r.revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=r.user_id)) ORDER BY c.name,c.id LIMIT 30`,[req.query.q.trim(),req.user.id]);res.json({cities:rows});}
+   AND r.revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=r.user_id)) ORDER BY c.name,c.id LIMIT 30`,[typeof q==='string'?q.trim():'',req.user.id,byId?Number(id):null]);res.json({cities:rows});}
  catch{res.status(503).json({code:'CITIES_UNAVAILABLE',error:'City choices could not load.'});}
 });
 router.get('/:routeId',async(req,res)=>{
@@ -77,10 +81,23 @@ router.post('/preview',async(req,res)=>{
    if(row.current[proposal.field==='route.origin'?'route.destination':'route.origin']?.cityId===id){res.status(422).json({code:'SAME_CITY',error:'Departure and destination must be different.'});return;}
    row.cities=[...row.cities.filter((c:{id:number})=>c.id!==id),...cities.rows];
   }
-  if(proposal.operation==='reverse'&&!row.history.some((a:{id:string;field:string;outcome:string})=>a.id===proposal.reversedActionId&&a.field===proposal.field&&a.outcome==='corrected')){
+  if(proposal.operation==='reverse'&&!row.history.some((a:{id:string;field:string;outcome:string;actorErased:boolean;sourceErased:boolean;value:unknown})=>a.id===proposal.reversedActionId&&a.field===proposal.field&&a.outcome==='corrected'&&!a.actorErased&&!a.sourceErased&&a.value!==null)){
    res.status(409).json({code:'CORRECTION_CHANGED',error:'Reopen that correction from the route history.'});return;
   }
-  res.json({route:row,proposal,previewToken:createCorePreview(proposal,req.user.id,row.revision,process.env.ADMIN_SECRET??''),
+  let after=proposal.value;
+  if(proposal.operation==='reverse'){
+   const {rows}=await pool.query(`SELECT a.proposed_value FROM public.v2_admin_core_actions a WHERE a.route_subject_id=$1 AND a.field_key=$2 AND a.outcome='corrected'
+    AND a.id<>$3 AND NOT EXISTS(SELECT 1 FROM public.v2_admin_core_actions r WHERE r.reversed_action_id=a.id AND r.outcome='reversed')
+    AND EXISTS(SELECT 1 FROM public.v2_review_roles role_now JOIN public.users u ON u.id=role_now.user_id WHERE role_now.user_id=$4
+     AND role_now.role='administrator' AND role_now.revoked_at IS NULL AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs d WHERE d.user_id=role_now.user_id))
+    ORDER BY a.position DESC LIMIT 1`,[proposal.routeId,proposal.field,proposal.reversedActionId,req.user.id]);
+   after=rows.length?rows[0].proposed_value:row.original[proposal.field];
+   const afterCityId=after?.cityId;
+   if(afterCityId&&!row.cities.some((c:{id:number})=>c.id===afterCityId)){
+    const found=await pool.query('SELECT id,name FROM public.cities WHERE id=$1',[afterCityId]);row.cities=[...row.cities,...found.rows];
+   }
+  }
+  res.json({route:row,proposal,after,previewToken:createCorePreview(proposal,req.user.id,row.revision,process.env.ADMIN_SECRET??''),
    effect:'Only this property changes. Original reports remain saved. Linked evidence is not reassigned.'});
  }catch{res.status(503).json({code:'PREVIEW_UNAVAILABLE',error:'The correction preview could not load. Your proposal has not been applied.'});}
 });

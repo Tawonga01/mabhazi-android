@@ -28,7 +28,7 @@ function record(row: Record<string, unknown>) {
 router.use((req, res, next) => {
   if (!req.isAuthenticated()) { res.status(401).json({ code: 'AUTH_REQUIRED', error: 'Sign in to see your routes.' }); return; }
   if (req.get('X-Mabhazi-Account') !== req.user.id) { res.status(409).json({ code: 'ACCOUNT_CHANGED', error: 'The active account changed. Reopen your routes.' }); return; }
-  res.setHeader('Cache-Control','private, no-store');next();
+  next();
 });
 router.get('/', async (req, res) => {
   if (!req.isAuthenticated()) return;

@@ -464,6 +464,20 @@ before(async () => {
   const oldContext=await readFile(new URL('../migrations/0030_public_route_context.sql',import.meta.url),'utf8');
   const oldView=oldContext.slice(oldContext.indexOf('CREATE VIEW public.v2_public_lead_reports'),oldContext.indexOf('CREATE FUNCTION public.v2_api_submit_public_actual_journey')).replace('CREATE VIEW','CREATE OR REPLACE VIEW');
   await db.query('BEGIN');await db.query(oldView);await assert.rejects(()=>db.query(adminApply),/admin_visibility_view_changed/);await db.query('ROLLBACK');
+  // Populated0040 -> correction0041: guarded apply/repeat/CRLF and fail-closed drift.
+  const coreApply=await readFile(new URL('../scripts/preview-apply-admin-core-0041.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_admin_core_actions(id uuid)');
+  await assert.rejects(()=>db.query(coreApply),/core_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(coreApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0041_admin_core_corrections.sql\n';
+  await db.query(coreApply);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_admin_core_action(varchar,uuid,jsonb) TO PUBLIC",'core_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_admin_core_receipt(varchar,uuid) SET search_path=public",'core_function_fence_changed'],
+   ["GRANT UPDATE ON public.v2_admin_core_actions TO mabhazi_api",'core_relation_fence_changed'],
+   ["ALTER TABLE public.v2_admin_core_actions DISABLE ROW LEVEL SECURITY",'core_table_shape_changed'],
+   ["CREATE OR REPLACE VIEW public.v2_admin_current_core AS SELECT DISTINCT ON(a.route_subject_id,a.field_key) a.* FROM public.v2_admin_core_actions a WHERE false ORDER BY a.route_subject_id,a.field_key,a.position DESC",'core_view_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0040_admin_route_visibility.sql'",'core_preview_baseline_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(coreApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
