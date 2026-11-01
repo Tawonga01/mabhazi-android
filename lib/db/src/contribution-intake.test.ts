@@ -1,3 +1,4 @@
+import {registerAdminCoreTests} from './admin-core.cases';
 import {registerAdminBootstrapTests} from './admin-bootstrap.cases';
 import {registerAdminVisibilityTests} from './admin-visibility.cases';
 import {registerPickupInvitationTests} from './pickup-invitation.cases';
@@ -865,3 +866,5 @@ registerAdminBatchTests(()=>({db,user,other,origin,destination,corridor}));
 registerAdminVisibilityTests(()=>({db,user,other,origin,destination,corridor}));
 
 registerAdminBootstrapTests(()=>({db,user,other}));
+
+registerAdminCoreTests(()=>({db,user,other,origin,destination,corridor}));
