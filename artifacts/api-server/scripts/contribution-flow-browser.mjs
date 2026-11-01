@@ -540,10 +540,10 @@ try {
     assert.equal(corrected.outcome,'corrected');
     const s=await session(1,false,'search');await publicSearch(s);
     await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).waitFor();
-    await s.page.getByText('Corrected route report',{exact:true}).waitFor();await publicShot(s,'reviewed-core-search.png');
+    await s.page.getByText('Corrected report',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).scrollIntoViewIfNeeded();await publicShot(s,'reviewed-core-search.png');
     await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).click();
     await s.page.getByRole('heading',{name:'Corrected route report',exact:true}).waitFor();
-    assert.equal(await s.page.getByRole('button',{name:'Add fare',exact:true}).isDisabled(),true);
+    assert.equal(await s.page.getByRole('button',{name:'Add fare',exact:true}).count(),0);
     await s.page.getByRole('button',{name:'About this route',exact:true}).click();
     await s.page.getByText('Time corrected',{exact:true}).waitFor();
     await publicShot(s,'reviewed-core-detail.png');assert.equal(s.posts(),0);await s.context.close();
