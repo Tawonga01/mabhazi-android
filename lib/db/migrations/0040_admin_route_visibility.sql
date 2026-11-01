@@ -48,7 +48,7 @@ DECLARE result jsonb;
 BEGIN
  PERFORM public.v2_admin_require(actor);
  SELECT jsonb_build_object('id',a.id,'operation',a.operation,'reason',a.reason_code,'routeId',a.route_subject_id,
-  'removalId',a.removal_id,'outcome',a.outcome,'createdAt',a.created_at,'actorErased',a.actor_user_id IS NULL,
+  'removalId',a.removal_id,'outcome',a.outcome,'createdAt',a.created_at,'actorErased',a.actor_user_id IS NULL,'actorId',a.actor_user_id,
   'sourceErased',a.contribution_id IS NULL,'effect',CASE a.outcome WHEN 'removed' THEN 'public_hidden'
    WHEN 'restored' THEN 'eligibility_recheck_queued' ELSE 'unchanged' END)
  INTO result FROM public.v2_admin_route_actions a WHERE a.id=request;
@@ -286,3 +286,18 @@ BEGIN
   VALUES(actor,client_key,contribution,digest,response);
  RETURN response;
 END; $$;
+
+CREATE OR REPLACE FUNCTION public.v2_api_admin_batch_receipt(actor varchar,request uuid) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE result jsonb;
+BEGIN
+ PERFORM public.v2_admin_require(actor);
+ SELECT jsonb_build_object('id',b.id,'operation',b.operation,'reason',b.reason_code,'createdAt',b.created_at,
+  'actorErased',b.actor_user_id IS NULL,'actorId',b.actor_user_id,'items',COALESCE((SELECT jsonb_agg(jsonb_build_object(
+   'ordinal',i.ordinal,'routeId',i.route_subject_id,'fieldKey',i.field_key,'observationId',i.observation_id,
+   'reviewId',i.review_id,'outcome',i.outcome,'detail',CASE WHEN i.contribution_id IS NULL THEN 'erased' ELSE i.detail END)
+   ORDER BY i.ordinal) FROM public.v2_admin_batch_items i WHERE i.batch_id=b.id),'[]'::jsonb))
+ INTO result FROM public.v2_admin_batches b WHERE b.id=request;
+ RETURN COALESCE(result,'{"found":false}'::jsonb);
+END;$$;
+

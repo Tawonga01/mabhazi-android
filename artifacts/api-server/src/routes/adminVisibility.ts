@@ -37,6 +37,7 @@ async function state(actor:string,id:string){
  const {rows}=await pool.query(`SELECT l.subject_id id,s.revision::text revision,s.lifecycle,l.attribution_erased,
   l.initial_contribution_id IS NOT NULL AND author.id IS NOT NULL source_available,
   origin.name origin,destination.name destination,coalesce(l.operator_name,op.display_name) operator,
+  lpad((l.reported_departure_seconds/3600)::text,2,'0')||':'||lpad(((l.reported_departure_seconds%3600)/60)::text,2,'0') departure,
   EXISTS(SELECT 1 FROM public.v2_public_lead_reports p WHERE p.subject_id=l.subject_id) public_visible,
   coalesce((SELECT jsonb_agg(jsonb_build_object('id',a.id,'reason',a.reason_code,'createdAt',a.created_at) ORDER BY a.created_at,a.id)
    FROM public.v2_admin_active_route_removals a WHERE a.route_subject_id=l.subject_id),'[]'::jsonb) removals,

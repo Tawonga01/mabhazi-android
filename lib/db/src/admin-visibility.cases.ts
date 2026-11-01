@@ -58,8 +58,8 @@ export function registerAdminVisibilityTests(context:()=>Context){
   await q('INSERT INTO v2_public_lead_hides(subject_id,report_id) VALUES($1,$2)',[f.route,report]);
   assert.equal((await apply(await command(f.route,'restore',a.id))).outcome,'restored');assert.equal(await visible(f.route),false);
  });
- test('admin visibility: withdrawal and source erasure cannot be undone by restoration',async()=>{
-  const f=await fixture(),a=await apply(await command(f.route));await q("UPDATE v2_subjects SET lifecycle='withdrawn' WHERE id=$1",[f.route]);
+ test('admin visibility: retirement and source erasure cannot be undone by restoration',async()=>{
+  const f=await fixture(),a=await apply(await command(f.route));await q("UPDATE v2_subjects SET lifecycle='retired' WHERE id=$1",[f.route]);
   assert.equal((await apply(await command(f.route,'restore',a.id))).outcome,'unavailable');assert.equal(await visible(f.route),false);
   const g=await fixture(),b=await apply(await command(g.route));await q('DELETE FROM v2_contributions WHERE id=$1',[g.source]);
   assert.equal((await apply(await command(g.route,'restore',b.id))).outcome,'unavailable');
@@ -84,8 +84,9 @@ export function registerAdminVisibilityTests(context:()=>Context){
   const f=await fixture(),a=await apply(await command(f.route));
   const t=(await q("INSERT INTO v2_question_tasks(subject_id,field_key,scope_key,scope,registry_key,registry_version,reason,input_generation,priority) SELECT $1,'boarding.pickup',v2_assessment_hash('{}'),'{}','pickup_place','prompts/1','missing',input_generation,40 FROM v2_subjects WHERE id=$1 RETURNING id",[f.route])).rows[0].id;
   assert.equal((await q("SELECT v2_prompt_eligible($1,$2,ARRAY['knows_route']) v",[t,context().user])).rows[0].v,false);
-  await apply(await command(f.route,'restore',a.id));await q('UPDATE v2_question_tasks SET input_generation=(SELECT input_generation FROM v2_subjects WHERE id=$1) WHERE id=$2',[f.route,t]);
-  assert.equal((await q("SELECT v2_prompt_eligible($1,$2,ARRAY['knows_route']) v",[t,context().user])).rows[0].v,true);
+  await apply(await command(f.route,'restore',a.id));await q("UPDATE v2_question_tasks SET state='obsolete' WHERE id=$1",[t]);
+  const next=(await q("INSERT INTO v2_question_tasks(subject_id,field_key,scope_key,scope,registry_key,registry_version,reason,input_generation,priority) SELECT $1,'boarding.pickup',v2_assessment_hash('{}'),'{}','pickup_place','prompts/1','missing',input_generation,40 FROM v2_subjects WHERE id=$1 RETURNING id",[f.route])).rows[0].id;
+  assert.equal((await q("SELECT v2_prompt_eligible($1,$2,ARRAY['knows_route']) v",[next,context().user])).rows[0].v,true);
  });
  test('admin visibility: fresh contextual intake is blocked but historical receipts and independent reporting survive',async()=>{
   const f=await fixture();await q("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[context().user]);
@@ -96,6 +97,14 @@ export function registerAdminVisibilityTests(context:()=>Context){
   await invalid("SELECT v2_submit_actual_journey($1,'2026-09-12',$2)",[context().user,fresh],['23503']);
   assert.deepEqual((await q("SELECT v2_submit_actual_journey($1,'2026-09-12',$2) r",[context().user,body])).rows[0].r,{...original,replayed:true});
   assert.equal((await q("SELECT v2_submit_actual_journey($1,'2026-09-12',$2) r",[context().user,{...body,clientSubmissionId:randomUUID(),target:{newActualJourney:{}}}])).rows[0].r.saveStatus,'saved');
+ });
+
+ test('admin visibility: restoration lifts its own removal without reviving an author-withdrawn fact',async()=>{
+  const f=await fixture(),a=await apply(await command(f.route));
+  const fact=(await q("SELECT o.id,s.revision FROM v2_observations o JOIN v2_observation_states s ON s.observation_id=o.id WHERE o.contribution_id=$1 AND o.field_key='operator.reported'",[f.source])).rows[0];
+  await q('SELECT v2_withdraw_observation($1,$2,$3,$4,NULL)',[context().user,fact.id,fact.revision,randomUUID()]);
+  assert.equal((await apply(await command(f.route,'restore',a.id))).outcome,'restored');assert.equal(await visible(f.route),false);
+  assert.equal((await q('SELECT status FROM v2_observation_states WHERE observation_id=$1',[fact.id])).rows[0].status,'withdrawn');
  });
 
 }

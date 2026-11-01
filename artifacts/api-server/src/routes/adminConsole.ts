@@ -1,3 +1,4 @@
+import {adminVisibilityEnabled} from './adminVisibility';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { renderAdminConsole, renderConsoleAccess, type ConsoleRoute } from './adminConsoleView';
@@ -111,7 +112,9 @@ router.get('/admin-console/data',async(req,res)=>{
     res.status(400).json({code:'INVALID_QUERY',error:'Use a city, operator or route reference.'});return;
   }
   try{
-    const result=await pool.query(`SELECT l.subject_id id,s.revision::text revision,s.lifecycle,
+    const routeVisibility=await adminVisibilityEnabled();
+    const removalColumn=routeVisibility?'EXISTS(SELECT 1 FROM public.v2_admin_active_route_removals h WHERE h.route_subject_id=l.subject_id)':'false';
+    const result=await pool.query(`SELECT ${removalColumn} removed,l.subject_id id,s.revision::text revision,s.lifecycle,
       origin.name origin,destination.name destination,coalesce(l.operator_name,op.display_name) operator,
       lpad((l.reported_departure_seconds/3600)::text,2,'0')||':'||lpad(((l.reported_departure_seconds%3600)/60)::text,2,'0') departure,
       EXISTS(SELECT 1 FROM public.v2_public_lead_reports p WHERE p.subject_id=l.subject_id) visible
@@ -129,7 +132,7 @@ router.get('/admin-console/data',async(req,res)=>{
       ORDER BY l.subject_id LIMIT $4`,[q,cursor??null,req.user.id,limit+1]);
     const rows=result.rows.slice(0,limit),ids=rows.map(r=>r.id as string),data=ids.length?await readAdminClaims(req.user.id,ids):{claims:[],routes:[]};
     if(data.routes.length!==ids.length){res.status(409).json({code:'CATALOGUE_CHANGED',error:'The route list changed. Refresh to continue.'});return;}
-    res.json({rows,claims:data.claims,hasMore:result.rows.length>limit,...(result.rows.length>limit?{nextCursor:ids.at(-1)}:{})});
+    res.json({rows,claims:data.claims,capabilities:{routeVisibility},hasMore:result.rows.length>limit,...(result.rows.length>limit?{nextCursor:ids.at(-1)}:{})});
   }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Route records could not be checked.'});}
 });
 router.get('/admin-console/evidence',async(req,res)=>{
