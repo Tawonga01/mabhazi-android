@@ -233,6 +233,10 @@ DO $$DECLARE definition text;BEGIN
  IF strpos(definition,'IF intended_id IS NOT NULL THEN')=0 THEN RAISE EXCEPTION 'v2_core_intake_definition_changed';END IF;
  definition:=replace(definition,'IF intended_id IS NOT NULL THEN','IF intended_id IS NOT NULL THEN'||E'\n IF EXISTS(SELECT 1 FROM public.v2_admin_current_core a WHERE a.route_subject_id=intended_id) THEN RAISE EXCEPTION ''v2_actual_intended_subject_unavailable'' USING ERRCODE=''23503'';END IF;');
  EXECUTE definition;
+ SELECT pg_get_functiondef('public.v2_api_route_report_action(varchar,uuid,text,text)'::regprocedure) INTO definition;
+ IF strpos(definition,'public.v2_public_lead_reports')=0 THEN RAISE EXCEPTION 'v2_core_safety_definition_changed';END IF;
+ definition:=replace(definition,'public.v2_public_lead_reports','public.v2_public_reviewed_lead_reports');
+ EXECUTE definition;
 END;$$;
 
 DO $$DECLARE r text;f record;t text;BEGIN

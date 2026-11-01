@@ -529,6 +529,26 @@ try {
   await admin.query("UPDATE users SET terms_accepted_version='2026-09-12',terms_accepted_at=now() WHERE id=$1",[users[1]]);
   async function seedPublic(name,time){const response=await fetch('http://127.0.0.1:5000/api/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':users[0]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:publicCities[0],destinationCityId:publicCities[1],departureTime:time,operator:{name}}},observations:[]})});assert.equal(response.status,200);return await response.json();}
   const publicA=await seedPublic('Public popup A','08:30'),publicB=await seedPublic('Public popup B','14:00'),publicC=await seedPublic('Road Wolf','07:00');
+
+  // A real, independently attributed correction rendered through the actual public API.
+  {
+    const revised=await seedPublic('Reviewed display coach','06:40'),reviewer=randomUUID();
+    await admin.query("INSERT INTO users(id,display_name) VALUES($1,'Synthetic correction reviewer')",[reviewer]);
+    await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','render_fixture')",[reviewer]);
+    const revision=(await admin.query('SELECT revision::text r FROM v2_subjects WHERE id=$1',[revised.subjectId])).rows[0].r;
+    const corrected=(await admin.query('SELECT v2_api_admin_core_action($1,$2,$3) receipt',[reviewer,randomUUID(),{routeId:revised.subjectId,revision,operation:'correct',field:'departure.reported',value:{time:'08:40',basis:'scheduled'},basis:'observed_sign',observedDate:'2026-10-31',reason:'source_checked',reversedActionId:null,expiresAt:Date.now()+300000}])).rows[0].receipt;
+    assert.equal(corrected.outcome,'corrected');
+    const s=await session(1,false,'search');await publicSearch(s);
+    await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).waitFor();
+    await s.page.getByText('Corrected route report',{exact:true}).waitFor();await publicShot(s,'reviewed-core-search.png');
+    await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).click();
+    await s.page.getByRole('heading',{name:'Corrected route report',exact:true}).waitFor();
+    assert.equal(await s.page.getByRole('button',{name:'Add fare',exact:true}).isDisabled(),true);
+    await s.page.getByRole('button',{name:'About this route',exact:true}).click();
+    await s.page.getByText('Time corrected',{exact:true}).waitFor();
+    await publicShot(s,'reviewed-core-detail.png');assert.equal(s.posts(),0);await s.context.close();
+    results.push('reviewed core appears with the corrected clock and field provenance; no invented calendar or silently reassigned contextual contribution');
+  }
   async function publicSearch(s){await s.page.getByText('Search for a route',{exact:true}).waitFor();for(const[label,name]of[['From city','Bulawayo'],['To city','Gweru']]){await s.page.getByText(label,{exact:true}).click();await s.page.getByPlaceholder('Type a city name…',{exact:true}).fill(name);await s.page.getByText(name,{exact:true}).click();}await s.page.getByText('Search Routes',{exact:true}).click();}
   async function publicShot(s,name){await takeShot(s.page,name);}
   async function openPublic(s,name='Public popup A',time='08:30'){await s.page.getByRole('button',{name:'Open route report '+name+' '+time,exact:true}).click();await s.page.getByRole('heading',{name:'Route report',exact:true}).waitFor();await s.page.getByRole('heading',{name:'Route report',exact:true}).locator('..').locator('..').getByText(name,{exact:true}).waitFor();}

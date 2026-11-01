@@ -37,6 +37,24 @@ export function registerAdminCoreApiTests(context:()=>Context){
   const state=await call('/'+route);assert.equal(state.value.current['departure.reported'].time,'08:00');assert.equal(state.value.original['departure.reported'].time,'00:00');
   assert.equal(state.value.history.length,1);
  }));
+ test('core API: supported public readers share corrected values/provenance while old readers withhold the original',async()=>enabled(async()=>{
+  const modern={'X-Mabhazi-Route-Display':'reviewed-core/1'};
+  const old=await fetch(context().base+'/v2/subjects/'+route);assert.equal(old.status,404);
+  const response=await fetch(context().base+'/v2/subjects/'+route,{headers:modern});assert.equal(response.status,200);
+  assert.match(response.headers.get('vary')??'',/X-Mabhazi-Route-Display/i);
+  const displayed=(await response.json() as any).subject;assert.equal(displayed.reportedTime.value,'08:00');assert.equal(displayed.timedDepartureEligible,false);
+  assert.equal(displayed.contributionTargetEligible,false);assert.equal(displayed.coreCorrections[0].field,'departure.reported');
+  assert.equal(displayed.coreCorrections[0].basis,'observed_sign');assert.equal(displayed.coreCorrections[0].observedDate,'2026-10-30');
+  assert.equal(JSON.stringify(displayed).includes(owner),false);
+  let cursor:string|undefined,found:any;
+  for(let n=0;n<30;n++){const r=await fetch(context().base+'/v2/search?originCityId='+displayed.origin.id+'&destinationCityId='+displayed.destination.id+(cursor?'&cursor='+cursor:''),{headers:modern});
+   assert.equal(r.status,200);const data=await r.json() as any;found=data.items.find((i:any)=>i.subjectId===route);if(found||!data.nextCursor)break;cursor=data.nextCursor;}
+  assert.ok(found);assert.deepEqual(found.coreCorrections,displayed.coreCorrections);assert.equal(found.reportedTime.value,'08:00');
+  const board=await fetch(context().base+'/v2/departure-board?originKey=city:'+displayed.origin.id,{headers:modern});assert.equal(board.status,200);
+  const entry=(await board.json() as any).entries.find((i:any)=>i.subjectId===route);assert.ok(entry);assert.equal(entry.reportedTime,'08:00');
+  assert.equal(entry.countdownEligible,false);assert.equal(entry.nextDepartureAt,undefined);assert.deepEqual(entry.coreCorrections,displayed.coreCorrections);
+  const unknown=await fetch(context().base+'/v2/subjects/'+route,{headers:{'X-Mabhazi-Route-Display':'future'}});assert.equal(unknown.status,400);
+ }));
  test('core API: stale proposal returns an unchanged receipt and reversal preserves original evidence',async()=>enabled(async()=>{
   const preview=await call('/preview',{...proposal(),value:{time:'09:00',basis:'scheduled'}});
   const later=await call('/preview',{...proposal(),field:'operator.reported',value:{name:'Core corrected operator'}});

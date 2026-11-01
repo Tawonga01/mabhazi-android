@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { V2City } from "./v2City";
+import type { V2CoreCorrection } from "./v2CoreCorrection";
 import type { V2PublicClockReport } from "./v2PublicClockReport";
 import type { V2PublicLeadKind } from "./v2PublicLeadKind";
 import type { V2PublicLeadMissingDetailsItem } from "./v2PublicLeadMissingDetailsItem";
@@ -28,4 +29,6 @@ export interface V2PublicLead {
   timedDepartureEligible: boolean;
   contributionTargetEligible: boolean;
   missingDetails: V2PublicLeadMissingDetailsItem[];
+  /** @maxItems 4 */
+  coreCorrections?: V2CoreCorrection[];
 }

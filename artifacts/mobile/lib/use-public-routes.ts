@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { searchV2Routes, type SearchV2RoutesParams } from '@workspace/api-client-react';
-export function publicSafetyHeaders(owner:string|null,blocked:ReadonlySet<string>){return {'X-Mabhazi-Blocked-Contributors':JSON.stringify([...blocked].sort()),...(owner?{'X-Mabhazi-Account':owner}:{})};}
+export function publicSafetyHeaders(owner:string|null,blocked:ReadonlySet<string>){return {'X-Mabhazi-Route-Display':'reviewed-core/1','X-Mabhazi-Blocked-Contributors':JSON.stringify([...blocked].sort()),...(owner?{'X-Mabhazi-Account':owner}:{})};}
 export function usePublicRoutes(params:SearchV2RoutesParams,enabled:boolean,owner:string|null,blocked:ReadonlySet<string>,revision:number){
  const safety=JSON.stringify([...blocked].sort());
  return useInfiniteQuery({queryKey:['public-route-reports',owner,params,safety,revision],enabled,

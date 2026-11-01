@@ -1,3 +1,4 @@
+import {reviewedRoutesAvailable} from '../lib/reviewedRoutes';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { GetV2OwnRouteParams, GetV2OwnRouteResponse, ListV2OwnRoutesQueryParams, ListV2OwnRoutesResponse } from '@workspace/api-zod';
@@ -19,15 +20,15 @@ const selected = `SELECT r.client_submission_id AS "clientSubmissionId", l.subje
   COALESCE(c.payload#>>'{target,newLead,operator,name}',reported_operator.display_name) AS operator,
   c.payload#>>'{target,newLead,departureTime}' AS "departureTime", s.lifecycle, s.revision `;
 function record(row: Record<string, unknown>) {
-  const { lifecycle, revision, ...context } = row;
+  const { lifecycle, revision, corrected, ...context } = row;
   const current = Number(revision);
-  return { ...context, availability: lifecycle === 'active' ? 'active' : 'unavailable',
-    ...(lifecycle === 'active' && Number.isSafeInteger(current) && current > 0 ? { currentLeadRevision: current } : {}) };
+  return { ...context, availability: lifecycle === 'active' && !corrected ? 'active' : 'unavailable',
+    ...(lifecycle === 'active' && !corrected && Number.isSafeInteger(current) && current > 0 ? { currentLeadRevision: current } : {}) };
 }
 router.use((req, res, next) => {
   if (!req.isAuthenticated()) { res.status(401).json({ code: 'AUTH_REQUIRED', error: 'Sign in to see your routes.' }); return; }
   if (req.get('X-Mabhazi-Account') !== req.user.id) { res.status(409).json({ code: 'ACCOUNT_CHANGED', error: 'The active account changed. Reopen your routes.' }); return; }
-  next();
+  res.setHeader('Cache-Control','private, no-store');next();
 });
 router.get('/', async (req, res) => {
   if (!req.isAuthenticated()) return;
@@ -46,7 +47,8 @@ router.get('/', async (req, res) => {
       values = [req.user.id, first.time, first.id, last.time, last.id];
       bounds = ' AND (r.created_at,r.client_submission_id)<=($2::timestamptz,$3::uuid) AND (r.created_at,r.client_submission_id)<($4::timestamptz,$5::uuid)';
     }
-    const result = await pool.query(`${selected} ${owned}${bounds} ORDER BY r.created_at DESC,r.client_submission_id DESC LIMIT 21`, values);
+    const correctionColumn=await reviewedRoutesAvailable()?",EXISTS(SELECT 1 FROM public.v2_admin_current_core a WHERE a.route_subject_id=l.subject_id) corrected ":',false corrected ';
+    const result = await pool.query(`${selected}${correctionColumn} ${owned}${bounds} ORDER BY r.created_at DESC,r.client_submission_id DESC LIMIT 21`, values);
     const page = result.rows.slice(0, 20);
     const nextCursor = result.rows.length > 20 ? (ids?.[0] ?? page[0].clientSubmissionId) + '.' + page[page.length - 1].clientSubmissionId : undefined;
     res.json(ListV2OwnRoutesResponse.parse({ routes: page.map(record), ...(nextCursor ? { nextCursor } : {}) }));

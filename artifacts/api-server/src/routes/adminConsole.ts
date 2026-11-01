@@ -114,8 +114,9 @@ router.get('/admin-console/data',async(req,res)=>{
   }
   try{
     const routeVisibility=await adminVisibilityEnabled(),coreCorrections=await adminCoreEnabled();
+    const correctionColumn=coreCorrections?"coalesce((SELECT jsonb_agg(jsonb_build_object('field',a.field_key,'value',CASE WHEN a.field_key IN('route.origin','route.destination') AND a.proposed_value IS NOT NULL THEN (SELECT jsonb_build_object('id',ci.id,'name',ci.name) FROM public.cities ci WHERE ci.id=a.corrected_city_id) ELSE a.proposed_value END)) FROM public.v2_admin_current_core a WHERE a.route_subject_id=l.subject_id),'[]'::jsonb)":"'[]'::jsonb";
     const removalColumn=routeVisibility?'EXISTS(SELECT 1 FROM public.v2_admin_active_route_removals h WHERE h.route_subject_id=l.subject_id)':'false';
-    const result=await pool.query(`SELECT ${removalColumn} removed,l.subject_id id,s.revision::text revision,s.lifecycle,
+    const result=await pool.query(`SELECT ${removalColumn} removed,${correctionColumn} corrections,l.subject_id id,s.revision::text revision,s.lifecycle,
       origin.name origin,destination.name destination,coalesce(l.operator_name,op.display_name) operator,
       lpad((l.reported_departure_seconds/3600)::text,2,'0')||':'||lpad(((l.reported_departure_seconds%3600)/60)::text,2,'0') departure,
       EXISTS(SELECT 1 FROM public.v2_public_lead_reports p WHERE p.subject_id=l.subject_id) visible

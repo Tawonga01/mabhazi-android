@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { V2CoreCorrection } from "./v2CoreCorrection";
 import type { V2DepartureEntryKind } from "./v2DepartureEntryKind";
 import type { V2DepartureEntryScheduleTimezone } from "./v2DepartureEntryScheduleTimezone";
 
@@ -28,4 +29,6 @@ export interface V2DepartureEntry {
   scheduleTimezone?: V2DepartureEntryScheduleTimezone;
   /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
   timedDepartureEligible: boolean;
+  /** @maxItems 4 */
+  coreCorrections?: V2CoreCorrection[];
 }

@@ -21,7 +21,7 @@ export const adminCoreWorkbench=String.raw`
   if(p){const reverse=p.proposal.operation==='reverse';return heading+'<section class="ad-panel"><div class="ad-panel-head"><h2>'+e(reverse?'Reverse this correction?':coreLabels[d.field])+'</h2></div><div class="ad-panel-body">'+
    '<div class="core-comparison"><div><span class="ad-subtitle">Originally submitted</span><strong>'+e(coreValue(r.original[p.proposal.field]))+'</strong></div><div><span class="ad-subtitle">Current</span><strong>'+e(coreValue(r.current[p.proposal.field]))+'</strong></div><div><span class="ad-subtitle">'+(reverse?'Action':'Proposed correction')+'</span><strong>'+e(reverse?'Reverse this exact correction':coreValue(p.proposal.value))+'</strong></div></div>'+
    '<p style="margin-top:22px">'+e(reverse?'Newer corrections and other properties stay in place.':'Only this property changes. The original report stays saved.')+'</p>'+
-   (!reverse?'<dl class="core-source"><div><dt>Source</dt><dd>'+e(basisLabels[p.proposal.basis])+'</dd></div><div><dt>Observed</dt><dd>'+e(p.proposal.observedDate||'Unknown')+'</dd></div></dl>':'')+
+   (!reverse?'<dl class="core-source"><div><dt>Source</dt><dd>'+e(basisLabels[p.proposal.basis])+'</dd></div><div><dt>Observed</dt><dd>'+e(p.proposal.observedDate||'Unknown')+'</dd></div><div><dt>Reason</dt><dd>'+e(reasonLabels[p.proposal.reason])+'</dd></div></dl>':'')+
    '<div class="ad-actions" style="margin-top:24px">'+btn(reverse?'Reverse correction':'Save correction','core-apply',S.storage&&!S.pending&&!S.busy?'':'disabled',true)+btn('Back','core-edit')+'</div></div></section>';}
   const city=d.field.startsWith('route.'),time=d.field==='departure.reported';
   const current=r.current[d.field],old=r.original[d.field];

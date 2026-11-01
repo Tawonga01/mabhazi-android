@@ -89,6 +89,35 @@ export const V2DepartureEntryScheduleTimezone = {
   "Africa/Harare": "Africa/Harare",
 } as const;
 
+export type V2CoreCorrectionField =
+  (typeof V2CoreCorrectionField)[keyof typeof V2CoreCorrectionField];
+
+export const V2CoreCorrectionField = {
+  routeorigin: "route.origin",
+  routedestination: "route.destination",
+  operatorreported: "operator.reported",
+  departurereported: "departure.reported",
+} as const;
+
+export type V2CoreCorrectionBasis =
+  (typeof V2CoreCorrectionBasis)[keyof typeof V2CoreCorrectionBasis];
+
+export const V2CoreCorrectionBasis = {
+  unprovided: "unprovided",
+  travelled: "travelled",
+  saw_operating: "saw_operating",
+  observed_sign: "observed_sign",
+  operator_statement: "operator_statement",
+  heard_from_other: "heard_from_other",
+} as const;
+
+export interface V2CoreCorrection {
+  field: V2CoreCorrectionField;
+  reviewedAt: string;
+  basis: V2CoreCorrectionBasis;
+  observedDate: string | null;
+}
+
 export interface V2DepartureEntry {
   key: string;
   kind: V2DepartureEntryKind;
@@ -109,6 +138,8 @@ export interface V2DepartureEntry {
   scheduleTimezone?: V2DepartureEntryScheduleTimezone;
   /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
   timedDepartureEligible: boolean;
+  /** @maxItems 4 */
+  coreCorrections?: V2CoreCorrection[];
 }
 
 export interface V2DepartureBoard {
@@ -1434,6 +1465,8 @@ export interface V2PublicLead {
   timedDepartureEligible: boolean;
   contributionTargetEligible: boolean;
   missingDetails: V2PublicLeadMissingDetailsItem[];
+  /** @maxItems 4 */
+  coreCorrections?: V2CoreCorrection[];
 }
 
 export interface V2PublicSearch {
@@ -1702,6 +1735,13 @@ export type ExpectedAccountHeaderParameter = string;
  * Opaque session token — Bearer <sid>.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ReviewedRouteDisplayHeaderParameter =
+  (typeof ReviewedRouteDisplayHeaderParameter)[keyof typeof ReviewedRouteDisplayHeaderParameter];
+
+export const ReviewedRouteDisplayHeaderParameter = {
+  "reviewed-core/1": "reviewed-core/1",
+} as const;
 
 export type ListV2PlaceReportsParams = {
   cursor?: string;

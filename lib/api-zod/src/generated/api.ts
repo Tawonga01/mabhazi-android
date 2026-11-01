@@ -1897,6 +1897,12 @@ export const SearchV2RoutesHeader = zod.object({
     .describe(
       "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
+  "X-Mabhazi-Route-Display": zod
+    .enum(["reviewed-core/1"])
+    .optional()
+    .describe(
+      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+    ),
 });
 
 export const searchV2RoutesResponseItemsItemRevisionMax = 9007199254740991;
@@ -1913,6 +1919,10 @@ export const searchV2RoutesResponseItemsItemReportedTimeValueRegExp =
   new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
 export const searchV2RoutesResponseItemsItemReportedTimeObservedDateRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsItemCoreCorrectionsItemObservedDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsItemCoreCorrectionsMax = 4;
+
 export const searchV2RoutesResponseItemsMax = 20;
 
 export const SearchV2RoutesResponse = zod.object({
@@ -1973,10 +1983,40 @@ export const SearchV2RoutesResponse = zod.object({
         }),
         publicationStatus: zod.enum(["details_needed"]),
         timedDepartureEligible: zod.literal(false),
-        contributionTargetEligible: zod.literal(true),
+        contributionTargetEligible: zod.boolean(),
         missingDetails: zod.array(
           zod.enum(["selected_fare", "operating_days", "boarding_location"]),
         ),
+        coreCorrections: zod
+          .array(
+            zod.object({
+              field: zod.enum([
+                "route.origin",
+                "route.destination",
+                "operator.reported",
+                "departure.reported",
+              ]),
+              reviewedAt: zod.coerce.date(),
+              basis: zod.enum([
+                "unprovided",
+                "travelled",
+                "saw_operating",
+                "observed_sign",
+                "operator_statement",
+                "heard_from_other",
+              ]),
+              observedDate: zod.union([
+                zod
+                  .string()
+                  .regex(
+                    searchV2RoutesResponseItemsItemCoreCorrectionsItemObservedDateOneRegExp,
+                  ),
+                zod.null(),
+              ]),
+            }),
+          )
+          .max(searchV2RoutesResponseItemsItemCoreCorrectionsMax)
+          .optional(),
       }),
     )
     .max(searchV2RoutesResponseItemsMax),
@@ -2012,6 +2052,12 @@ export const GetV2SubjectHeader = zod.object({
     .describe(
       "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
+  "X-Mabhazi-Route-Display": zod
+    .enum(["reviewed-core/1"])
+    .optional()
+    .describe(
+      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+    ),
 });
 
 export const getV2SubjectResponseSubjectRevisionMax = 9007199254740991;
@@ -2029,6 +2075,9 @@ export const getV2SubjectResponseSubjectReportedTimeValueRegExp = new RegExp(
 );
 export const getV2SubjectResponseSubjectReportedTimeObservedDateRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2SubjectResponseSubjectCoreCorrectionsItemObservedDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2SubjectResponseSubjectCoreCorrectionsMax = 4;
 
 export const GetV2SubjectResponse = zod.object({
   subject: zod.object({
@@ -2073,10 +2122,40 @@ export const GetV2SubjectResponse = zod.object({
     }),
     publicationStatus: zod.enum(["details_needed"]),
     timedDepartureEligible: zod.literal(false),
-    contributionTargetEligible: zod.literal(true),
+    contributionTargetEligible: zod.boolean(),
     missingDetails: zod.array(
       zod.enum(["selected_fare", "operating_days", "boarding_location"]),
     ),
+    coreCorrections: zod
+      .array(
+        zod.object({
+          field: zod.enum([
+            "route.origin",
+            "route.destination",
+            "operator.reported",
+            "departure.reported",
+          ]),
+          reviewedAt: zod.coerce.date(),
+          basis: zod.enum([
+            "unprovided",
+            "travelled",
+            "saw_operating",
+            "observed_sign",
+            "operator_statement",
+            "heard_from_other",
+          ]),
+          observedDate: zod.union([
+            zod
+              .string()
+              .regex(
+                getV2SubjectResponseSubjectCoreCorrectionsItemObservedDateOneRegExp,
+              ),
+            zod.null(),
+          ]),
+        }),
+      )
+      .max(getV2SubjectResponseSubjectCoreCorrectionsMax)
+      .optional(),
   }),
 });
 
@@ -3004,12 +3083,21 @@ export const GetV2DepartureBoardHeader = zod.object({
     .string()
     .optional()
     .describe("Opaque session token — Bearer <sid>."),
+  "X-Mabhazi-Route-Display": zod
+    .enum(["reviewed-core/1"])
+    .optional()
+    .describe(
+      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+    ),
 });
 
 export const getV2DepartureBoardResponseOriginsItemKeyMax = 240;
 
 export const getV2DepartureBoardResponseEntriesItemReportedTimeRegExp =
   new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
+export const getV2DepartureBoardResponseEntriesItemCoreCorrectionsItemObservedDateOneRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2DepartureBoardResponseEntriesItemCoreCorrectionsMax = 4;
 
 export const GetV2DepartureBoardResponse = zod.object({
   generatedAt: zod.coerce.date().optional(),
@@ -3056,6 +3144,36 @@ export const GetV2DepartureBoardResponse = zod.object({
         .describe(
           "False for these original community reports and legacy schedules. Canonical service calendar\/timezone publication remains a separate gate.",
         ),
+      coreCorrections: zod
+        .array(
+          zod.object({
+            field: zod.enum([
+              "route.origin",
+              "route.destination",
+              "operator.reported",
+              "departure.reported",
+            ]),
+            reviewedAt: zod.coerce.date(),
+            basis: zod.enum([
+              "unprovided",
+              "travelled",
+              "saw_operating",
+              "observed_sign",
+              "operator_statement",
+              "heard_from_other",
+            ]),
+            observedDate: zod.union([
+              zod
+                .string()
+                .regex(
+                  getV2DepartureBoardResponseEntriesItemCoreCorrectionsItemObservedDateOneRegExp,
+                ),
+              zod.null(),
+            ]),
+          }),
+        )
+        .max(getV2DepartureBoardResponseEntriesItemCoreCorrectionsMax)
+        .optional(),
     }),
   ),
 });
