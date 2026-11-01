@@ -1,3 +1,4 @@
+import {registerAdminVisibilityTests} from './admin-visibility.cases';
 import {registerPickupInvitationTests} from './pickup-invitation.cases';
 import {registerAdminBatchTests} from './admin-batches.cases';
 import {registerPromptControlTests} from './prompt-controls.cases';
@@ -843,3 +844,5 @@ registerPromptControlTests(() => ({db,user,other,connectionString}));
 
 registerPickupInvitationTests(()=>({db,user,other,origin,destination}));
 registerAdminBatchTests(()=>({db,user,other,origin,destination,corridor}));
+
+registerAdminVisibilityTests(()=>({db,user,other,origin,destination,corridor}));

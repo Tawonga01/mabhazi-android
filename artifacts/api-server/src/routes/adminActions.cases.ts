@@ -1,3 +1,4 @@
+import {createVisibilityPreview} from './adminVisibility';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {test} from 'node:test';
@@ -118,6 +119,40 @@ export function registerAdminActionTests(context:()=>Context){
   assert.equal((await call('/reverse-preview',{batchId:firstBatch,actor:owner})).status,422);
   assert.equal((await call('/reverse-preview',{batchId:firstBatch},{Origin:'https://untrusted.example'})).status,403);
   assert.equal((await q('SELECT count(*) FROM v2_admin_batches')).rows[0].count,before);
+ }));
+ test('admin visibility HTTP: private state, preview and writes preserve named authority and exact scope',async()=>enabled(async()=>{
+  const id=await newRoute();assert.equal((await call('/visibility/'+id)).status,200);
+  const p=await call('/visibility/preview',{routeId:id,operation:'remove'});assert.equal(p.status,200);assert.equal(p.value.route.id,id);
+  const body={clientRequestId:randomUUID(),previewToken:p.value.previewToken,reason:'inaccurate'};
+  assert.equal((await call('/visibility/actions',body,{},null)).status,401);
+  assert.equal((await call('/visibility/actions',body,{},context().tokens[0])).status,403);
+  assert.equal((await call('/visibility/actions',body,{Origin:'https://untrusted.example'})).status,403);
+  assert.equal((await call('/visibility/'+id,undefined,{'X-Mabhazi-Account':context().accounts[0]})).status,409);
+  assert.equal((await call('/visibility/actions',{...body,actor:owner})).status,422);
+ }));
+ test('admin visibility HTTP: removal reaches public detail and a scoped restore retains immutable receipts',async()=>enabled(async()=>{
+  const id=await newRoute(),publicRead=()=>fetch(context().base+'/v2/subjects/'+id);assert.equal((await publicRead()).status,200);
+  const p=(await call('/visibility/preview',{routeId:id,operation:'remove'})).value;
+  const body={clientRequestId:randomUUID(),previewToken:p.previewToken,reason:'inaccurate'};
+  const [one,two]=await Promise.all([call('/visibility/actions',body),call('/visibility/actions',body)]);assert.equal(one.status,200);assert.deepEqual(one.value,two.value);assert.equal(one.value.outcome,'removed');
+  assert.equal((await publicRead()).status,404);assert.deepEqual((await call('/visibility/receipts/'+body.clientRequestId)).value,one.value);
+  const state=(await call('/visibility/'+id)).value;assert.equal(state.public_visible,false);assert.equal(state.removals.length,1);
+  const undo=(await call('/visibility/preview',{routeId:id,operation:'restore',removalId:body.clientRequestId})).value;
+  const restored=await call('/visibility/actions',{clientRequestId:randomUUID(),previewToken:undo.previewToken,reason:'record_rechecked'});assert.equal(restored.status,200);assert.equal(restored.value.outcome,'restored');
+  assert.equal((await publicRead()).status,200);assert.deepEqual((await call('/visibility/receipts/'+body.clientRequestId)).value,one.value);
+  assert.equal((await call('/visibility/'+id)).value.history.length,2);
+ }));
+ test('admin visibility HTTP: tampered, expired, wrong-reason and stale previews cannot change another route',async()=>enabled(async()=>{
+  const id=await newRoute(),p=(await call('/visibility/preview',{routeId:id,operation:'remove'})).value;
+  const body={clientRequestId:randomUUID(),previewToken:p.previewToken,reason:'inaccurate'};
+  const [encoded,mac]=p.previewToken.split('.'),raw=JSON.parse(Buffer.from(encoded,'base64url').toString());
+  assert.equal((await call('/visibility/actions',{...body,previewToken:Buffer.from(JSON.stringify({...raw,routeId:route})).toString('base64url')+'.'+mac})).status,409);
+  assert.equal((await call('/visibility/actions',{...body,reason:'record_rechecked'})).status,422);
+  const expired=createVisibilityPreview({actor:owner,routeId:id,revision:p.route.revision,operation:'remove',removalId:null},Date.now()-300001);
+  assert.equal((await call('/visibility/actions',{...body,previewToken:expired})).value.code,'PREVIEW_EXPIRED');
+  await q('UPDATE v2_subjects SET revision=revision+1 WHERE id=$1',[id]);
+  const stale=await call('/visibility/actions',body);assert.equal(stale.status,200);assert.equal(stale.value.outcome,'changed');
+  assert.equal((await call('/visibility/'+id)).value.removals.length,0);
  }));
  test('admin actions: account erasure closes an old session and redacts receipt actor references',async()=>enabled(async()=>{
   await q('DELETE FROM users WHERE id=$1',[owner]);assert.equal((await call('/receipts/'+randomUUID())).status,401);

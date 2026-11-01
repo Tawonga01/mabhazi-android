@@ -1,3 +1,4 @@
+import adminVisibility from './adminVisibility';
 import {Router,type IRouter} from 'express';
 import {pool} from '@workspace/db';
 import {getOrigin} from '../lib/auth';
@@ -25,6 +26,7 @@ router.use((req,res,next)=>{
  }
  next();
 });
+router.use('/visibility',adminVisibility);
 router.get('/receipts/:requestId',async(req,res)=>{
  if(!req.isAuthenticated())return;
  if(!validAdminId(req.params.requestId)||Object.keys(req.query).length){res.status(400).json({code:'INVALID_REQUEST',error:'Use a saved action reference.'});return;}
