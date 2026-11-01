@@ -50,7 +50,7 @@ router.get('/admin-console', async (req, res) => {
       const name=req.user.displayName||[req.user.firstName,req.user.lastName].filter(Boolean).join(' ')||'Administrator';
       res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
       res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
-      res.send(renderAdminWorkbench(name,actor));return;
+      res.send(renderAdminWorkbench(name,actor,process.env.MABHAZI_DEPLOYMENT==='preview'?'Preview':'Live'));return;
     }
     const result = await pool.query(`SELECT l.subject_id AS id,s.revision::text AS revision,s.lifecycle,
       origin.name AS origin,destination.name AS destination,

@@ -1,7 +1,7 @@
 import {escape,renderAdminConsole} from './adminConsoleView';
 import {adminWorkbenchStyles} from './adminWorkbenchStyles';
 
-export function renderAdminWorkbench(name:string,account:string){
+export function renderAdminWorkbench(name:string,account:string,environment='Preview'){
  // Reuse the original brand image already carried by the private catalogue.
  const brand=renderAdminConsole({name:'',q:'',record:null,nextCursor:null,rows:[]}).match(/<img alt="" src="data:image\/png;base64,[^"]+"[^>]*>/)?.[0]??'';
  return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+
@@ -13,7 +13,7 @@ export function renderAdminWorkbench(name:string,account:string){
   '<aside class="ad-sidebar"><div class="ad-brand">'+brand+'<div><strong>Mabhazi</strong><span>Administration</span></div></div>'+
   '<nav class="ad-nav" aria-label="Administration"><button type="button" data-do="queue" aria-current="page">Review</button><button type="button" data-do="history">History</button></nav>'+
   '<div class="ad-account"><div><strong>'+escape(name)+'</strong><small>Administrator</small><a href="/api/logout?returnTo=/api/admin-console">Sign out</a></div></div></aside>'+
-  '<main class="ad-main"><header class="ad-topbar"><span id="workbench-breadcrumb">Review / Routes</span><span class="ad-private">Private workspace</span></header>'+
+  '<main class="ad-main"><header class="ad-topbar"><span id="workbench-breadcrumb">Review / Routes</span><span class="ad-private">'+escape(environment)+' workspace</span></header>'+
   '<div class="ad-content"><div id="workbench-recovery" aria-live="polite"></div><div id="workbench-notice" role="status"></div><div id="workbench-screen" aria-live="polite"><p class="br-loading">Loading routes…</p></div>'+
   '<noscript>Enable JavaScript to review records in this workspace.</noscript></div></main></div></div></div>'+
   '<script src="/api/admin-console/ui.js" defer></script></body></html>';

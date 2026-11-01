@@ -446,6 +446,22 @@ before(async () => {
    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0037_prompt_controls_api.sql'",'invitation_preview_baseline_changed'],
    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0038_pickup_invitation_api.sql'",'invitation_preview_hash_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(invitationApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  // Populated0038 -> named admin0039/0040: exact repeat, CRLF, access/view drift rollback.
+  const adminApply=await readFile(new URL('../scripts/preview-apply-admin-0040.sql',import.meta.url),'utf8');
+  await db.query('BEGIN');await db.query('CREATE TABLE public.v2_admin_batches(id uuid)');
+  await assert.rejects(()=>db.query(adminApply),/admin_partial_or_unrecorded/);await db.query('ROLLBACK');
+  await db.query(adminApply.replace(/\r?\n/g,'\r\n'));previousStageLog+='Applied 0039_admin_property_batches.sql\nApplied 0040_admin_route_visibility.sql\n';
+  await db.query(adminApply);
+  for(const [change,message] of [
+   ["GRANT EXECUTE ON FUNCTION v2_api_admin_property_batch(varchar,uuid,jsonb) TO PUBLIC",'admin_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_admin_route_action(varchar,uuid,jsonb) SECURITY INVOKER",'admin_function_fence_changed'],
+   ["ALTER FUNCTION v2_api_admin_route_action_receipt(varchar,uuid) SET search_path=public",'admin_function_fence_changed'],
+   ["GRANT SELECT ON public.v2_admin_route_actions TO PUBLIC",'admin_table_fence_changed'],
+   ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0039_admin_property_batches.sql'",'admin_preview_hash_changed']
+  ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(adminApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  const oldContext=await readFile(new URL('../migrations/0030_public_route_context.sql',import.meta.url),'utf8');
+  const oldView=oldContext.slice(oldContext.indexOf('CREATE VIEW public.v2_public_lead_reports'),oldContext.indexOf('CREATE FUNCTION public.v2_api_submit_public_actual_journey')).replace('CREATE VIEW','CREATE OR REPLACE VIEW');
+  await db.query('BEGIN');await db.query(oldView);await assert.rejects(()=>db.query(adminApply),/admin_visibility_view_changed/);await db.query('ROLLBACK');
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
