@@ -241,6 +241,11 @@ DO $$DECLARE definition text;BEGIN
  IF strpos(definition,'public.v2_public_lead_reports')=0 THEN RAISE EXCEPTION 'v2_core_safety_definition_changed';END IF;
  definition:=replace(definition,'public.v2_public_lead_reports','public.v2_public_reviewed_lead_reports');
  EXECUTE definition;
+ SELECT pg_get_functiondef('public.v2_api_route_contribution_context(varchar,uuid,varchar[])'::regprocedure) INTO definition;
+ IF strpos(definition,'IF state.id IS NULL OR lead.subject_id IS NULL THEN')=0 THEN RAISE EXCEPTION 'v2_core_place_context_definition_changed';END IF;
+ definition:=replace(definition,'IF state.id IS NULL OR lead.subject_id IS NULL THEN',
+  'IF state.id IS NULL OR lead.subject_id IS NULL OR EXISTS(SELECT 1 FROM public.v2_admin_current_core a WHERE a.route_subject_id=subject) THEN');
+ EXECUTE definition;
 END;$$;
 
 DO $$DECLARE r text;f record;t text;BEGIN

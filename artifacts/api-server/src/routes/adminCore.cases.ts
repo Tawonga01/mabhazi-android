@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import type pg from 'pg';
 type Context={admin:pg.Client;base:string;accounts:string[];tokens:string[];leadBody:()=>Record<string,unknown>};
 export function registerAdminCoreApiTests(context:()=>Context){
- const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string,submission:string;
+ const owner=randomUUID(),token=randomBytes(32).toString('hex');let route:string,submission:string,originalContext:any;
  const q=(sql:string,values:unknown[]=[])=>context().admin.query(sql,values);
  async function enabled<T>(fn:()=>Promise<T>){const a=process.env.NAMED_ADMIN_CONSOLE_ENABLED,b=process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED;
   process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED='true';
@@ -19,6 +19,8 @@ export function registerAdminCoreApiTests(context:()=>Context){
   await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','test_bootstrap')",[owner]);
   const saved=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify(context().leadBody())});
   assert.equal(saved.status,200);const receipt=await saved.json() as any;route=receipt.subjectId;submission=receipt.clientSubmissionId;
+  const contextResponse=await fetch(context().base+'/v2/subjects/'+route+'/contribution-context',{headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0]}});
+  assert.equal(contextResponse.status,200);originalContext=await contextResponse.json();
   assert.equal((await call('/'+route)).status,503);
   await enabled(async()=>{const r=await call('/'+route);assert.equal(r.status,200);assert.equal(r.value.current['departure.reported'].time,'00:00');assert.equal(Number(r.value.dependencies),0);assert.match(r.headers.get('cache-control')??'',/no-store/);});
  });
@@ -61,6 +63,10 @@ export function registerAdminCoreApiTests(context:()=>Context){
   const unknown=await fetch(context().base+'/v2/subjects/'+route,{headers:{'X-Mabhazi-Route-Display':'future'}});assert.equal(unknown.status,400);
   const owned=await fetch(context().base+'/v2/my-routes/'+submission,{headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0]}});
   assert.equal(owned.status,200);const own=(await owned.json() as any).route;assert.equal(own.departureTime,'00:00');assert.equal(own.availability,'unavailable');assert.equal(own.currentLeadRevision,undefined);
+  const oldContext=await fetch(context().base+'/v2/subjects/'+route+'/contribution-context',{headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0]}});assert.equal(oldContext.status,404);
+  const beforeFacts=(await q('SELECT count(*) n FROM v2_observations WHERE original_subject_id=$1',[route])).rows[0].n;
+  const stalePlace=await fetch(context().base+'/v2/route-observations',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'own_contribution',target:{existing:{subjectId:route,expectedRevision:displayed.revision,identityKey:originalContext.identityKey}},observations:[{fieldKey:'boarding.pickup',value:{cityId:own.origin.id,name:'Must not move onto a corrected service'},scope:{}}]})});
+  assert.equal(stalePlace.status,404);assert.equal((await q('SELECT count(*) n FROM v2_observations WHERE original_subject_id=$1',[route])).rows[0].n,beforeFacts);
   const safety=await fetch(context().base+'/v2/subjects/'+route+'/safety',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[1],'X-Mabhazi-Account':context().accounts[1],'Content-Type':'application/json'},body:JSON.stringify({action:'report',reason:'inaccurate'})});
   assert.equal(safety.status,200);assert.equal((await safety.json() as any).status,'reported');
  }));
