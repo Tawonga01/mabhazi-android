@@ -60,7 +60,8 @@ router.get('/:clientSubmissionId', async (req, res) => {
   if (!parsed.success) { res.status(400).json({ code: 'INVALID_REQUEST_ID', error: 'The route reference is invalid.' }); return; }
   if (Object.keys(req.query).length) { res.status(400).json({ code: 'INVALID_QUERY', error: 'Reopen your route and try again.' }); return; }
   try {
-    const result = await pool.query(`${selected} ${owned} AND r.client_submission_id=$2`, [req.user.id, parsed.data.clientSubmissionId]);
+    const correctionColumn=await reviewedRoutesAvailable()?",EXISTS(SELECT 1 FROM public.v2_admin_current_core a WHERE a.route_subject_id=l.subject_id) corrected ":',false corrected ';
+    const result = await pool.query(`${selected}${correctionColumn} ${owned} AND r.client_submission_id=$2`, [req.user.id, parsed.data.clientSubmissionId]);
     if (!result.rows[0]) { res.status(404).json({ code: 'ROUTE_UNAVAILABLE', error: 'This submitted route is unavailable.' }); return; }
     res.json(GetV2OwnRouteResponse.parse({ route: record(result.rows[0]) }));
   } catch { res.status(503).json({ code: 'TEMPORARILY_UNAVAILABLE', error: 'Your route could not be checked. Try again.' }); }

@@ -174,7 +174,9 @@ BEGIN
   ELSE
    SELECT o.value INTO current_value FROM public.v2_observations o WHERE o.contribution_id=source AND o.field_key=field;
   END IF;
-  SELECT coalesce((SELECT a.proposed_value FROM public.v2_admin_current_core a WHERE a.route_subject_id=route AND a.field_key=field),current_value) INTO current_value;
+  IF EXISTS(SELECT 1 FROM public.v2_admin_current_core a WHERE a.route_subject_id=route AND a.field_key=field) THEN
+   SELECT a.proposed_value INTO current_value FROM public.v2_admin_current_core a WHERE a.route_subject_id=route AND a.field_key=field;
+  END IF;
   IF proposal=current_value THEN result:='unchanged';END IF;
   IF field IN('route.origin','route.destination') AND proposal->>'cityId'=coalesce(
    (SELECT a.proposed_value->>'cityId' FROM public.v2_admin_current_core a WHERE a.route_subject_id=route

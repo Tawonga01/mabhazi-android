@@ -81,6 +81,10 @@ export function registerAdminCoreTests(context:()=>Context){
   const a=(await q('SELECT * FROM v2_admin_core_actions WHERE id=$1',[r.id])).rows[0];
   assert.equal(a.proposed_value,null);assert.equal(a.request_digest,null);assert.equal(a.observed_date,null);assert.equal(a.actor_user_id,null);
   assert.equal(await legacy(f.route),'0');assert.equal(await reviewed(f.route),undefined);
+  await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','independent_recheck')",[context().user]);
+  const independent=await apply(await command(f.route,'departure.reported',{time:'07:00',basis:'unspecified'}),randomUUID(),context().user);
+  assert.equal(independent.outcome,'corrected');assert.equal((await reviewed(f.route)).reported_time.value,'07:00');
+  assert.equal((await reviewed(f.route)).core_corrections.length,1);assert.equal(await legacy(f.route),'0');
  });
  test('core correction: source erasure and administrative removal stay effective in every projection',async()=>{
   const f=await fixture();await apply(await command(f.route));
