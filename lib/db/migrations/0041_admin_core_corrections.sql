@@ -227,7 +227,7 @@ CREATE VIEW public.v2_public_reviewed_lead_reports AS
 DO $$DECLARE definition text;BEGIN
  SELECT pg_get_functiondef('public.v2_prompt_eligible(uuid,varchar,text[])'::regprocedure) INTO definition;
  IF strpos(definition,'BEGIN')=0 THEN RAISE EXCEPTION 'v2_core_prompt_definition_changed';END IF;
- definition:=replace(definition,'BEGIN','BEGIN'||E'\n IF EXISTS(SELECT 1 FROM public.v2_question_tasks t JOIN public.v2_admin_current_core a ON a.route_subject_id=t.subject_id WHERE t.id=task) THEN RETURN false;END IF;');
+ definition:=replace(definition,'BEGIN','BEGIN'||E'\n IF EXISTS(SELECT 1 FROM public.v2_question_tasks core_task JOIN public.v2_admin_current_core a ON a.route_subject_id=core_task.subject_id WHERE core_task.id=task) THEN RETURN false;END IF;');
  EXECUTE definition;
  SELECT pg_get_functiondef('public.v2_submit_actual_journey(varchar,text,jsonb)'::regprocedure) INTO definition;
  IF strpos(definition,'IF intended_id IS NOT NULL THEN')=0 THEN RAISE EXCEPTION 'v2_core_intake_definition_changed';END IF;

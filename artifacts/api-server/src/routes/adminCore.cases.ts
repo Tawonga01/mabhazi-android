@@ -20,7 +20,7 @@ export function registerAdminCoreApiTests(context:()=>Context){
   const saved=await fetch(context().base+'/v2/contributions',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify(context().leadBody())});
   assert.equal(saved.status,200);route=(await saved.json() as any).subjectId;
   assert.equal((await call('/'+route)).status,503);
-  await enabled(async()=>{const r=await call('/'+route);assert.equal(r.status,200);assert.equal(r.value.current['departure.reported'].time,'00:00');assert.equal(r.value.dependencies,0);assert.match(r.headers.get('cache-control')??'',/no-store/);});
+  await enabled(async()=>{const r=await call('/'+route);assert.equal(r.status,200);assert.equal(r.value.current['departure.reported'].time,'00:00');assert.equal(Number(r.value.dependencies),0);assert.match(r.headers.get('cache-control')??'',/no-store/);});
  });
  test('core API: public, changed-account, cross-origin and actor-injected writes fail before changing data',async()=>enabled(async()=>{
   assert.equal((await call('/'+route,undefined,{},null)).status,401);
