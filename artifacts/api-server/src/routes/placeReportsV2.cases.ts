@@ -80,4 +80,21 @@ export function registerPlaceReportTests(context:()=>Context){
   await q('SET ROLE mabhazi_api');try{await assert.rejects(q('INSERT INTO v2_place_report_refs(observation_id) VALUES(gen_random_uuid())'),e=>(e as {code:string}).code==='42501');assert.equal((await q("SELECT has_function_privilege(current_user,'v2_place_reference_created()','EXECUTE') p")).rows[0].p,false);await assert.rejects(q('SELECT * FROM v2_place_report_context'),e=>(e as {code:string}).code==='42501');assert.equal((await q("SELECT has_function_privilege(current_user,'v2_prompt_identity(uuid)','EXECUTE') p")).rows[0].p,false);}finally{await q('RESET ROLE');}
   for(const role of ['anon','authenticated']){if(!(await q('SELECT 1 FROM pg_roles WHERE rolname=$1',[role])).rows.length)await q('CREATE ROLE '+role);await q('SET ROLE '+role);try{await assert.rejects(q('SELECT * FROM v2_place_report_context'),e=>(e as {code:string}).code==='42501');await assert.rejects(q('SELECT v2_api_place_report_action(NULL,NULL,NULL,NULL,NULL,NULL)'),e=>(e as {code:string}).code==='42501');}finally{await q('RESET ROLE');}}
  });
+ test('approved cards: approved pickup uses its own date, suppresses pending neighbours and disappears on withdrawal',async()=>{
+  const {l,saved}=await ready(),actor=context().accounts[1],headers={'X-Mabhazi-Route-Display':'reviewed-core/1'};
+  const card=()=>http('/v2/subjects/'+l.subjectId,undefined,null,headers);
+  assert.equal((await card()).value.subject.cardDetails,undefined);
+  const c=(await q(`SELECT o.id,d.assessment_id,s.revision,COALESCE(rc.revision,0) case_revision FROM v2_observations o
+   JOIN v2_current_fields f ON f.subject_id=o.original_subject_id AND f.field_key=o.field_key AND f.scope_key=o.scope_key JOIN v2_field_decisions d ON d.id=f.field_decision_id JOIN v2_subjects s ON s.id=o.original_subject_id
+   LEFT JOIN v2_field_review_threads t ON t.subject_id=s.id AND t.field_key=o.field_key AND t.scope_key=o.scope_key LEFT JOIN v2_review_cases rc ON rc.id=t.case_id WHERE o.contribution_id=$1 AND o.field_key='boarding.pickup'`,[saved.contributionId])).rows[0];
+  await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','card_fixture') ON CONFLICT DO NOTHING",[actor]);
+  await q("SELECT v2_resolve_field($1,$2,$3,$4,$5,ARRAY[]::uuid[],'accept','reports_reviewed',NULL,$6)",[actor,c.assessment_id,c.case_revision,c.revision,c.id,randomUUID()]);
+  const response=await card();assert.equal(response.status,200,JSON.stringify(response.value));
+  assert.equal(response.value.subject.cardDetails!.pickup!.name,'Central rank');assert.equal(response.value.subject.cardDetails!.pickup!.freshness,'unknown');assert.equal(response.value.subject.cardDetails!.pickup!.observedDate,null);
+  assert.equal(response.value.subject.cardDetails!.fare,undefined);assert.equal(response.value.subject.cardDetails!.dropoff,undefined);
+  const blocked=await http('/v2/subjects/'+l.subjectId,undefined,null,{...headers,'X-Mabhazi-Blocked-Contributors':JSON.stringify([actor])});assert.equal(blocked.value.subject.cardDetails,undefined);
+  assert.ok(!JSON.stringify(response.value).includes(c.id));
+  await q('SELECT v2_withdraw_observation($1,$2,1,$3,NULL)',[actor,c.id,randomUUID()]);assert.equal((await card()).value.subject.cardDetails,undefined);
+ });
+
 }

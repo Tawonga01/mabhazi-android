@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { V2ApprovedCardDetails } from "./v2ApprovedCardDetails";
 import type { V2City } from "./v2City";
 import type { V2CoreCorrection } from "./v2CoreCorrection";
 import type { V2PublicClockReport } from "./v2PublicClockReport";
@@ -29,6 +30,7 @@ export interface V2PublicLead {
   timedDepartureEligible: boolean;
   contributionTargetEligible: boolean;
   missingDetails: V2PublicLeadMissingDetailsItem[];
+  cardDetails?: V2ApprovedCardDetails;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
 }

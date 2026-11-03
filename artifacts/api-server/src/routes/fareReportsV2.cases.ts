@@ -109,4 +109,31 @@ export function registerFareReportTests(context:()=>Context){
   const db=context().admin;await q('SET ROLE mabhazi_api');try{await assert.rejects(q('INSERT INTO v2_public_fare_refs(observation_id) VALUES(gen_random_uuid())'),e=>(e as {code:string}).code==='42501');assert.equal((await q("SELECT has_function_privilege(current_user,'v2_fare_reference_created()','EXECUTE') p")).rows[0].p,false);}finally{await q('RESET ROLE');}
   for(const role of ['anon','authenticated']){if(!(await q('SELECT 1 FROM pg_roles WHERE rolname=$1',[role])).rows.length)await q('CREATE ROLE '+role);await db.query('SET ROLE '+role);try{await assert.rejects(q('SELECT * FROM v2_fare_report_context'),e=>(e as {code:string}).code==='42501');await assert.rejects(q('SELECT v2_api_fare_report_action(NULL,NULL,NULL,NULL,NULL,NULL)'),e=>(e as {code:string}).code==='42501');}finally{await q('RESET ROLE');}}
  });
+ test('approved cards: selected scoped fare only; dates, currency, private IDs, blocks and reversal stay safe',async()=>{
+  const prior=process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED;process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED='true';
+  try{
+   const {l,a}=await ready(),actor=context().accounts[1],headers={'X-Mabhazi-Route-Display':'reviewed-core/1'};
+   const card=async(extra:Record<string,string>={})=>http('/v2/subjects/'+l.subjectId,undefined,null,{...headers,...extra});
+   assert.equal((await card()).status,200);assert.equal((await card()).value.subject.cardDetails,undefined);
+   const current=(await q(`SELECT o.id observation,d.assessment_id,COALESCE(rc.revision,0) case_revision,s.revision FROM v2_observations o
+    JOIN v2_current_fields cf ON cf.subject_id=o.original_subject_id AND cf.field_key=o.field_key AND cf.scope_key=o.scope_key
+    JOIN v2_field_decisions d ON d.id=cf.field_decision_id JOIN v2_subjects s ON s.id=o.original_subject_id
+    LEFT JOIN v2_field_review_threads t ON t.subject_id=s.id AND t.field_key=o.field_key AND t.scope_key=o.scope_key
+    LEFT JOIN v2_review_cases rc ON rc.id=t.case_id WHERE o.original_subject_id=$1 AND o.field_key='fare.paid'`,[a.subjectId])).rows[0];
+   await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','card_fixture') ON CONFLICT DO NOTHING",[actor]);
+   const review=(await q("SELECT v2_resolve_field($1,$2,$3,$4,$5,ARRAY[]::uuid[],'accept','reports_reviewed',NULL,$6) id",[actor,current.assessment_id,current.case_revision,current.revision,current.observation,randomUUID()])).rows[0].id;
+   const response=await card();assert.equal(response.status,200,JSON.stringify(response.value));const subject=response.value.subject,fare=subject.cardDetails!.fare!;
+   assert.equal(fare.amount,'25');assert.equal(fare.currency,'USD');assert.equal(fare.kind,'paid');assert.equal(fare.observedDate,await date());assert.equal(fare.freshness,'fresh');assert.equal(fare.scope.serviceDate,await date());
+   assert.equal(subject.cardDetails!.pickup,undefined);assert.equal(subject.timedDepartureEligible,false);
+   for(const privateId of [actor,a.subjectId,a.contributionId,current.observation,review])assert.ok(!JSON.stringify(subject).includes(privateId));
+   assert.equal((await card({'X-Mabhazi-Blocked-Contributors':JSON.stringify([actor])})).value.subject.cardDetails,undefined);
+   assert.equal((await http('/v2/subjects/'+l.subjectId)).value.subject.cardDetails,undefined);
+   const search=await http('/v2/search?fromCity=API%20Origin&operator='+encodeURIComponent('Fare boundary bus'),undefined,null,headers);
+   assert.equal(search.status,200);assert.ok((search.value as any).operators.includes('Fare boundary bus'));assert.ok((search.value as any).matchingCount>0);assert.ok((search.value as any).items.every((r:any)=>r.operatorReport.value==='Fare boundary bus'));
+   await q(`SELECT v2_record_review($1,c.id,c.revision,s.revision,'reverse','decision_incorrect',NULL,ARRAY[]::uuid[],'evidence/1',$2)
+    FROM v2_review_decisions d JOIN v2_review_cases c ON c.id=d.case_id JOIN v2_subjects s ON s.id=c.subject_id WHERE d.id=$2`,[actor,review]);
+   assert.equal((await card()).value.subject.cardDetails,undefined);
+  }finally{if(prior===undefined)delete process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED;else process.env.NAMED_ADMIN_CORE_CORRECTIONS_ENABLED=prior;}
+ });
+
 }

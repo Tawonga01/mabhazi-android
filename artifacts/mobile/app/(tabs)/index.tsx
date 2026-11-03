@@ -1,3 +1,4 @@
+import {OperatorFilter} from '@/components/OperatorFilter';
 import { ui } from '@/constants/ui';
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -11,12 +12,13 @@ import {
   ActivityIndicator,
   Platform,
   Animated,
+  AppState,
 } from "react-native";
 import { Feather } from "@/components/VectorIcon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/lib/auth";
 import { JourneyCard, type Journey } from "@/components/JourneyCard";
@@ -57,6 +59,7 @@ export default function SearchScreen() {
 
   const [fromCity, setFromCity] = useState(params.fromCity ?? "");
   const [toCity, setToCity] = useState(params.toCity ?? "");
+  const [operatorFilter,setOperatorFilter]=useState<string|null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -83,6 +86,7 @@ export default function SearchScreen() {
   // Auto-trigger search when navigated here from Contribute with pre-filled cities
   useEffect(() => {
     if (params.fromCity || params.toCity) {
+      setOperatorFilter(null);
       const fc = (params.fromCity as string) ?? "";
       const tc = (params.toCity as string) ?? "";
       setFromChoice(null); setToChoice(null);
@@ -128,15 +132,23 @@ export default function SearchScreen() {
 
   const safetyReady=!isBlockedContributorsLoading&&!blockedContributorsError;
   const publicRequired=searchParams!==null;
-  const publicParams={...(searchedRoute?.origin?{originCityId:searchedRoute.origin.id}:{fromCity:searchParams?.fromCity}),...(searchedRoute?.destination?{destinationCityId:searchedRoute.destination.id}:{toCity:searchParams?.toCity})};
+  const publicParams={...(operatorFilter?{operator:operatorFilter}:{}),...(searchedRoute?.origin?{originCityId:searchedRoute.origin.id}:{fromCity:searchParams?.fromCity}),...(searchedRoute?.destination?{destinationCityId:searchedRoute.destination.id}:{toCity:searchParams?.toCity})};
   const publicResults=usePublicRoutes(publicParams,publicRequired&&safetyReady&&!authLoading,user?.id??null,blockedContributorIds,capture.revision);
   const publicItems=safetyReady&&!authLoading?(publicResults.data?.pages.flatMap(page=>page.items)??[]):[];
   const publicHidden=safetyReady&&publicResults.data?.pages.some(page=>page.hasHiddenResults)?1:0;
   const resultItems=[...visibleJourneys.map(journey=>({kind:'legacy' as const,journey})),...publicItems.map(route=>({kind:'lead' as const,route}))];
+  const operators=[...new Map([...visibleJourneys.map(j=>j.busCompany),...(publicResults.data?.pages[0]?.operators??publicItems.map(r=>r.operatorReport.value))].filter(Boolean).map(name=>[name.trim().toLocaleLowerCase(),name.trim()])).values()].sort((a,b)=>a.localeCompare(b));
+  const filteredItems=resultItems.filter(item=>!operatorFilter||(item.kind==='lead'?item.route.operatorReport.value:item.journey.busCompany).trim().toLocaleLowerCase()===operatorFilter.trim().toLocaleLowerCase());
+  const matchingCount=visibleJourneys.filter(j=>!operatorFilter||j.busCompany.trim().toLocaleLowerCase()===operatorFilter.trim().toLocaleLowerCase()).length+(publicResults.data?.pages[0]?.matchingCount??publicItems.length);
   const viewState = searchViewState({ searched: hasSearched, loading: isLoading || isFetching || authLoading || publicRequired&&safetyReady&&publicResults.isLoading,
     succeeded: isSuccess&&(!publicRequired||!safetyReady||publicResults.isSuccess),failed:isError||publicRequired&&safetyReady&&publicResults.isError,
-    safetyLoading: isBlockedContributorsLoading,safetyFailed:!!blockedContributorsError,total:journeys.length+publicItems.length+publicHidden,visible:resultItems.length });
+    safetyLoading: isBlockedContributorsLoading,safetyFailed:!!blockedContributorsError,total:journeys.length+publicItems.length+publicHidden+operators.length,visible:resultItems.length+operators.length });
   const retrySearch=()=>{void refetch();if(publicRequired&&safetyReady)void publicResults.refetch();};
+
+  // Public facts are read-only. Recheck after returning to Search/the app and
+  // allow pull-to-refresh; dashboard approvals must not wait for a new APK.
+  useFocusEffect(useCallback(()=>{if(publicRequired&&safetyReady&&!capture.isOpen)void publicResults.refetch();},[publicRequired,safetyReady,capture.isOpen,publicResults.refetch]));
+  useEffect(()=>{const subscription=AppState.addEventListener('change',state=>{if(state==='active'&&publicRequired&&safetyReady&&!capture.isOpen)void publicResults.refetch();});return()=>subscription.remove();},[publicRequired,safetyReady,capture.isOpen,publicResults.refetch]);
 
   const collapseSearch = useCallback(() => {
     Animated.timing(expandAnim, {
@@ -157,6 +169,8 @@ export default function SearchScreen() {
 
   const handleSearch = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void queryClient.invalidateQueries({queryKey:['public-route-reports']});
+    setOperatorFilter(null);
     setHasSearched(true);
     setSearchedRoute(searchRoutePrefill(fromCity, toCity, fromChoice, toChoice));
     setSearchParams({
@@ -165,7 +179,7 @@ export default function SearchScreen() {
       day: selectedDay ?? undefined,
     });
     collapseSearch();
-  }, [fromCity, toCity, fromChoice, toChoice, selectedDay, collapseSearch]);
+  }, [fromCity, toCity, fromChoice, toChoice, selectedDay, collapseSearch, queryClient]);
 
   const swapCities = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -603,7 +617,9 @@ export default function SearchScreen() {
         </View>
       ) : (
         <FlatList
-           data={resultItems}
+           data={filteredItems}
+          refreshing={isFetching||publicResults.isRefetching}
+          onRefresh={retrySearch}
           keyExtractor={(item) => item.kind==='lead'?'lead:'+item.route.subjectId:'legacy:'+item.journey.id}
           renderItem={({ item }) => item.kind==='lead'? <PublicRouteCard route={item.route} disabled={capture.isOpen} onPress={()=>capture.open({kind:'public_route',subjectId:item.route.subjectId})}/> : (
             <JourneyCard
@@ -631,6 +647,7 @@ export default function SearchScreen() {
             },
           ]}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={[styles.emptySubtitle,{color:colors.mutedForeground,margin:24}]}>No matching departures</Text>}
           ListFooterComponent={publicResults.hasNextPage?<View style={{margin:16}}><CaptureButton title="Load more route reports" busy={publicResults.isFetchingNextPage} onPress={()=>void publicResults.fetchNextPage()}/></View>:null}
           ListHeaderComponent={
              <View>
@@ -639,6 +656,7 @@ export default function SearchScreen() {
                    <TermsAcceptanceCard terms={terms} />
                  </View>
                ) : null}
+               <OperatorFilter operators={operators} value={operatorFilter} onChange={setOperatorFilter}/>
                <Text
                  style={[
                    styles.resultsCount,
@@ -648,7 +666,7 @@ export default function SearchScreen() {
                    },
                  ]}
                >
-                  {resultItems.length} route{resultItems.length !== 1 ? "s" : ""} found
+                  {matchingCount} departure{matchingCount !== 1 ? "s" : ""}
                </Text>
              </View>
           }

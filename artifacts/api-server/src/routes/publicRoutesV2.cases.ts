@@ -1,3 +1,4 @@
+import {cardFreshness,projectApprovedCards} from '../lib/approvedCardDetails';
 import assert from 'node:assert/strict';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
@@ -195,3 +196,15 @@ export function registerPublicRouteTests(context:()=>Context){
  });
 
 }
+
+test('approved card freshness: 14-day boundary, unknown and future observations; approval time never substituted',()=>{
+ assert.equal(cardFreshness('2026-10-21','2026-11-03'),'fresh');
+ assert.equal(cardFreshness('2026-10-20','2026-11-03'),'older');
+ assert.equal(cardFreshness(null,'2026-11-03'),'unknown');
+ assert.equal(cardFreshness('2026-11-04','2026-11-03'),'unknown');
+ const claim={route_subject_id:'r',field_key:'fare.paid',ref:'ref',original_value:{amount:'15',currency:'USD'},scope:{serviceDate:'2026-10-25',passengerCategory:'adult',ticketBasis:'one_way'},observed_date:null,as_of:'2026-11-03'};
+ assert.equal((projectApprovedCards([claim]).get('r')!.fare as any).freshness,'fresh');
+ assert.equal((projectApprovedCards([{...claim,field_key:'boarding.pickup',original_value:{name:'Rank'},scope:{}}]).get('r')!.pickup as any).freshness,'unknown');
+ assert.equal(projectApprovedCards([claim,{...claim,ref:'other',original_value:{amount:'200',currency:'ZAR'}}]).get('r'),undefined);
+ assert.equal(projectApprovedCards([claim,{...claim,ref:'child',scope:{...claim.scope,passengerCategory:'child'}}]).get('r'),undefined);
+});

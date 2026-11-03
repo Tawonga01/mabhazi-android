@@ -530,6 +530,41 @@ try {
   async function seedPublic(name,time){const response=await fetch('http://127.0.0.1:5000/api/v2/contributions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':users[0]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:publicCities[0],destinationCityId:publicCities[1],departureTime:time,operator:{name}}},observations:[]})});assert.equal(response.status,200);return await response.json();}
   const publicA=await seedPublic('Public popup A','08:30'),publicB=await seedPublic('Public popup B','14:00'),publicC=await seedPublic('Road Wolf','07:00');
 
+
+  // Real approved facts, actual Expo cards and filtering; no mocked card payload.
+  {
+   const first=await seedPublic('Card approval coach','07:00'),second=await seedPublic('Card pickup coach','14:30'),reviewer=randomUUID();
+   await admin.query("INSERT INTO users(id) VALUES($1)",[reviewer]);
+   await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','card_render_fixture')",[reviewer]);
+   const day=(await admin.query("SELECT to_char(statement_timestamp()-interval '2 days','YYYY-MM-DD') day")).rows[0].day;
+   const revision=Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[first.subjectId])).rows[0].revision);
+   const r=await fetch('http://127.0.0.1:5000/api/v2/actual-journeys',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[1],'X-Mabhazi-Account':users[1]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{newActualJourney:{intendedSubject:{id:first.subjectId,kind:'lead',expectedRevision:revision}}},observations:[{fieldKey:'fare.paid',value:{amount:'15',currency:'USD'},scope:{schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:publicCities[0],destinationCityId:publicCities[1]},serviceDate:day,passengerCategory:'adult',ticketBasis:'one_way'}}]})});
+   assert.equal(r.status,200);const actual=await r.json();
+   const ctxResponse=await fetch('http://127.0.0.1:5000/api/v2/subjects/'+second.subjectId+'/contribution-context',{headers:{Authorization:'Bearer '+tokens[1],'X-Mabhazi-Account':users[1]}}),ctx=await ctxResponse.json();assert.equal(ctxResponse.status,200);
+   const p=await fetch('http://127.0.0.1:5000/api/v2/route-observations',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[1],'X-Mabhazi-Account':users[1]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{existing:{subjectId:second.subjectId,expectedRevision:ctx.revision,identityKey:ctx.identityKey}},observations:[{fieldKey:'boarding.pickup',value:{cityId:publicCities[0],name:'4th avenue'},scope:{}}]})});assert.equal(p.status,200);
+   const ids=[first.subjectId,second.subjectId,actual.subjectId];
+   await admin.query("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE state='pending' AND NOT(subject_id=ANY($1::uuid[]))",[ids]);
+   for(let n=0;n<4;n++)for(const kind of ['normalise','associate','assess'])assert.equal((await admin.query('SELECT v2_worker_drain_'+kind+'(20) r')).rows[0].r.failedAttempts,0);
+   for(const [subject,field]of [[actual.subjectId,'fare.paid'],[second.subjectId,'boarding.pickup']]){
+    const c=(await admin.query(`SELECT o.id,d.assessment_id,s.revision,COALESCE(rc.revision,0) case_revision FROM v2_observations o
+     JOIN v2_current_fields f ON f.subject_id=o.original_subject_id AND f.field_key=o.field_key AND f.scope_key=o.scope_key
+     JOIN v2_field_decisions d ON d.id=f.field_decision_id JOIN v2_subjects s ON s.id=o.original_subject_id
+     LEFT JOIN v2_field_review_threads t ON t.subject_id=s.id AND t.field_key=o.field_key AND t.scope_key=o.scope_key LEFT JOIN v2_review_cases rc ON rc.id=t.case_id
+     WHERE o.original_subject_id=$1 AND o.field_key=$2`,[subject,field])).rows[0];assert.ok(c);
+    await admin.query("SELECT v2_resolve_field($1,$2,$3,$4,$5,ARRAY[]::uuid[],'accept','reports_reviewed',NULL,$6)",[reviewer,c.assessment_id,c.case_revision,c.revision,c.id,randomUUID()]);
+   }
+   const s=await session(null,false,'search');await publicSearch(s);
+   const fare=s.page.getByRole('button',{name:'Open route report Card approval coach 07:00',exact:true}),pickup=s.page.getByRole('button',{name:'Open route report Card pickup coach 14:30',exact:true});
+   await fare.getByText('USD 15',{exact:true}).waitFor();await pickup.getByText('4th avenue',{exact:true}).waitFor();
+   assert.equal(await fare.getByText('from',{exact:true}).count(),0);
+   await fare.scrollIntoViewIfNeeded();await publicShot(s,'approved-cards-all-operators.png');
+   await s.page.getByRole('button',{name:'Filter by operator: All operators',exact:true}).click();await s.page.getByRole('button',{name:'Card pickup coach',exact:true}).click();
+   await pickup.waitFor();assert.equal(await fare.count(),0);await s.page.getByText('1 departure',{exact:true}).waitFor();await publicShot(s,'approved-cards-operator-filter.png');
+   await s.page.setViewportSize({width:320,height:568});await publicShot(s,'approved-cards-narrow.png');assert.equal(await s.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   await pickup.click();await s.page.getByRole('heading',{name:'Route report',exact:true}).waitFor();await s.page.getByText('4th avenue',{exact:true}).waitFor();assert.equal(s.posts(),0);
+   await s.context.close();results.push('approved-only price and pickup cards render real resolved facts, retain scoped accessibility, immediately filter/count exact operators and open the correct route at320px without writes');
+  }
+
   // A real, independently attributed correction rendered through the actual public API.
   {
     const revised=await seedPublic('Reviewed display coach','06:40'),reviewer=randomUUID();
@@ -540,7 +575,7 @@ try {
     assert.equal(corrected.outcome,'corrected');
     const s=await session(1,false,'search');await publicSearch(s);
     await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).waitFor();
-    await s.page.getByText('Corrected report',{exact:true}).waitFor();await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).scrollIntoViewIfNeeded();await publicShot(s,'reviewed-core-search.png');
+    await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).scrollIntoViewIfNeeded();await publicShot(s,'reviewed-core-search.png');
     await s.page.getByRole('button',{name:'Open route report Reviewed display coach 08:40',exact:true}).click();
     await s.page.getByRole('heading',{name:'Corrected route report',exact:true}).waitFor();
     assert.equal(await s.page.getByRole('button',{name:'Add fare',exact:true}).count(),0);

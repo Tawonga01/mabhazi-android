@@ -27,5 +27,10 @@ export type SearchV2RoutesParams = {
    * @maxLength 80
    */
   toCity?: string;
+  /**
+   * @minLength 1
+   * @maxLength 180
+   */
+  operator?: string;
   cursor?: string;
 };

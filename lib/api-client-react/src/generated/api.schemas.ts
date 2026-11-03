@@ -1426,6 +1426,54 @@ export interface V2PublicFarePage {
   nextCursor?: string;
 }
 
+export type V2ApprovedCardFactFreshness =
+  (typeof V2ApprovedCardFactFreshness)[keyof typeof V2ApprovedCardFactFreshness];
+
+export const V2ApprovedCardFactFreshness = {
+  fresh: "fresh",
+  older: "older",
+  unknown: "unknown",
+} as const;
+
+export interface V2ApprovedCardFact {
+  id: string;
+  /**
+   * @minLength 10
+   * @maxLength 10
+   */
+  observedDate?: string | null;
+  freshness: V2ApprovedCardFactFreshness;
+}
+
+export type V2ApprovedCardPlace = V2ApprovedCardFact & {
+  /** @maxLength 180 */
+  name: string;
+};
+
+export type V2ApprovedCardFareKind =
+  (typeof V2ApprovedCardFareKind)[keyof typeof V2ApprovedCardFareKind];
+
+export const V2ApprovedCardFareKind = {
+  paid: "paid",
+  quoted: "quoted",
+  advertised: "advertised",
+} as const;
+
+export type V2ApprovedCardFareScope = { [key: string]: unknown };
+
+export type V2ApprovedCardFare = V2ApprovedCardFact & {
+  kind: V2ApprovedCardFareKind;
+  amount: string;
+  currency: string;
+  scope: V2ApprovedCardFareScope;
+};
+
+export interface V2ApprovedCardDetails {
+  fare?: V2ApprovedCardFare;
+  pickup?: V2ApprovedCardPlace;
+  dropoff?: V2ApprovedCardPlace;
+}
+
 export type V2PublicLeadKind =
   (typeof V2PublicLeadKind)[keyof typeof V2PublicLeadKind];
 
@@ -1465,6 +1513,7 @@ export interface V2PublicLead {
   timedDepartureEligible: boolean;
   contributionTargetEligible: boolean;
   missingDetails: V2PublicLeadMissingDetailsItem[];
+  cardDetails?: V2ApprovedCardDetails;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
 }
@@ -1473,6 +1522,9 @@ export interface V2PublicSearch {
   /** @maxItems 20 */
   items: V2PublicLead[];
   hasHiddenResults: boolean;
+  /** @minimum 0 */
+  matchingCount?: number;
+  operators?: string[];
   nextCursor?: string;
 }
 
@@ -1776,6 +1828,11 @@ export type SearchV2RoutesParams = {
    * @maxLength 80
    */
   toCity?: string;
+  /**
+   * @minLength 1
+   * @maxLength 180
+   */
+  operator?: string;
   cursor?: string;
 };
 

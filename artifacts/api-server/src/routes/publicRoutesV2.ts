@@ -1,3 +1,4 @@
+import {readApprovedCards} from '../lib/approvedCardDetails';
 import {reviewedRoutesAvailable,reviewedRoutesHeader,reviewedRoutesVersion} from '../lib/reviewedRoutes';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
@@ -24,28 +25,30 @@ router.use((req,res,next) => {
 });
 router.get('/search',async(req,res)=>{
  const parsed=SearchV2RoutesQueryParams.strict().safeParse(req.query);
- if(!parsed.success || ['originCityId','destinationCityId','fromCity','toCity','cursor'].some(key=>req.query[key]!==undefined&&typeof req.query[key]!=='string')){
+ if(!parsed.success || ['originCityId','destinationCityId','fromCity','toCity','operator','cursor'].some(key=>req.query[key]!==undefined&&typeof req.query[key]!=='string')){
   res.status(400).json({code:'INVALID_QUERY',error:'Check your city search.'});return;
  }
  const {originCityId,destinationCityId,cursor}=parsed.data,fromCity=parsed.data.fromCity?.trim()??'',toCity=parsed.data.toCity?.trim()??'';
  if(originCityId!==undefined&&!Number.isInteger(originCityId)||destinationCityId!==undefined&&!Number.isInteger(destinationCityId)||originCityId!==undefined&&originCityId===destinationCityId||originCityId!==undefined&&fromCity||destinationCityId!==undefined&&toCity){res.status(400).json({code:'INVALID_QUERY',error:'Choose a city or enter a city name.'});return;}
- const values:unknown[]=[originCityId??null,destinationCityId??null,res.locals.blockedIds,req.isAuthenticated()?req.user.id:null,fromCity,toCity];
+ const values:unknown[]=[originCityId??null,destinationCityId??null,res.locals.blockedIds,req.isAuthenticated()?req.user.id:null,fromCity,toCity,parsed.data.operator??null];
  const corridor=' AND ($1::integer IS NULL OR p.origin_city_id=$1) AND ($2::integer IS NULL OR p.destination_city_id=$2) AND strpos(lower(p.origin->>\'name\'),lower($5))>0 AND strpos(lower(p.destination->>\'name\'),lower($6))>0';
  const blocked='p.author_user_id=ANY($3::varchar[]) OR EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$4 AND b.blocked_user_id=p.author_user_id)';
- const allowed=' AND NOT('+blocked+')';
+ const allowed=' AND NOT('+blocked+')',operatorFilter=' AND ($7::text IS NULL OR lower(btrim(p.operator_report->>\'value\'))=lower(btrim($7)))';
  try {
   const modern=req.get(reviewedRoutesHeader)===reviewedRoutesVersion&&await reviewedRoutesAvailable(),source=modern?'FROM public.v2_public_reviewed_lead_reports p WHERE true':eligible,select=columns+(modern?' ,p.core_corrections AS "coreCorrections" ':'');
   const cities=await pool.query('SELECT id FROM public.cities WHERE id=ANY($1::integer[])',[[originCityId,destinationCityId].filter(id=>id!==undefined)]);
   if(cities.rows.length!==[originCityId,destinationCityId].filter(id=>id!==undefined).length){res.status(422).json({code:'CITY_UNAVAILABLE',error:'Choose the cities again.'});return;}
   if(cursor){
-   const anchor=await pool.query('SELECT 1 '+source+corridor+allowed+' AND p.subject_id=$7',[...values,cursor]);
+   const anchor=await pool.query('SELECT 1 '+source+corridor+allowed+operatorFilter+' AND p.subject_id=$8',[...values,cursor]);
    if(!anchor.rows.length){res.status(400).json({code:'INVALID_CURSOR',error:'The results changed. Refresh your search.'});return;}
    values.push(cursor);
   }
-  const result=await pool.query(select+source+corridor+allowed+(cursor?' AND p.subject_id>$7::uuid':'')+' ORDER BY p.subject_id LIMIT 21',values);
+  const result=await pool.query(select+source+corridor+allowed+operatorFilter+(cursor?' AND p.subject_id>$8::uuid':'')+' ORDER BY p.subject_id LIMIT 21',values);
   const hidden=await pool.query('SELECT EXISTS(SELECT 1 '+source+corridor+' AND ('+blocked+')) hidden',values.slice(0,6));
   const page=result.rows.slice(0,20);
-  res.json(SearchV2RoutesResponse.parse({items:page.map(safeProjection),hasHiddenResults:hidden.rows[0]?.hidden===true,
+  const metadata=await pool.query(`SELECT count(*) FILTER(WHERE $7::text IS NULL OR lower(btrim(p.operator_report->>'value'))=lower(btrim($7)))::integer count,COALESCE(jsonb_agg(DISTINCT p.operator_report->>'value'),'[]'::jsonb) operators `+source+corridor+allowed,values.slice(0,7));
+  const cards=modern?await readApprovedCards(page,res.locals.blockedIds,req.isAuthenticated()?req.user.id:null):new Map();
+  res.json(SearchV2RoutesResponse.parse({items:page.map(row=>safeProjection({...row,...(cards.has(row.subjectId)?{cardDetails:cards.get(row.subjectId)}:{})})),matchingCount:metadata.rows[0].count,operators:metadata.rows[0].operators,hasHiddenResults:hidden.rows[0]?.hidden===true,
    ...(result.rows.length>20?{nextCursor:page[page.length-1].subjectId}:{})}));
  }catch{res.status(503).json({code:'TEMPORARILY_UNAVAILABLE',error:'Route results could not be loaded. Try again.'});}
 });
@@ -56,7 +59,8 @@ router.get('/subjects/:subjectId',async(req,res)=>{
   const modern=req.get(reviewedRoutesHeader)===reviewedRoutesVersion&&await reviewedRoutesAvailable(),source=modern?'FROM public.v2_public_reviewed_lead_reports p WHERE true':eligible,select=columns+(modern?' ,p.core_corrections AS "coreCorrections" ':'');
   const result=await pool.query(select+source+' AND p.subject_id=$1 AND NOT(p.author_user_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=p.author_user_id)',[parsed.data.subjectId,res.locals.blockedIds,req.isAuthenticated()?req.user.id:null]);
   if(!result.rows[0]){res.status(404).json({code:'SUBJECT_UNAVAILABLE',error:'This route is unavailable.'});return;}
-  res.json(GetV2SubjectResponse.parse({subject:safeProjection(result.rows[0])}));
+  const row=result.rows[0],cards=modern?await readApprovedCards([row],res.locals.blockedIds,req.isAuthenticated()?req.user.id:null):new Map();
+  res.json(GetV2SubjectResponse.parse({subject:safeProjection({...row,...(cards.has(row.subjectId)?{cardDetails:cards.get(row.subjectId)}:{})})}));
  }catch{res.status(503).json({code:'TEMPORARILY_UNAVAILABLE',error:'This route could not be checked. Try again.'});}
 });
 export default router;

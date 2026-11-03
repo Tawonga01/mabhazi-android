@@ -1853,6 +1853,8 @@ export const searchV2RoutesQueryFromCityMax = 80;
 
 export const searchV2RoutesQueryToCityMax = 80;
 
+export const searchV2RoutesQueryOperatorMax = 180;
+
 export const SearchV2RoutesQueryParams = zod.object({
   originCityId: zod.coerce
     .number()
@@ -1873,6 +1875,11 @@ export const SearchV2RoutesQueryParams = zod.object({
     .string()
     .min(1)
     .max(searchV2RoutesQueryToCityMax)
+    .optional(),
+  operator: zod.coerce
+    .string()
+    .min(1)
+    .max(searchV2RoutesQueryOperatorMax)
     .optional(),
   cursor: zod.coerce.string().uuid().optional(),
 });
@@ -1919,11 +1926,26 @@ export const searchV2RoutesResponseItemsItemReportedTimeValueRegExp =
   new RegExp("^([01][0-9]|2[0-3]):[0-5][0-9]$");
 export const searchV2RoutesResponseItemsItemReportedTimeObservedDateRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsItemCardDetailsFareOneObservedDateMin = 10;
+export const searchV2RoutesResponseItemsItemCardDetailsFareOneObservedDateMax = 10;
+
+export const searchV2RoutesResponseItemsItemCardDetailsPickupOneObservedDateMin = 10;
+export const searchV2RoutesResponseItemsItemCardDetailsPickupOneObservedDateMax = 10;
+
+export const searchV2RoutesResponseItemsItemCardDetailsPickupTwoNameMax = 180;
+
+export const searchV2RoutesResponseItemsItemCardDetailsDropoffOneObservedDateMin = 10;
+export const searchV2RoutesResponseItemsItemCardDetailsDropoffOneObservedDateMax = 10;
+
+export const searchV2RoutesResponseItemsItemCardDetailsDropoffTwoNameMax = 180;
+
 export const searchV2RoutesResponseItemsItemCoreCorrectionsItemObservedDateOneRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const searchV2RoutesResponseItemsItemCoreCorrectionsMax = 4;
 
 export const searchV2RoutesResponseItemsMax = 20;
+
+export const searchV2RoutesResponseMatchingCountMin = 0;
 
 export const SearchV2RoutesResponse = zod.object({
   items: zod
@@ -1987,6 +2009,81 @@ export const SearchV2RoutesResponse = zod.object({
         missingDetails: zod.array(
           zod.enum(["selected_fare", "operating_days", "boarding_location"]),
         ),
+        cardDetails: zod
+          .object({
+            fare: zod
+              .object({
+                id: zod.string().uuid(),
+                observedDate: zod
+                  .string()
+                  .min(
+                    searchV2RoutesResponseItemsItemCardDetailsFareOneObservedDateMin,
+                  )
+                  .max(
+                    searchV2RoutesResponseItemsItemCardDetailsFareOneObservedDateMax,
+                  )
+                  .nullish(),
+                freshness: zod.enum(["fresh", "older", "unknown"]),
+              })
+              .and(
+                zod.object({
+                  kind: zod.enum(["paid", "quoted", "advertised"]),
+                  amount: zod.string(),
+                  currency: zod.string(),
+                  scope: zod.record(zod.string(), zod.unknown()),
+                }),
+              )
+              .optional(),
+            pickup: zod
+              .object({
+                id: zod.string().uuid(),
+                observedDate: zod
+                  .string()
+                  .min(
+                    searchV2RoutesResponseItemsItemCardDetailsPickupOneObservedDateMin,
+                  )
+                  .max(
+                    searchV2RoutesResponseItemsItemCardDetailsPickupOneObservedDateMax,
+                  )
+                  .nullish(),
+                freshness: zod.enum(["fresh", "older", "unknown"]),
+              })
+              .and(
+                zod.object({
+                  name: zod
+                    .string()
+                    .max(
+                      searchV2RoutesResponseItemsItemCardDetailsPickupTwoNameMax,
+                    ),
+                }),
+              )
+              .optional(),
+            dropoff: zod
+              .object({
+                id: zod.string().uuid(),
+                observedDate: zod
+                  .string()
+                  .min(
+                    searchV2RoutesResponseItemsItemCardDetailsDropoffOneObservedDateMin,
+                  )
+                  .max(
+                    searchV2RoutesResponseItemsItemCardDetailsDropoffOneObservedDateMax,
+                  )
+                  .nullish(),
+                freshness: zod.enum(["fresh", "older", "unknown"]),
+              })
+              .and(
+                zod.object({
+                  name: zod
+                    .string()
+                    .max(
+                      searchV2RoutesResponseItemsItemCardDetailsDropoffTwoNameMax,
+                    ),
+                }),
+              )
+              .optional(),
+          })
+          .optional(),
         coreCorrections: zod
           .array(
             zod.object({
@@ -2021,6 +2118,11 @@ export const SearchV2RoutesResponse = zod.object({
     )
     .max(searchV2RoutesResponseItemsMax),
   hasHiddenResults: zod.boolean(),
+  matchingCount: zod
+    .number()
+    .min(searchV2RoutesResponseMatchingCountMin)
+    .optional(),
+  operators: zod.array(zod.string()).optional(),
   nextCursor: zod.string().uuid().optional(),
 });
 
@@ -2075,6 +2177,19 @@ export const getV2SubjectResponseSubjectReportedTimeValueRegExp = new RegExp(
 );
 export const getV2SubjectResponseSubjectReportedTimeObservedDateRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2SubjectResponseSubjectCardDetailsFareOneObservedDateMin = 10;
+export const getV2SubjectResponseSubjectCardDetailsFareOneObservedDateMax = 10;
+
+export const getV2SubjectResponseSubjectCardDetailsPickupOneObservedDateMin = 10;
+export const getV2SubjectResponseSubjectCardDetailsPickupOneObservedDateMax = 10;
+
+export const getV2SubjectResponseSubjectCardDetailsPickupTwoNameMax = 180;
+
+export const getV2SubjectResponseSubjectCardDetailsDropoffOneObservedDateMin = 10;
+export const getV2SubjectResponseSubjectCardDetailsDropoffOneObservedDateMax = 10;
+
+export const getV2SubjectResponseSubjectCardDetailsDropoffTwoNameMax = 180;
+
 export const getV2SubjectResponseSubjectCoreCorrectionsItemObservedDateOneRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const getV2SubjectResponseSubjectCoreCorrectionsMax = 4;
@@ -2126,6 +2241,73 @@ export const GetV2SubjectResponse = zod.object({
     missingDetails: zod.array(
       zod.enum(["selected_fare", "operating_days", "boarding_location"]),
     ),
+    cardDetails: zod
+      .object({
+        fare: zod
+          .object({
+            id: zod.string().uuid(),
+            observedDate: zod
+              .string()
+              .min(getV2SubjectResponseSubjectCardDetailsFareOneObservedDateMin)
+              .max(getV2SubjectResponseSubjectCardDetailsFareOneObservedDateMax)
+              .nullish(),
+            freshness: zod.enum(["fresh", "older", "unknown"]),
+          })
+          .and(
+            zod.object({
+              kind: zod.enum(["paid", "quoted", "advertised"]),
+              amount: zod.string(),
+              currency: zod.string(),
+              scope: zod.record(zod.string(), zod.unknown()),
+            }),
+          )
+          .optional(),
+        pickup: zod
+          .object({
+            id: zod.string().uuid(),
+            observedDate: zod
+              .string()
+              .min(
+                getV2SubjectResponseSubjectCardDetailsPickupOneObservedDateMin,
+              )
+              .max(
+                getV2SubjectResponseSubjectCardDetailsPickupOneObservedDateMax,
+              )
+              .nullish(),
+            freshness: zod.enum(["fresh", "older", "unknown"]),
+          })
+          .and(
+            zod.object({
+              name: zod
+                .string()
+                .max(getV2SubjectResponseSubjectCardDetailsPickupTwoNameMax),
+            }),
+          )
+          .optional(),
+        dropoff: zod
+          .object({
+            id: zod.string().uuid(),
+            observedDate: zod
+              .string()
+              .min(
+                getV2SubjectResponseSubjectCardDetailsDropoffOneObservedDateMin,
+              )
+              .max(
+                getV2SubjectResponseSubjectCardDetailsDropoffOneObservedDateMax,
+              )
+              .nullish(),
+            freshness: zod.enum(["fresh", "older", "unknown"]),
+          })
+          .and(
+            zod.object({
+              name: zod
+                .string()
+                .max(getV2SubjectResponseSubjectCardDetailsDropoffTwoNameMax),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
     coreCorrections: zod
       .array(
         zod.object({

@@ -11,5 +11,8 @@ export interface V2PublicSearch {
   /** @maxItems 20 */
   items: V2PublicLead[];
   hasHiddenResults: boolean;
+  /** @minimum 0 */
+  matchingCount?: number;
+  operators?: string[];
   nextCursor?: string;
 }

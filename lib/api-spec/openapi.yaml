@@ -777,7 +777,9 @@ paths:
         custom city text is bounded literal discovery, never a contribution
         identity. Without a city filter this is bounded public discovery; do not
         mix an ID and text for the same endpoint. No canonical service identity,
-        selected facts or timed departures. UUID keyset pages may see concurrent
+        canonical fares or timed departures. The reviewed-core reader optionally
+        includes individually approved, scoped card facts with a 14-day observation
+        freshness window. Approval dates do not refresh observation age. UUID keyset pages may see concurrent
         inserts after their cursor; refresh starts a new enumeration.
       parameters:
         - name: originCityId
@@ -792,6 +794,9 @@ paths:
         - name: toCity
           in: query
           schema: { type: string, minLength: 1, maxLength: 80 }
+        - name: operator
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 180 }
         - name: cursor
           in: query
           schema: { type: string, format: uuid }
@@ -3436,6 +3441,37 @@ components:
             "nextCursor": { "type": "string", "format": "uuid" }
           }
       }
+    V2ApprovedCardFact:
+      type: object
+      required: [id, freshness]
+      properties:
+        id: {type: string, format: uuid}
+        observedDate: {type: string, nullable: true, minLength: 10, maxLength: 10}
+        freshness: {type: string, enum: [fresh, older, unknown]}
+    V2ApprovedCardPlace:
+      allOf:
+        - $ref: '#/components/schemas/V2ApprovedCardFact'
+        - type: object
+          required: [name]
+          properties:
+            name: {type: string, maxLength: 180}
+    V2ApprovedCardFare:
+      allOf:
+        - $ref: '#/components/schemas/V2ApprovedCardFact'
+        - type: object
+          required: [kind, amount, currency, scope]
+          properties:
+            kind: {type: string, enum: [paid, quoted, advertised]}
+            amount: {type: string}
+            currency: {type: string}
+            scope: {type: object, additionalProperties: true}
+    V2ApprovedCardDetails:
+      type: object
+      additionalProperties: false
+      properties:
+        fare: {$ref: '#/components/schemas/V2ApprovedCardFare'}
+        pickup: {$ref: '#/components/schemas/V2ApprovedCardPlace'}
+        dropoff: {$ref: '#/components/schemas/V2ApprovedCardPlace'}
     V2PublicLead:
       {
         "type": "object",
@@ -3476,6 +3512,7 @@ components:
                     "enum": [ "selected_fare", "operating_days", "boarding_location" ]
                   }
               },
+            cardDetails: { $ref: "#/components/schemas/V2ApprovedCardDetails" },
             coreCorrections:
               {
                 type: array,
@@ -3498,6 +3535,8 @@ components:
                 "items": { "$ref": "#/components/schemas/V2PublicLead" }
               },
             "hasHiddenResults": { "type": "boolean" },
+            matchingCount: {type: integer, minimum: 0},
+            operators: {type: array, uniqueItems: true, items: {type: string}},
             "nextCursor": { "type": "string", "format": "uuid" }
           }
       }
