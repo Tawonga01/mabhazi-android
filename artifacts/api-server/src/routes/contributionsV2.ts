@@ -1,3 +1,8 @@
+import promptControls,{promptControlsEnabled} from './promptControlsV2';
+import departureBoard from './departureBoardV2';
+import pickupQuestions, {pickupQuestionsEnabled,pickupInvitationsEnabled} from './pickupQuestionsV2';
+import placeReports, {placeReportsEnabled} from './placeReportsV2';
+import routeObservations, { routeObservationsEnabled } from './routeObservationsV2';
 import { Router, type IRouter, type Response } from 'express';
 import { pool } from '@workspace/db';
 import { SubmitV2LeadBody, SubmitV2LeadResponse, GetV2LeadReceiptParams, ListV2CitiesQueryParams } from '@workspace/api-zod';
@@ -6,8 +11,13 @@ import { CURRENT_TERMS_VERSION } from '../lib/terms';
 import { requireCurrentTerms } from '../middlewares/termsMiddleware';
 import { saveMinimumLead } from '../lib/minimumLead';
 import { parseActualJourney, saveActualJourney } from '../lib/actualJourney';
+import ownRoutes from './ownRoutesV2';
+import publicRoutes from './publicRoutesV2';
+import fareReports,{fareReportsEnabled} from './fareReportsV2';
+import routeSafety, { parseBlockedIds } from './routeSafetyV2';
 
 const router: IRouter = Router();
+router.use(departureBoard);
 // Orval validates values but currently emits stripping objects and number() for
 // integer schemas. Preserve its generated rules and add the specified strictness.
 const coreSchema = SubmitV2LeadBody.shape.target.shape.newLead;
@@ -36,10 +46,19 @@ async function actualEnabled() {
 }
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 router.get('/capabilities', async (_req, res) => {
-  let ready = false, actualReady=false;
-  try { ready = await enabled(); actualReady=ready && await actualEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
-  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady });
+  let ready = false, actualReady=false, fareReady=false, routeReady=false, placeReadReady=false, pickupReady=false,pickupInviteReady=false,promptReady=false;
+  try { ready = await enabled(); actualReady=ready && await actualEnabled(); fareReady=actualReady && await fareReportsEnabled(); routeReady=ready && await routeObservationsEnabled(); placeReadReady=ready && await placeReportsEnabled(); pickupReady=ready && await pickupQuestionsEnabled(); promptReady=await promptControlsEnabled(); pickupInviteReady=pickupReady&&await pickupInvitationsEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
+  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady,routeObservationsEnabled:routeReady,placeReportsEnabled:placeReadReady,pickupQuestionsEnabled:pickupReady,pickupInvitationsEnabled:pickupInviteReady,promptControlsEnabled:promptReady });
 });
+// History and receipt recovery remain readable when new intake is paused.
+router.use('/my-routes', ownRoutes);
+router.use(publicRoutes);
+router.use(fareReports);
+router.use(routeSafety);
+router.use(routeObservations);
+router.use(placeReports);
+router.use(pickupQuestions);
+router.use(promptControls);
 router.use(async (req, res, next) => {
   // Pausing new intake must not prevent an account checking a committed receipt.
   if (req.method === 'GET' && req.path.startsWith('/receipts/')) { next(); return; }
@@ -70,7 +89,17 @@ router.get('/receipts/:clientSubmissionId', async (req, res) => {
       WHERE user_id=$1 AND client_submission_id=$2`, [req.user.id, parsed.data.clientSubmissionId]);
     if (!rows[0]) { res.json({ found: false }); return; }
     const receipt = SubmitV2LeadResponse.parse({ ...(rows[0].initial_response as Record<string, unknown>), replayed: true });
-    res.json({ found: true, initialReceipt: receipt });
+    // A live selection revision is separate from the immutable initial receipt.
+    // Only the account's active, attributable initial community lead is eligible.
+    const selected = await pool.query(`SELECT s.revision FROM public.v2_leads l
+      JOIN public.v2_subjects s ON s.id=l.subject_id
+      JOIN public.v2_contributions c ON c.id=l.initial_contribution_id
+      WHERE l.subject_id=$1 AND c.id=$2 AND c.user_id=$3
+        AND l.intake_kind='community' AND NOT l.attribution_erased AND s.lifecycle='active'`,
+      [receipt.subjectId, receipt.contributionId, req.user.id]);
+    const revision = Number(selected.rows[0]?.revision);
+    res.json({ found: true, initialReceipt: receipt,
+      ...(Number.isSafeInteger(revision) && revision > 0 ? { currentLeadRevision: revision } : {}) });
   } catch { failure(res, 503, 'TEMPORARILY_UNAVAILABLE', 'The saved receipt could not be checked. Keep this draft and try again.'); }
 });
 router.post('/actual-journeys', (req,res,next) => {
@@ -87,7 +116,9 @@ router.post('/actual-journeys', (req,res,next) => {
   catch { failure(res,503,'TEMPORARILY_UNAVAILABLE','Journey reports are temporarily unavailable.');return; }
   const parsed=parseActualJourney(req.body);
   if (!parsed.success) { res.status(422).json({error:'Check the journey details.',code:'INVALID_CONTRIBUTION',fieldErrors:parsed.fieldErrors});return; }
-  try { res.json(await saveActualJourney(req.user.id,parsed.data)); }
+  const blocked=parseBlockedIds(req.get('X-Mabhazi-Blocked-Contributors'));
+  if(!blocked){failure(res,400,'INVALID_SAFETY_CONTEXT','Your hidden contributor settings could not be checked.');return;}
+  try { res.json(await saveActualJourney(req.user.id,parsed.data,undefined,blocked)); }
   catch (error) {
     const {code,message}=error as {code?:string;message?:string};
     if (message==='v2_intake_idempotency_conflict') { failure(res,409,'IDEMPOTENCY_CONFLICT','This reference was already used for different answers. Check its receipt.');return; }

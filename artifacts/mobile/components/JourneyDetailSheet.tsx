@@ -1,6 +1,9 @@
+import { FormKeyboardView } from '@/components/FormKeyboardView';
+import { ui } from '@/constants/ui';
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
+  Image,
   Text,
   Modal,
   Animated,
@@ -11,7 +14,6 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  KeyboardAvoidingView,
 } from "react-native";
 import { Feather } from "@/components/VectorIcon";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -85,7 +87,7 @@ const LEVEL_BG: Record<Level, string> = {
   green: "#DCFCE7", yellow: "#FEF9C3", red: "#FEE2E2", gray: "#F1F5F9",
 };
 const LEVEL_COLOR: Record<Level, string> = {
-  green: "#16A34A", yellow: "#CA8A04", red: "#DC2626", gray: "#64748B",
+  green: "#166534", yellow: "#855600", red: "#B4233B", gray: "#617186",
 };
 
 function getConfidenceLevel(
@@ -122,7 +124,7 @@ function Section({ title, icon, children }: { title: string; icon: string; child
         <View style={[ss.sectionIconWrap, { backgroundColor: colors.secondary }]}>
           <Feather name={icon as any} size={13} color={colors.primary} />
         </View>
-        <Text style={[ss.sectionTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+        <Text style={[ss.sectionTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
           {title}
         </Text>
       </View>
@@ -135,7 +137,7 @@ function Indicator({ level, text }: { level: Level; text: string }) {
   return (
     <View style={[ss.indicatorPill, { backgroundColor: LEVEL_BG[level] }]}>
       <View style={[ss.indicatorDot, { backgroundColor: LEVEL_COLOR[level] }]} />
-      <Text style={[ss.indicatorText, { color: LEVEL_COLOR[level], fontFamily: "Inter_500Medium" }]}>
+      <Text style={[ss.indicatorText, { color: LEVEL_COLOR[level], fontFamily: ui.type.medium }]}>
         {text}
       </Text>
     </View>
@@ -154,7 +156,7 @@ function YesNoCard({
   const colors = useColors();
   return (
     <View style={[ss.yesNoCard, { borderColor: colors.border, backgroundColor: colors.background }]}>
-      <Text style={[ss.yesNoLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+      <Text style={[ss.yesNoLabel, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
         {label}
       </Text>
       <View style={ss.yesNoButtons}>
@@ -172,7 +174,7 @@ function YesNoCard({
           <Feather name="check" size={14} color={value === true ? "#16A34A" : colors.mutedForeground} />
           <Text style={[
             ss.yesNoBtnText,
-            { color: value === true ? "#16A34A" : colors.mutedForeground, fontFamily: value === true ? "Inter_600SemiBold" : "Inter_400Regular" },
+            { color: value === true ? "#16A34A" : colors.mutedForeground, fontFamily: value === true ? ui.type.semibold : ui.type.regular },
           ]}>
             Yes
           </Text>
@@ -191,7 +193,7 @@ function YesNoCard({
           <Feather name="x" size={14} color={value === false ? "#DC2626" : colors.mutedForeground} />
           <Text style={[
             ss.yesNoBtnText,
-            { color: value === false ? "#DC2626" : colors.mutedForeground, fontFamily: value === false ? "Inter_600SemiBold" : "Inter_400Regular" },
+            { color: value === false ? "#DC2626" : colors.mutedForeground, fontFamily: value === false ? ui.type.semibold : ui.type.regular },
           ]}>
             No
           </Text>
@@ -440,14 +442,14 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
               size={34}
               color={blockedContributorsError ? colors.destructive : colors.primary}
             />
-            <Text style={[ss.emptyText, { color: blockedContributorsError ? colors.destructive : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[ss.emptyText, { color: blockedContributorsError ? colors.destructive : colors.foreground, fontFamily: ui.type.semibold }]}>
               {blockedContributorsError || "Loading safety settings…"}
             </Text>
             <TouchableOpacity
               style={[ss.confirmBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
               onPress={onClose}
             >
-              <Text style={[ss.confirmBtnText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text style={[ss.confirmBtnText, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
                 Close
               </Text>
             </TouchableOpacity>
@@ -523,30 +525,19 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
             <View style={[ss.handle, { backgroundColor: colors.border }]} />
           </View>
 
-          {/* Header */}
-          <View style={[ss.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
-            <View style={[ss.companyBadge, { backgroundColor: colors.primary }]}>
-              <Feather name="truck" size={12} color="#fff" />
-              <Text style={ss.companyBadgeText} numberOfLines={1}>{journey.busCompany}</Text>
+          {/* Journey context remains visible while the useful detail scrolls. */}
+          <View style={{backgroundColor:ui.color.navy,padding:20,flexDirection:'row',alignItems:'flex-start',gap:12}}>
+            <View style={{flex:1,gap:12}}>
+              <Text accessibilityRole="header" style={{color:'#FFFFFF',fontFamily:ui.type.bold,fontSize:25,lineHeight:33}}>{journey.fromCity} → {journey.toCity}</Text>
+              <View style={{flexDirection:'row',gap:10,alignItems:'center'}}><Image source={require('../assets/images/departures-bus.png')} style={{width:24,height:24,tintColor:ui.color.orange}} resizeMode="contain" accessible={false}/><Text style={{color:'#F3F6FA',fontFamily:ui.type.semibold,fontSize:16,flex:1}}>{journey.busCompany}</Text></View>
+              <Text style={{color:'#B6C5D8',fontFamily:ui.type.regular,fontSize:14,lineHeight:21}}>{journey.departureTime} → {journey.arrivalTime} · {journey.scheduledDays}</Text>
             </View>
-            <View style={ss.headerRoute}>
-              <Text style={[ss.headerCity, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
-                numberOfLines={1}>{journey.fromCity}</Text>
-              <Feather name="arrow-right" size={14} color={colors.mutedForeground} />
-              <Text style={[ss.headerCity, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}
-                numberOfLines={1}>{journey.toCity}</Text>
-            </View>
-            <TouchableOpacity
-              style={[ss.closeBtn, { backgroundColor: colors.secondary }]}
-              onPress={onClose}
-            >
-              <Feather name="x" size={18} color={colors.foreground} />
-            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close route details" onPress={onClose} style={{width:44,height:44,borderRadius:22,backgroundColor:'#233B57',alignItems:'center',justifyContent:'center'}}><Feather name="x" size={22} color="#DDE7F1"/></TouchableOpacity>
           </View>
 
-          <KeyboardAvoidingView
+          <FormKeyboardView
             style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            
           >
             <ScrollView
               contentContainerStyle={[ss.scrollContent, { paddingBottom: Platform.OS === "ios" ? insets.bottom + 20 : 40 }]}
@@ -556,18 +547,108 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
               {isLoading ? (
                 <View style={ss.centered}>
                   <ActivityIndicator color={colors.primary} size="large" />
-                  <Text style={[ss.mutedText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[ss.mutedText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                     Loading community data…
                   </Text>
                 </View>
               ) : (
                 <>
-                  <TermsAcceptanceCard terms={terms} />
+<Section title="Fare Tracker" icon="dollar-sign">
+                    <View style={ss.fareRow}>
+                      <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                          Listed price
+                        </Text>
+                        <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
+                          ${journey.price.toFixed(2)}
+                        </Text>
+                      </View>
+
+                      {data?.priceToday != null ? (
+                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                            Community today
+                          </Text>
+                          <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: ui.type.bold }]}>
+                            ${data.priceToday.toFixed(2)}
+                          </Text>
+                          {data.priceYesterday != null && data.priceToday !== data.priceYesterday && (
+                            <View style={[
+                              ss.fareChangePill,
+                              { backgroundColor: data.priceToday > data.priceYesterday ? "#FEE2E2" : "#DCFCE7" },
+                            ]}>
+                              <Feather
+                                name={data.priceToday > data.priceYesterday ? "trending-up" : "trending-down"}
+                                size={11}
+                                color={data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A"}
+                              />
+                              <Text style={[ss.fareChangeText, {
+                                color: data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A",
+                                fontFamily: ui.type.medium,
+                              }]}>
+                                was ${data.priceYesterday.toFixed(2)} yesterday
+                              </Text>
+                            </View>
+                          )}
+                          {data.priceYesterday != null && data.priceToday === data.priceYesterday && (
+                            <Text style={[ss.fareStable, { color: "#166534", fontFamily: ui.type.regular }]}>
+                              Same as yesterday
+                            </Text>
+                          )}
+                        </View>
+                      ) : isAuthenticated ? (
+                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                            What I paid
+                          </Text>
+                          <View style={ss.fareInputRow}>
+                            <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>
+                              $
+                            </Text>
+                            <TextInput
+                              style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
+                              placeholder="0.00"
+                              placeholderTextColor={colors.mutedForeground}
+                              value={reportedPrice}
+                              onChangeText={setReportedPrice}
+                              keyboardType="decimal-pad"
+                              maxLength={8}
+                            />
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={[ss.fareBlock, ss.fareBlockEmpty, { backgroundColor: colors.secondary, borderColor: colors.border, borderStyle: "dashed" }]}>
+                          <Feather name="lock" size={14} color={colors.mutedForeground} />
+                          <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular, marginTop: 4 }]}>
+                            Sign in to report
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    {/* If already has community price, also show input for authenticated users */}
+                    {isAuthenticated && data?.priceToday != null && (
+                      <View style={ss.fareUpdateRow}>
+                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                          What I paid today ($)
+                        </Text>
+                        <View style={ss.fareInputRow}>
+                          <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: ui.type.bold }]}>$</Text>
+                          <TextInput
+                            style={[ss.fareInput, { color: colors.foreground, fontFamily: ui.type.bold, borderBottomColor: colors.border }]}
+                            placeholder="0.00"
+                            placeholderTextColor={colors.mutedForeground}
+                            value={reportedPrice}
+                            onChangeText={setReportedPrice}
+                            keyboardType="decimal-pad"
+                            maxLength={8}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  </Section>
+                  {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
                   {/* ── UGC safety controls ── */}
                   <Section title="Safety" icon="shield">
-                    <Text style={[ss.correctionIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Report objectionable route content or a contributor. Blocking is local to this device, reversible, and hides that contributor&apos;s public routes and comments.
-                    </Text>
                     <View style={ss.safetyActionRow}>
                       <UgcSafetyActions
                         journeyId={journey.id}
@@ -590,7 +671,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                       activeOpacity={0.75}
                     >
                       <Feather name="users" size={14} color={colors.primary} />
-                      <Text style={[ss.manageBlocksText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                      <Text style={[ss.manageBlocksText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                         Manage blocked contributors
                       </Text>
                     </TouchableOpacity>
@@ -600,9 +681,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                   <Section title="Route confidence" icon="shield">
                     <View style={ss.confidenceTopRow}>
                       <Indicator level={confidenceLevel} text={confidenceText} />
-                      <Text style={[ss.confidenceScore, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                        {hasConfidenceData ? `${confidenceScore}%` : "—"}
-                      </Text>
+
                     </View>
 
                     <View style={[ss.confidenceTrack, { backgroundColor: colors.muted }]}>
@@ -618,21 +697,21 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                     </View>
 
                     <View style={ss.confidenceMeta}>
-                      <Text style={[ss.confidenceMetaText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[ss.confidenceMetaText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                         {confirmationCount > 0
                           ? `${confirmationCount} community confirmation${confirmationCount === 1 ? "" : "s"}`
                           : "No community confirmations yet"}
                       </Text>
-                      <Text style={[ss.confidenceMetaText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {lastConfirmedAt ? `Last confirmed ${timeAgo(lastConfirmedAt)}` : "Awaiting first confirmation"}
+                      <Text style={[ss.confidenceMetaText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                        {lastConfirmedAt ? `Last confirmed ${timeAgo(lastConfirmedAt)}` : "Date unknown"}
                       </Text>
                     </View>
 
                     {confirmedLocally ? (
                       <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                        <Feather name="check-circle" size={15} color="#16A34A" />
-                        <Text style={[ss.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                          Thanks — your confirmation strengthens this route.
+                        <Feather name="check-circle" size={15} color="#166534" />
+                        <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
+                          Confirmation saved.
                         </Text>
                       </View>
                     ) : isAuthenticated ? (
@@ -648,7 +727,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                         ) : (
                           <>
                             <Feather name="check-circle" size={16} color={colors.primaryForeground} />
-                            <Text style={[ss.confirmBtnText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                            <Text style={[ss.confirmBtnText, { color: colors.primaryForeground, fontFamily: ui.type.semibold }]}>
                               Confirm this route is operating
                             </Text>
                           </>
@@ -662,14 +741,14 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                         activeOpacity={0.8}
                       >
                         <Feather name="log-in" size={16} color={colors.primary} />
-                        <Text style={[ss.confirmBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                        <Text style={[ss.confirmBtnText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                           Sign in to confirm this route
                         </Text>
                       </TouchableOpacity>
                     )}
 
                     {confirmError ? (
-                      <Text style={[ss.confirmError, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[ss.confirmError, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                         {confirmError}
                       </Text>
                     ) : null}
@@ -677,9 +756,6 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                   {/* ── Structured corrections ── */}
                   <Section title="Correct route details" icon="edit-3">
-                    <Text style={[ss.correctionIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Spotted something different? Small corrections help keep this route useful for everyone.
-                    </Text>
 
                     {isAuthenticated ? (
                       <>
@@ -714,7 +790,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                                     ss.correctionOptionLabel,
                                     {
                                       color: selected ? colors.primary : colors.foreground,
-                                      fontFamily: selected ? "Inter_600SemiBold" : "Inter_400Regular",
+                                      fontFamily: selected ? ui.type.semibold : ui.type.regular,
                                     },
                                   ]}
                                 >
@@ -727,7 +803,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                         <TextInput
                           testID="correction-input"
-                          style={[ss.correctionInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
+                          style={[ss.correctionInput, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card, fontFamily: ui.type.regular }]}
                           placeholder={
                             correctionType === "pickup_point"
                               ? "What is the correct pickup point?"
@@ -770,7 +846,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                           ) : (
                             <>
                               <Feather name="send" size={15} color={colors.accentForeground} />
-                              <Text style={[ss.correctionSubmitText, { color: colors.accentForeground, fontFamily: "Inter_600SemiBold" }]}>
+                              <Text style={[ss.correctionSubmitText, { color: colors.accentForeground, fontFamily: ui.type.semibold }]}>
                                 Submit correction
                               </Text>
                             </>
@@ -779,14 +855,14 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                         {correctionSubmitted ? (
                           <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                            <Feather name="check-circle" size={15} color="#16A34A" />
-                            <Text style={[ss.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                              Correction recorded — thank you for improving this route.
+                            <Feather name="check-circle" size={15} color="#166534" />
+                            <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
+                      Correction saved.
                             </Text>
                           </View>
                         ) : null}
                         {correctionError ? (
-                          <Text style={[ss.confirmError, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                          <Text style={[ss.confirmError, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                             {correctionError}
                           </Text>
                         ) : null}
@@ -799,7 +875,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                         activeOpacity={0.8}
                       >
                         <Feather name="log-in" size={16} color={colors.primary} />
-                        <Text style={[ss.confirmBtnText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                        <Text style={[ss.confirmBtnText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
                           Sign in to suggest a correction
                         </Text>
                       </TouchableOpacity>
@@ -809,11 +885,11 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                   {/* ── Community Comments ── */}
                   <Section title="Community" icon="message-circle">
                     {isBlockedContributorsLoading ? (
-                      <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                         Loading safety settings…
                       </Text>
                     ) : blockedContributorsError ? (
-                      <Text style={[ss.emptyText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[ss.emptyText, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                         {blockedContributorsError}
                       </Text>
                     ) : visibleComments.length > 0 ? (
@@ -824,14 +900,14 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                           </View>
                           <View style={ss.commentBody}>
                             {c.authorName ? (
-                              <Text style={[ss.commentAuthor, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                              <Text style={[ss.commentAuthor, { color: colors.mutedForeground, fontFamily: ui.type.semibold }]}>
                                 {c.authorName}
                               </Text>
                             ) : null}
-                            <Text style={[ss.commentText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+                            <Text style={[ss.commentText, { color: colors.foreground, fontFamily: ui.type.regular }]}>
                               {c.content}
                             </Text>
-                            <Text style={[ss.commentTime, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                            <Text style={[ss.commentTime, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                               {timeAgo(c.createdAt)}
                             </Text>
                           </View>
@@ -846,7 +922,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                         </View>
                       ))
                     ) : (
-                      <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                         No community comments yet
                       </Text>
                     )}
@@ -854,7 +930,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                     {isAuthenticated ? (
                       <View style={[ss.inlineInputWrap, { borderColor: colors.border, backgroundColor: colors.card }]}>
                         <TextInput
-                          style={[ss.inlineTextArea, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                          style={[ss.inlineTextArea, { color: colors.foreground, fontFamily: ui.type.regular }]}
                           placeholder="Share your experience with this route…"
                           placeholderTextColor={colors.mutedForeground}
                           value={comment}
@@ -868,7 +944,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                     ) : (
                       <View style={ss.signInRow}>
                         <Feather name="lock" size={13} color={colors.mutedForeground} />
-                        <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                           Sign in to comment
                         </Text>
                       </View>
@@ -876,99 +952,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                   </Section>
 
                   {/* ── Fare Tracker ── */}
-                  <Section title="Fare Tracker" icon="dollar-sign">
-                    <View style={ss.fareRow}>
-                      <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          Listed price
-                        </Text>
-                        <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                          ${journey.price.toFixed(2)}
-                        </Text>
-                      </View>
-
-                      {data?.priceToday != null ? (
-                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                            Community today
-                          </Text>
-                          <Text style={[ss.fareValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                            ${data.priceToday.toFixed(2)}
-                          </Text>
-                          {data.priceYesterday != null && data.priceToday !== data.priceYesterday && (
-                            <View style={[
-                              ss.fareChangePill,
-                              { backgroundColor: data.priceToday > data.priceYesterday ? "#FEE2E2" : "#DCFCE7" },
-                            ]}>
-                              <Feather
-                                name={data.priceToday > data.priceYesterday ? "trending-up" : "trending-down"}
-                                size={11}
-                                color={data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A"}
-                              />
-                              <Text style={[ss.fareChangeText, {
-                                color: data.priceToday > data.priceYesterday ? "#DC2626" : "#16A34A",
-                                fontFamily: "Inter_500Medium",
-                              }]}>
-                                was ${data.priceYesterday.toFixed(2)} yesterday
-                              </Text>
-                            </View>
-                          )}
-                          {data.priceYesterday != null && data.priceToday === data.priceYesterday && (
-                            <Text style={[ss.fareStable, { color: "#16A34A", fontFamily: "Inter_400Regular" }]}>
-                              Same as yesterday
-                            </Text>
-                          )}
-                        </View>
-                      ) : isAuthenticated ? (
-                        <View style={[ss.fareBlock, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                            What I paid
-                          </Text>
-                          <View style={ss.fareInputRow}>
-                            <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                              $
-                            </Text>
-                            <TextInput
-                              style={[ss.fareInput, { color: colors.foreground, fontFamily: "Inter_700Bold", borderBottomColor: colors.border }]}
-                              placeholder="0.00"
-                              placeholderTextColor={colors.mutedForeground}
-                              value={reportedPrice}
-                              onChangeText={setReportedPrice}
-                              keyboardType="decimal-pad"
-                              maxLength={8}
-                            />
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={[ss.fareBlock, ss.fareBlockEmpty, { backgroundColor: colors.secondary, borderColor: colors.border, borderStyle: "dashed" }]}>
-                          <Feather name="lock" size={14} color={colors.mutedForeground} />
-                          <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 4 }]}>
-                            Sign in to report
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {/* If already has community price, also show input for authenticated users */}
-                    {isAuthenticated && data?.priceToday != null && (
-                      <View style={ss.fareUpdateRow}>
-                        <Text style={[ss.fareLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          What I paid today ($)
-                        </Text>
-                        <View style={ss.fareInputRow}>
-                          <Text style={[ss.fareInputPrefix, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>$</Text>
-                          <TextInput
-                            style={[ss.fareInput, { color: colors.foreground, fontFamily: "Inter_700Bold", borderBottomColor: colors.border }]}
-                            placeholder="0.00"
-                            placeholderTextColor={colors.mutedForeground}
-                            value={reportedPrice}
-                            onChangeText={setReportedPrice}
-                            keyboardType="decimal-pad"
-                            maxLength={8}
-                          />
-                        </View>
-                      </View>
-                    )}
-                  </Section>
+                  
 
                   {/* ── Community Insights ── */}
                   <Section title="Community Insights" icon="bar-chart-2">
@@ -986,8 +970,8 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
 
                       {submitted && (
                         <View style={[ss.successBanner, { backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                          <Feather name="check-circle" size={15} color="#16A34A" />
-                          <Text style={[ss.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
+                          <Feather name="check-circle" size={15} color="#166534" />
+                          <Text style={[ss.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
                             Report submitted — thank you!
                           </Text>
                         </View>
@@ -1004,7 +988,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                       >
                         {submitting
                           ? <ActivityIndicator size="small" color="#fff" />
-                          : <Text style={[ss.submitBtnText, { fontFamily: "Inter_600SemiBold" }]}>Submit Report</Text>
+                          : <Text style={[ss.submitBtnText, { fontFamily: ui.type.semibold }]}>Submit Report</Text>
                         }
                       </TouchableOpacity>
                     </Section>
@@ -1012,7 +996,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                     <Section title="Trip Report" icon="clipboard">
                       <View style={ss.signInRow}>
                         <Feather name="lock" size={15} color={colors.mutedForeground} />
-                        <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                        <Text style={[ss.emptyText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                           Sign in to submit a trip report
                         </Text>
                       </View>
@@ -1021,7 +1005,7 @@ export function JourneyDetailSheet({ journey, visible, onClose }: JourneyDetailS
                 </>
               )}
             </ScrollView>
-          </KeyboardAvoidingView>
+          </FormKeyboardView>
           </Animated.View>
         </View>
       </Modal>
@@ -1053,7 +1037,7 @@ const ss = StyleSheet.create({
   },
   handleWrap: { alignItems: "center", paddingVertical: 10 },
   handle: { width: 40, height: 4, borderRadius: 2 },
-  header: {
+  header: {flexWrap: 'wrap', 
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
@@ -1068,20 +1052,20 @@ const ss = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 14,
-    maxWidth: "34%",
+    maxWidth: "100%",
   },
-  companyBadgeText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff", flexShrink: 1 },
+  companyBadgeText: { fontSize: 14, fontFamily: ui.type.semibold, color: "#fff", flexShrink: 1 },
   headerRoute: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    justifyContent: "center",
+    justifyContent: 'flex-start',
   },
-  headerCity: { fontSize: 14, flexShrink: 1 },
-  closeBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  scrollContent: { padding: 16, gap: 12, paddingBottom: 40 },
-  termsCard: {
+  headerCity: { fontSize: 17, flexShrink: 1 },
+  closeBtn: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  scrollContent: { padding: 20, gap: 20, paddingBottom: 40 },
+  termsCard: {minHeight: 44, 
     borderRadius: 14,
     borderWidth: 1,
     padding: 12,
@@ -1098,16 +1082,16 @@ const ss = StyleSheet.create({
     justifyContent: "center",
     marginTop: 1,
   },
-  termsText: { flex: 1, fontSize: 12, lineHeight: 18 },
-  termsError: { fontSize: 12, lineHeight: 17, marginHorizontal: 4 },
+  termsText: { flex: 1, fontSize: 14, lineHeight: 21 },
+  termsError: { fontSize: 14, lineHeight: 21, marginHorizontal: 4 },
   centered: { paddingVertical: 48, alignItems: "center", gap: 14 },
   mutedText: { fontSize: 14 },
-  section: { borderRadius: 14, borderWidth: 1, padding: 14, gap: 12 },
+  section: { borderRadius: 16, borderWidth: 0, padding: 16, gap: 16 },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 8 },
   sectionIconWrap: { width: 26, height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  sectionTitle: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8 },
-  emptyText: { fontSize: 13, fontStyle: "italic" },
-  confidenceTopRow: {
+  sectionTitle: { fontSize: 19, textTransform: 'none', letterSpacing: 0 },
+  emptyText: {lineHeight: 21,  fontSize: 14, fontStyle: 'normal' },
+  confidenceTopRow: { flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1120,12 +1104,12 @@ const ss = StyleSheet.create({
     overflow: "hidden",
   },
   confidenceFill: { height: "100%", borderRadius: 4 },
-  confidenceMeta: {
+  confidenceMeta: {flexWrap: 'wrap', 
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
   },
-  confidenceMetaText: { fontSize: 11, flexShrink: 1 },
+  confidenceMetaText: { fontSize: 14, flexShrink: 1 },
   confirmBtn: {
     minHeight: 44,
     borderRadius: 12,
@@ -1136,9 +1120,9 @@ const ss = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
   },
-  confirmBtnText: { fontSize: 13 },
-  confirmError: { fontSize: 12, textAlign: "center" },
-  correctionIntro: { fontSize: 13, lineHeight: 19 },
+  confirmBtnText: { fontSize: 16 },
+  confirmError: { fontSize: 14, textAlign: "center" },
+  correctionIntro: { fontSize: 14, lineHeight: 21 },
   correctionOptions: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1148,19 +1132,19 @@ const ss = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: 10,
-    borderRadius: 18,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  correctionOptionLabel: { fontSize: 12 },
+  correctionOptionLabel: { fontSize: 14 },
   correctionInput: {
-    minHeight: 46,
+    minHeight: 50,
     borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 13,
+    fontSize: 16,
   },
   correctionSubmitBtn: {
     minHeight: 44,
@@ -1171,27 +1155,27 @@ const ss = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
   },
-  correctionSubmitText: { fontSize: 13 },
+  correctionSubmitText: { fontSize: 16 },
   commentRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   avatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   commentBody: { flex: 1, gap: 3 },
-  commentAuthor: { fontSize: 11 },
-  commentText: { fontSize: 13, lineHeight: 19 },
-  commentTime: { fontSize: 11 },
+  commentAuthor: { fontSize: 14 },
+  commentText: { fontSize: 16, lineHeight: 24 },
+  commentTime: { fontSize: 14 },
   inlineInputWrap: {
     borderRadius: 10,
     borderWidth: 1,
     padding: 10,
   },
   inlineTextArea: {
-    fontSize: 13,
+    fontSize: 16,
     minHeight: 70,
     textAlignVertical: "top",
   },
   signInRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 4 },
   safetyActionRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   manageBlocksButton: {
-    minHeight: 40,
+    minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: "row",
@@ -1200,22 +1184,22 @@ const ss = StyleSheet.create({
     gap: 7,
     paddingHorizontal: 10,
   },
-  manageBlocksText: { fontSize: 12 },
-  fareRow: { flexDirection: "row", gap: 10 },
-  fareBlock: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, gap: 6 },
+  manageBlocksText: { fontSize: 14 },
+  fareRow: {flexWrap: 'wrap',  flexDirection: "row", gap: 10 },
+  fareBlock: {minWidth: 120,  flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, gap: 6 },
   fareBlockEmpty: { alignItems: "center", justifyContent: "center", paddingVertical: 18 },
-  fareLabel: { fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
-  fareValue: { fontSize: 22 },
+  fareLabel: { fontSize: 14, textTransform: 'none', letterSpacing: 0 },
+  fareValue: { fontSize: 28 },
   fareChangePill: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: "flex-start",
   },
-  fareChangeText: { fontSize: 11 },
-  fareStable: { fontSize: 11 },
+  fareChangeText: { fontSize: 14 },
+  fareStable: { fontSize: 14 },
   fareInputRow: { flexDirection: "row", alignItems: "flex-end", gap: 2 },
   fareInputPrefix: { fontSize: 18, paddingBottom: 2 },
-  fareInput: {
-    fontSize: 22,
+  fareInput: {minHeight: 44, 
+    fontSize: 26,
     flex: 1,
     borderBottomWidth: 1.5,
     paddingBottom: 2,
@@ -1224,13 +1208,13 @@ const ss = StyleSheet.create({
     gap: 6,
     paddingTop: 4,
   },
-  indicatorPill: {
+  indicatorPill: { maxWidth: "100%", flexShrink: 1,
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingHorizontal: 12, paddingVertical: 9, borderRadius: 20, alignSelf: "flex-start",
   },
   indicatorDot: { width: 8, height: 8, borderRadius: 4 },
-  indicatorText: { fontSize: 13 },
-  yesNoCard: {
+  indicatorText: { fontSize: 14, lineHeight: 21, flexShrink: 1 },
+  yesNoCard: {gap: 12, flexWrap: 'wrap', 
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1241,7 +1225,7 @@ const ss = StyleSheet.create({
   },
   yesNoLabel: { fontSize: 14, flex: 1 },
   yesNoButtons: { flexDirection: "row", gap: 8 },
-  yesNoBtn: {
+  yesNoBtn: {minHeight: 44, 
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -1250,7 +1234,7 @@ const ss = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
   },
-  yesNoBtnText: { fontSize: 13 },
+  yesNoBtnText: { fontSize: 14 },
   successBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1259,12 +1243,12 @@ const ss = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  successText: { fontSize: 13 },
-  submitBtn: {
+  successText: { fontSize: 14 },
+  submitBtn: {minHeight: 50, 
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
     marginTop: 4,
   },
-  submitBtnText: { color: "#fff", fontSize: 15 },
+  submitBtnText: { color: ui.color.ink, fontSize: 16 },
 });

@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import React, { useCallback } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import * as Haptics from "expo-haptics";
@@ -36,6 +37,10 @@ export function DaysPicker({ value, onChange }: DaysPickerProps) {
         return (
           <TouchableOpacity
             key={day}
+            accessibilityRole="checkbox"
+            accessibilityLabel={`Operating day ${day}`}
+            accessibilityState={{ checked: isSelected }}
+            aria-checked={isSelected}
             style={[
               styles.chip,
               {
@@ -51,7 +56,7 @@ export function DaysPicker({ value, onChange }: DaysPickerProps) {
                 styles.chipText,
                 {
                   color: isSelected ? "#FFFFFF" : colors.foreground,
-                  fontFamily: isSelected ? "Inter_600SemiBold" : "Inter_400Regular",
+                  fontFamily: isSelected ? ui.type.semibold : ui.type.regular,
                 },
               ]}
             >
@@ -74,12 +79,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     minWidth: 44,
     minHeight: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   chipText: {
-    fontSize: 13,
+    fontSize: 14,
   },
 });

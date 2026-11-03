@@ -1,3 +1,4 @@
+import { ui } from '@/constants/ui';
 import { Feather } from "@/components/VectorIcon";
 import { reloadAppAsync } from "expo";
 import React, { useState } from "react";
@@ -185,13 +186,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 16,
     width: "100%",
-    maxWidth: 600,
+    maxWidth: 450,
   },
   title: {
     fontSize: 28,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 40,
+    lineHeight: 36,
   },
   message: {
     fontSize: 16,
@@ -209,9 +210,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     zIndex: 10,
   },
-  button: {
+  button: {minHeight: 50, 
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 14,
     paddingHorizontal: 24,
     minWidth: 200,
     shadowColor: "#000",
@@ -219,9 +220,9 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 0,
   },
   buttonText: {
     fontWeight: "600",
@@ -271,8 +272,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   errorText: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 21,
     width: "100%",
   },
 });

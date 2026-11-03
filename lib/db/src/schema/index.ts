@@ -38,3 +38,5 @@ export * from "./routePatternCreation";
 
 export * from "./processing";
 export * from "./identityLookup";
+
+export * from "./publicRouteContext";

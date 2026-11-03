@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {createRequire} from 'node:module';
+import {nextLegacyDeparture,legacyScheduleTimezone} from '../src/lib/departureSchedule';
+const require=createRequire(import.meta.url);
+const {departureCountdown,departureClock}=require('../../mobile/lib/departure-board-model.ts') as typeof import('../../mobile/lib/departure-board-model');
+export function registerDepartureScheduleTests(){
+ test('departure schedule: Zimbabwe legacy clock is independent of phone/host timezone',()=>{assert.equal(legacyScheduleTimezone,'Africa/Harare');assert.equal(nextLegacyDeparture('08:00','Daily',Date.parse('2026-10-31T00:00:00Z')),'2026-10-31T06:00:00.000Z');});
+ test('departure schedule: actual weekday list skips nonoperating days and passed trips',()=>{assert.equal(nextLegacyDeparture('08:00','Mon, Fri',Date.parse('2026-10-30T07:00:00Z')),'2026-11-02T06:00:00.000Z');assert.equal(nextLegacyDeparture('08:00','Saturday',Date.parse('2026-10-30T23:00:00Z')),'2026-10-31T06:00:00.000Z');});
+ test('departure schedule: exact date never becomes daily or a future invented trip',()=>{assert.equal(nextLegacyDeparture('08:00','2026-11-15',Date.parse('2026-10-31T00:00:00Z')),'2026-11-15T06:00:00.000Z');for(const day of ['2026-10-30','2026-02-30','sometimes','Mon, unknown',''])assert.equal(nextLegacyDeparture('08:00',day,Date.parse('2026-10-31T00:00:00Z')),null);});
+ test('departure schedule: midnight, year boundary and precise seconds use service local date',()=>{assert.equal(nextLegacyDeparture('00:00','Daily',Date.parse('2026-12-31T21:59:00Z')),'2026-12-31T22:00:00.000Z');assert.equal(nextLegacyDeparture('00:00','Daily',Date.parse('2026-12-31T22:01:00Z')),'2027-01-01T22:00:00.000Z');assert.equal(nextLegacyDeparture('08:00:30','Daily',Date.parse('2026-10-31T06:00:01Z')),'2026-10-31T06:00:30.000Z');});
+ test('departure schedule: invalid clocks, missing schedules and invalid server time fail closed',()=>{for(const clock of ['',null,'8:00','24:00','08:60','08:00:99'])assert.equal(nextLegacyDeparture(clock,'Daily',Date.now()),null);assert.equal(nextLegacyDeparture('08:00',null,Date.now()),null);assert.equal(nextLegacyDeparture('08:00','Daily',NaN),null);});
+ test('departure board: requested hours/minutes badge does not invent a tomorrow or negative time',()=>{const now=Date.parse('2026-10-31T00:00:00Z');assert.equal(departureCountdown('2026-10-31T06:26:00Z',now),'6h 26m');assert.equal(departureCountdown('2026-10-31T10:26:00Z',now),'10h 26m');assert.equal(departureCountdown('2026-10-31T00:00:01Z',now),'1m');for(const time of [undefined,'bad','2026-10-30T23:59:59Z','2026-10-31T00:00:00Z'])assert.equal(departureCountdown(time,now),null);assert.equal(departureCountdown('2026-10-31T01:00:00Z',NaN),null);});
+ test('departure board: twelve-hour clock preserves midnight/noon and rejects missing reported time',()=>{for(const [input,output] of [['08:00','8:00 AM'],['12:00','12:00 PM'],['16:00','4:00 PM'],['00:00','12:00 AM'],['invalid','—']])assert.equal(departureClock(input),output);assert.equal(departureClock(null),'—');});
+}
