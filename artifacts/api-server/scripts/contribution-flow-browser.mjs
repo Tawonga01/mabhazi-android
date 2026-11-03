@@ -536,7 +536,7 @@ try {
    const first=await seedPublic('Card approval coach','07:00'),second=await seedPublic('Card pickup coach','14:30'),reviewer=randomUUID();
    await admin.query("INSERT INTO users(id) VALUES($1)",[reviewer]);
    await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'reviewer','card_render_fixture')",[reviewer]);
-   const day=(await admin.query("SELECT to_char(statement_timestamp()-interval '2 days','YYYY-MM-DD') day")).rows[0].day;
+   const day=(await admin.query("SELECT to_char(statement_timestamp()-interval '2 days','YYYY-MM-DD') d")).rows[0].d;
    const revision=Number((await admin.query('SELECT revision FROM v2_subjects WHERE id=$1',[first.subjectId])).rows[0].revision);
    const r=await fetch('http://127.0.0.1:5000/api/v2/actual-journeys',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tokens[1],'X-Mabhazi-Account':users[1]},body:JSON.stringify({schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{newActualJourney:{intendedSubject:{id:first.subjectId,kind:'lead',expectedRevision:revision}}},observations:[{fieldKey:'fare.paid',value:{amount:'15',currency:'USD'},scope:{schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:publicCities[0],destinationCityId:publicCities[1]},serviceDate:day,passengerCategory:'adult',ticketBasis:'one_way'}}]})});
    assert.equal(r.status,200);const actual=await r.json();
