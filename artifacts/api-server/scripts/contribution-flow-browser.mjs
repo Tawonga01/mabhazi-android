@@ -343,7 +343,7 @@ try {
     assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
     await takeShot(s.page,'search-error.png');
     fail=false;await s.page.getByRole('button',{name:'Try search again',exact:true}).click();
-    await s.page.getByText('Route report',{exact:true}).first().waitFor();
+    await s.page.getByRole('button',{name:/^Open route report /}).first().waitFor();
     assert.equal(await s.page.getByRole('button',{name:'Add a route',exact:true}).count(),0);
     results.push('failed search never invites duplicate intake and retry recovers to current public reports instead of a false empty state');
     await s.context.close();

@@ -1842,7 +1842,7 @@ export const SubmitV2ActualJourneyResponse = zod.object({
 });
 
 /**
- * Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, selected facts or timed departures. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
+ * Basic validated lead reports only. Selected city IDs are exact; custom city text is bounded literal discovery, never a contribution identity. Without a city filter this is bounded public discovery; do not mix an ID and text for the same endpoint. No canonical service identity, canonical fares or timed departures. The reviewed-core reader optionally includes individually approved, scoped card facts with a 14-day observation freshness window. Approval dates do not refresh observation age. UUID keyset pages may see concurrent inserts after their cursor; refresh starts a new enumeration.
  * @summary Discover initial community route reports
  */
 export const searchV2RoutesQueryOriginCityIdMax = 999999999;
