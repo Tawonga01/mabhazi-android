@@ -1,3 +1,4 @@
+import {registerTimetableCommandTests} from './timetable-command.cases';
 import {registerStaffTimetableTests} from './staff-timetable.cases';
 import {registerReviewedCalendarTests} from './reviewed-calendar.cases';
 import {registerAdminCoreTests} from './admin-core.cases';
@@ -859,6 +860,7 @@ registerRoutePatternTests(() => ({ db, connectionString, user, other, origin, de
 registerServiceRunTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 registerReviewedCalendarTests(() => ({db,user,other,origin,destination,corridor}));
 registerStaffTimetableTests(() => ({db,user,other,origin,destination,corridor}));
+registerTimetableCommandTests(() => ({db,user,other,origin,destination,corridor}));
 
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 

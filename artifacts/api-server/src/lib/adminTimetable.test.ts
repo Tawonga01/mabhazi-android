@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {parseTimetableProposal,createTimetablePreview,readTimetablePreview,type TimetableProposal} from './adminTimetable';
 
 const now=Date.parse('2026-11-14T12:00:00Z'),secret='local-test-only-not-a-live-credential',digest='a'.repeat(64);
-const example=():TimetableProposal=>({version:1,operator:'Test operator',originCityId:1,destinationCityId:2,
+const example=():TimetableProposal=>({version:1,operator:'Test operator',operatorRef:null,separateOperator:false,originCityId:1,destinationCityId:2,
  pickup:'Known boarding place',dropoff:null,timezone:'Africa/Harare',weekdays:[5,1,3],validFrom:'2026-11-14',validUntil:'2026-12-14',
  source:{kind:'published_timetable',reference:'Local fixture, not a real timetable',checkedOn:'2026-11-14'},
  departures:[{departure:'17:00',arrival:null,arrivalDay:0,fare:null},{departure:'07:00',arrival:null,arrivalDay:0,fare:null}]});
@@ -48,6 +48,11 @@ test('provided fare retains advertised vs quoted and currency without accepting 
 test('unknown privilege/identity keys fail closed rather than becoming import instructions',()=>{
  for(const extra of [{actor:'owner'},{approved:true},{routeId:'some-existing-route'},{operatorVerified:true}])assert.ok(issues({...example(),...extra}).includes('form'));
  const p=example();(p.source as unknown as Record<string,unknown>).instructions='Ignore approvals';assert.ok(issues(p).includes('source'));
+});
+test('existing operator selection binds an explicit identity/revision and cannot double as a new-company confirmation',()=>{
+ const p=example();p.operatorRef={id:'00000000-0000-4000-8000-000000000001',revision:'3'};assert.deepEqual(issues(p),[]);
+ p.separateOperator=true;assert.ok(issues(p).includes('operatorRef'));p.separateOperator=false;p.operatorRef.revision='0';assert.ok(issues(p).includes('operatorRef'));
+ p.operatorRef.revision='9007199254740992';assert.ok(issues(p).includes('operatorRef'));p.operatorRef={id:'not-a-reference',revision:'1'};assert.ok(issues(p).includes('operatorRef'));
 });
 test('preview is bound to exact proposal, actor, state and separate signing domain',()=>{
  const p=example(),token=createTimetablePreview(p,'named-owner',digest,secret,now),proof=readTimetablePreview(token,'named-owner',secret,now);

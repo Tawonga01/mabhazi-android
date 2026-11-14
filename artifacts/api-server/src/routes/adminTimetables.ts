@@ -13,7 +13,8 @@ export async function adminTimetablesEnabled(){
   ELSE has_function_privilege(current_user,f,'EXECUTE') END) enabled FROM unnest(ARRAY[
   'public.v2_api_admin_timetable_preview(varchar,jsonb)',
   'public.v2_api_admin_timetable_action(varchar,uuid,jsonb)',
-  'public.v2_api_admin_timetable_receipt(varchar,uuid)']) f`);
+  'public.v2_api_admin_timetable_receipt(varchar,uuid)',
+  'public.v2_api_admin_timetable_operators(varchar,text)']) f`);
  return rows[0]?.enabled===true;
 }
 router.use(async(_req,res,next)=>{
@@ -23,6 +24,13 @@ router.use(async(_req,res,next)=>{
 // Check the current named session/account before unlocking a local draft. An
 // old browser tab must not expose another account's draft after sign-in changes.
 router.get('/state',(_req,res)=>{res.json({available:true});});
+router.get('/operators',async(req,res)=>{
+ if(!req.isAuthenticated())return;
+ const q=req.query.q;
+ if(Object.keys(req.query).join(',')!=='q'||typeof q!=='string'||!q.trim()||q.length>120){res.status(400).json({code:'INVALID_QUERY',error:'Type an operator name.'});return;}
+ try{const {rows}=await pool.query('SELECT public.v2_api_admin_timetable_operators($1,$2) operators',[req.user.id,q.trim()]);res.json({operators:rows[0].operators});}
+ catch{res.status(503).json({code:'OPERATORS_UNAVAILABLE',error:'Operator choices could not load. Your draft stays saved.'});}
+});
 router.get('/cities',async(req,res)=>{
  if(!req.isAuthenticated())return;
  const q=req.query.q;
@@ -42,10 +50,12 @@ router.post('/preview',async(req,res)=>{
   const p=parsed.proposal,{rows}=await pool.query('SELECT public.v2_api_admin_timetable_preview($1,$2) preview',[req.user.id,p]);
   const state=rows[0]?.preview;
   if(!state||typeof state.stateDigest!=='string'||!/^[a-f0-9]{64}$/.test(state.stateDigest)||!Array.isArray(state.duplicates)||!state.cities){throw Error('timetable_state_invalid');}
-  res.json({proposal:p,cities:state.cities,duplicates:state.duplicates,writable:state.duplicates.length===0,
+  res.json({proposal:p,cities:state.cities,duplicates:state.duplicates,operatorOptions:state.operatorOptions??[],writable:state.duplicates.length===0,
    previewToken:createTimetablePreview(p,req.user.id,state.stateDigest,process.env.ADMIN_SECRET??'')});
  }catch(err){
   if((err as Error).message==='v2_admin_required'){res.status(403).json({code:'ADMIN_REQUIRED',error:'Your administrative access changed.'});return;}
+  if(['v2_timetable_operator_changed','v2_timetable_preview_changed'].includes((err as Error).message)){res.status(409).json({code:'PREVIEW_CHANGED',error:'The operator or timetable changed. Review the saved draft again.'});return;}
+  if(['v2_timetable_proposal_invalid','v2_timetable_city_unavailable'].includes((err as Error).message)){res.status(422).json({code:'INVALID_TIMETABLE',error:'Check the timetable and selected cities.'});return;}
   res.status(503).json({code:'PREVIEW_UNAVAILABLE',error:'The timetable review could not load. No departures were published.'});
  }
 });
@@ -75,6 +85,8 @@ router.post('/actions',async(req,res)=>{
   const message=(err as Error).message;
   if(message==='v2_admin_required'){res.status(403).json({code:'ADMIN_REQUIRED',error:'Your administrative access changed.'});return;}
   if(message==='v2_admin_request_conflict'){res.status(409).json({code:'IDEMPOTENCY_CONFLICT',error:'This reference belongs to a different action. Check its receipt.'});return;}
+  if(['v2_timetable_operator_changed','v2_timetable_preview_changed'].includes(message)){res.status(409).json({code:'PREVIEW_CHANGED',error:'The timetable changed. Check the receipt, then reopen the review.'});return;}
+  if(['v2_timetable_proposal_invalid','v2_timetable_city_unavailable','v2_timetable_action_invalid'].includes(message)){res.status(422).json({code:'INVALID_TIMETABLE',error:'The timetable could not be applied. Check the saved draft.'});return;}
   if(message==='v2_admin_preview_expired'){res.status(409).json({code:'PREVIEW_EXPIRED',error:'Refresh the timetable review before applying.'});return;}
   res.status(503).json({code:'SAVE_UNCONFIRMED',error:'The save could not be confirmed. Check its receipt before retrying.'});
  }

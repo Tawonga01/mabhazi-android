@@ -1,7 +1,7 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 
 export type TimetableRow={departure:string;arrival:string|null;arrivalDay:0|1;fare:{amount:string;currency:string;kind:'advertised'|'quoted'}|null};
-export type TimetableProposal={version:1;operator:string;originCityId:number;destinationCityId:number;
+export type TimetableProposal={version:1;operator:string;operatorRef:{id:string;revision:string}|null;separateOperator:boolean;originCityId:number;destinationCityId:number;
  pickup:string;dropoff:string|null;timezone:string;weekdays:number[];validFrom:string;validUntil:string;
  source:{kind:'published_timetable'|'operator_confirmation';reference:string;checkedOn:string};departures:TimetableRow[]};
 export type TimetableIssue={field:string;message:string};
@@ -19,9 +19,13 @@ const domain='mabhazi-admin-timetable/1\0';
 export function parseTimetableProposal(raw:unknown,now=Date.now()):TimetableParse{
  const issues:TimetableIssue[]=[];
  const fail=(field:string,message:string)=>issues.push({field,message});
- if(!object(raw)||!own(raw,['version','operator','originCityId','destinationCityId','pickup','dropoff','timezone','weekdays','validFrom','validUntil','source','departures'])||raw.version!==1)
+ if(!object(raw)||!own(raw,['version','operator','operatorRef','separateOperator','originCityId','destinationCityId','pickup','dropoff','timezone','weekdays','validFrom','validUntil','source','departures'])||raw.version!==1)
   return{proposal:null,issues:[{field:'form',message:'Use the timetable entry form.'}]};
  if(!text(raw.operator,120))fail('operator','Enter the operator name.');
+ if(typeof raw.separateOperator!=='boolean'||raw.operatorRef!==null&&(!object(raw.operatorRef)||!own(raw.operatorRef,['id','revision'])
+  ||typeof raw.operatorRef.id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(raw.operatorRef.id)
+  ||typeof raw.operatorRef.revision!=='string'||!/^[1-9]\d{0,15}$/.test(raw.operatorRef.revision)||BigInt(raw.operatorRef.revision)>9007199254740991n)
+  ||raw.operatorRef!==null&&raw.separateOperator===true)fail('operatorRef','Choose an existing operator, or explicitly add a separate operator.');
  if(!city(raw.originCityId))fail('originCityId','Choose a departure city.');
  if(!city(raw.destinationCityId))fail('destinationCityId','Choose a destination city.');
  if(city(raw.originCityId)&&raw.originCityId===raw.destinationCityId)fail('destinationCityId','Choose a different destination.');
