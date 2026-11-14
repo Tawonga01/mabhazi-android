@@ -57,17 +57,31 @@ CREATE INDEX v2_admin_timetable_property_review_idx ON public.v2_admin_timetable
 CREATE FUNCTION public.v2_timetable_history_guard() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF TG_OP='UPDATE' AND pg_trigger_depth()>1 THEN
-  IF TG_TABLE_NAME='v2_admin_timetables' AND OLD.actor_user_id IS NOT NULL AND NEW.actor_user_id IS NULL
-   AND to_jsonb(NEW)-ARRAY['actor_user_id','request_digest','proposal','erased']=to_jsonb(OLD)-ARRAY['actor_user_id','request_digest','proposal','erased'] THEN
-   NEW.proposal:=NULL;NEW.request_digest:=NULL;NEW.erased:=true;RETURN NEW;
-  ELSIF TG_TABLE_NAME='v2_admin_timetable_properties'
-   AND (NEW.observation_id IS NOT DISTINCT FROM OLD.observation_id OR NEW.observation_id IS NULL)
-   AND (NEW.contribution_id IS NOT DISTINCT FROM OLD.contribution_id OR NEW.contribution_id IS NULL)
-   AND to_jsonb(NEW)-ARRAY['observation_id','contribution_id']=to_jsonb(OLD)-ARRAY['observation_id','contribution_id'] THEN RETURN NEW;
+  IF TG_TABLE_NAME='v2_admin_timetables' THEN
+   IF NOT OLD.erased AND NEW.erased AND NEW.proposal IS NULL AND NEW.request_digest IS NULL
+    AND to_jsonb(NEW)-ARRAY['request_digest','proposal','erased']=to_jsonb(OLD)-ARRAY['request_digest','proposal','erased'] THEN RETURN NEW;END IF;
+   IF OLD.actor_user_id IS NOT NULL AND NEW.actor_user_id IS NULL
+    AND to_jsonb(NEW)-ARRAY['actor_user_id','request_digest','proposal','erased']=to_jsonb(OLD)-ARRAY['actor_user_id','request_digest','proposal','erased'] THEN
+    NEW.proposal:=NULL;NEW.request_digest:=NULL;NEW.erased:=true;RETURN NEW;END IF;
+  ELSIF TG_TABLE_NAME='v2_admin_timetable_properties' THEN
+   IF (NEW.observation_id IS NOT DISTINCT FROM OLD.observation_id OR NEW.observation_id IS NULL)
+    AND (NEW.contribution_id IS NOT DISTINCT FROM OLD.contribution_id OR NEW.contribution_id IS NULL)
+    AND to_jsonb(NEW)-ARRAY['observation_id','contribution_id']=to_jsonb(OLD)-ARRAY['observation_id','contribution_id'] THEN RETURN NEW;END IF;
   END IF;
  END IF;
  RAISE EXCEPTION 'v2_timetable_history_immutable' USING ERRCODE='23514';
 END;$$;
+-- The command must not retain an extra raw copy after its evidence is erased.
+-- Historical entry/property IDs survive, while replay can never restore it.
+CREATE FUNCTION public.v2_timetable_forget_payload() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF public.v2_json_uuid(OLD.payload->'timetableCommandId') THEN
+  UPDATE public.v2_admin_timetables SET proposal=NULL,request_digest=NULL,erased=true
+   WHERE id=(OLD.payload->>'timetableCommandId')::uuid AND actor_user_id=OLD.user_id AND NOT erased;
+ END IF;
+ RETURN OLD;
+END;$$;
+CREATE TRIGGER timetable_forget_payload BEFORE DELETE ON public.v2_contributions FOR EACH ROW EXECUTE FUNCTION public.v2_timetable_forget_payload();
 DO $$ DECLARE t text;r text;BEGIN
  FOREACH t IN ARRAY ARRAY['v2_admin_timetables','v2_admin_timetable_entries','v2_admin_timetable_properties'] LOOP
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
@@ -79,8 +93,12 @@ DO $$ DECLARE t text;r text;BEGIN
   END LOOP;
  END LOOP;
  REVOKE ALL ON FUNCTION public.v2_timetable_history_guard() FROM PUBLIC,mabhazi_api;
+ REVOKE ALL ON FUNCTION public.v2_timetable_forget_payload() FROM PUBLIC,mabhazi_api;
  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
-  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_history_guard() FROM %I',r);END IF;
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
+   EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_history_guard() FROM %I',r);
+   EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_forget_payload() FROM %I',r);
+  END IF;
  END LOOP;
 END;$$;
 
@@ -137,7 +155,7 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE result jsonb;
 BEGIN
  PERFORM public.v2_admin_require(actor);
- SELECT jsonb_build_object('kind','timetable','id',t.id,'outcome','approved','actorErased',t.erased,'createdAt',t.created_at,
+ SELECT jsonb_build_object('kind','timetable','id',t.id,'outcome','approved','actorErased',t.actor_user_id IS NULL,'sourceErased',t.erased,'createdAt',t.created_at,
   'departureCount',(SELECT count(*) FROM public.v2_admin_timetable_entries e WHERE e.timetable_id=t.id),
   'entries',COALESCE((SELECT jsonb_agg(jsonb_build_object('runId',e.run_subject_id,'ordinal',e.ordinal,
    'properties',(SELECT jsonb_agg(jsonb_build_object('field',p.field_key,'reviewId',p.review_id,'sourceErased',p.contribution_id IS NULL OR (p.writer_kind<>'header' AND p.observation_id IS NULL)) ORDER BY p.field_key)
@@ -193,8 +211,10 @@ BEGIN
  END IF;
  WITH proposed_clocks AS (SELECT a->>'departure' clock FROM jsonb_array_elements(p->'departures') a),
  candidates AS (
-  SELECT 'operator'::text kind,a->>'id' id,a->>'revision' revision,NULL::text clock
-   FROM jsonb_array_elements(operators) a WHERE p->'operatorRef'='null'::jsonb AND p->'separateOperator'='false'::jsonb AND lower(a->>'name')=lower(p->>'operator')
+  SELECT 'operator'::text kind,o.subject_id::text id,s.revision::text revision,NULL::text clock
+   FROM public.v2_operators o JOIN public.v2_subjects s ON s.id=o.subject_id
+   WHERE p->'operatorRef'='null'::jsonb AND p->'separateOperator'='false'::jsonb AND lower(o.display_name)=lower(p->>'operator')
+    AND public.v2_current_reviewed_creation(o.subject_id)
   UNION ALL
   SELECT 'lead',r.subject_id::text,r.revision::text,r.reported_time->>'value' FROM public.v2_public_reviewed_lead_reports r
    WHERE r.origin_city_id=(p->>'originCityId')::integer AND r.destination_city_id=(p->>'destinationCityId')::integer
@@ -392,6 +412,93 @@ DO $$ DECLARE r text;f record;BEGIN
   EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,mabhazi_api',f.signature);
   FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
    IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f.signature,r);END IF;
+  END LOOP;
+ END LOOP;
+END;$$;
+
+
+-- Reader prerequisite, not a public view or access grant. Preserve the strict
+-- original reader; bridge only one exact reviewed calendar/arrival edit whose
+-- own physical change invalidated the original head. Never rescue an unrelated
+-- stale origin, overwritten parent, erased evidence or reversed edit.
+CREATE OR REPLACE FUNCTION public.v2_current_reviewed_creation(subject uuid) RETURNS boolean
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
+DECLARE original jsonb;current_edit jsonb;o public.v2_transport_creation_origins;p public.v2_transport_creations;s public.v2_subjects;
+ field text;native_table text;columns text[];
+BEGIN
+ SELECT * INTO s FROM public.v2_subjects WHERE id=subject;
+ IF s.id IS NULL OR s.lifecycle<>'active' THEN RETURN false;END IF;
+ original:=public.v2_read_created_subject(subject);
+ IF original->>'status'='reviewed_origin' THEN RETURN true;END IF;
+ IF s.kind='service_plan' THEN field:='service.calendar';native_table:='v2_service_plans';columns:=ARRAY['calendar_id','timezone'];
+ ELSIF s.kind='run' THEN field:='arrival.scheduled';native_table:='v2_runs';columns:=ARRAY['arrival_seconds'];
+ ELSE RETURN false;END IF;
+ current_edit:=public.v2_read_transport(subject);
+ IF current_edit->>'status' IS DISTINCT FROM 'reviewed' OR current_edit->>'fieldKey' IS DISTINCT FROM field THEN RETURN false;END IF;
+ SELECT * INTO o FROM public.v2_transport_creation_origins WHERE subject_id=subject;
+ SELECT * INTO p FROM public.v2_transport_creations WHERE id=o.creation_id;
+ IF o.creation_id IS NULL OR o.erased OR p.erased OR NOT public.v2_creation_evidence_live(p.id)
+  OR NOT public.v2_creation_dependencies_live(p.id)
+  OR NOT EXISTS(SELECT 1 FROM public.v2_transport_edit_heads h
+   JOIN public.v2_transport_edits e ON e.id=h.edit_id AND e.subject_id=subject AND e.field_key=field AND NOT e.erased
+   JOIN public.v2_transport_edit_events applied ON applied.id=h.event_id AND applied.action='apply'
+   JOIN public.v2_transport_edit_events approved ON approved.edit_id=e.id AND approved.action='review' AND approved.review_id=applied.review_id
+   JOIN public.v2_transport_change_subjects changed ON changed.subject_id=subject AND changed.is_root
+    AND changed.previous_revision=approved.resulting_revision AND changed.resulting_revision=applied.resulting_revision
+    AND changed.previous_generation=approved.resulting_generation AND changed.resulting_generation=applied.resulting_generation
+   JOIN public.v2_transport_changes cause ON cause.id=changed.change_id AND cause.source_table=native_table
+    AND cause.operation='UPDATE' AND cause.changed_columns<@columns
+   JOIN public.v2_transport_creation_events invalidation ON invalidation.creation_id=p.id AND invalidation.action='invalidate' AND invalidation.cause_id=cause.id
+   WHERE h.subject_id=subject AND (CASE s.kind WHEN 'service_plan' THEN e.before_snapshot-'calendar' ELSE e.before_snapshot END)=o.snapshot)
+  OR NOT EXISTS(SELECT 1 FROM public.v2_review_decisions d JOIN public.v2_review_cases c ON c.id=d.case_id
+   WHERE d.id=o.review_id AND d.action='accept' AND NOT d.evidence_erased AND c.last_decision_id=d.id AND c.state='resolved') THEN RETURN false;END IF;
+ IF (o.snapshot->'data')-columns IS DISTINCT FROM (current_edit->'snapshot'->'data')-columns THEN RETURN false;END IF;
+ IF s.kind='run' THEN RETURN o.snapshot-'data'=current_edit->'snapshot'-'data';END IF;
+ RETURN COALESCE(current_edit->'snapshot'->'calendar'->>'id'=current_edit->'snapshot'->'data'->>'calendar_id'
+  AND current_edit->'snapshot'->'calendar'->>'timezone'=current_edit->'snapshot'->'data'->>'timezone',false);
+END;$$;
+
+CREATE FUNCTION public.v2_timetable_property_current(run uuid,field text) RETURNS boolean
+LANGUAGE plpgsql STABLE SET search_path=pg_catalog AS $$
+DECLARE property public.v2_admin_timetable_properties;target uuid;
+BEGIN
+ SELECT p.* INTO property FROM public.v2_admin_timetable_properties p
+  JOIN public.v2_admin_timetable_entries e ON e.run_subject_id=p.run_subject_id
+  JOIN public.v2_admin_timetables t ON t.id=e.timetable_id AND NOT t.erased
+  JOIN public.v2_leads l ON l.subject_id=e.source_subject_id AND NOT l.attribution_erased
+  JOIN public.v2_subjects s ON s.id=e.source_subject_id AND s.lifecycle='active'
+  WHERE p.run_subject_id=run AND p.field_key=field;
+ IF NOT FOUND OR property.contribution_id IS NULL OR NOT EXISTS(SELECT 1 FROM public.v2_contributions WHERE id=property.contribution_id)
+  OR NOT EXISTS(SELECT 1 FROM public.v2_review_decisions d JOIN public.v2_review_cases c ON c.id=d.case_id
+   WHERE d.id=property.review_id AND NOT d.evidence_erased AND d.action='accept' AND c.state='resolved' AND c.last_decision_id=d.id) THEN RETURN false;END IF;
+ IF property.writer_kind='header' THEN
+  RETURN EXISTS(SELECT 1 FROM public.v2_leads l WHERE l.subject_id=property.subject_id AND l.initial_contribution_id=property.contribution_id AND NOT l.attribution_erased);
+ END IF;
+ IF property.observation_id IS NULL OR NOT EXISTS(SELECT 1 FROM public.v2_observations o
+  JOIN public.v2_observation_states os ON os.observation_id=o.id AND os.status='active'
+  JOIN public.v2_observation_targets ot ON ot.observation_id=o.id AND ot.assignment_id IS NULL
+  JOIN public.v2_review_decision_evidence ev ON ev.observation_id=o.id AND ev.decision_id=property.review_id
+  WHERE o.id=property.observation_id AND o.field_key=field AND o.original_subject_id=property.subject_id AND o.contribution_id=property.contribution_id) THEN RETURN false;END IF;
+ IF property.writer_kind='field' THEN RETURN true;
+ ELSIF property.writer_kind='creation' THEN
+  SELECT p.target_subject_id INTO target FROM public.v2_transport_creations p
+   JOIN public.v2_transport_creation_origins o ON o.creation_id=p.id AND o.review_id=property.review_id AND NOT o.erased
+   WHERE p.id=property.writer_id AND NOT p.erased AND p.observation_id=property.observation_id;
+  RETURN COALESCE(public.v2_current_reviewed_creation(target),false);
+ ELSIF property.writer_kind='edit' THEN
+  RETURN EXISTS(SELECT 1 FROM public.v2_transport_edit_heads h JOIN public.v2_transport_edits e ON e.id=h.edit_id
+   JOIN public.v2_transport_edit_events a ON a.id=h.event_id AND a.action='apply' AND a.review_id=property.review_id
+   WHERE h.subject_id=property.subject_id AND e.id=property.writer_id AND e.observation_id=property.observation_id
+   AND NOT e.erased AND public.v2_read_transport(h.subject_id)->>'status'='reviewed'
+   AND public.v2_current_reviewed_creation(h.subject_id));
+ END IF;
+ RETURN false;
+END;$$;
+DO $$ DECLARE r text;f text;BEGIN
+ FOREACH f IN ARRAY ARRAY['public.v2_current_reviewed_creation(uuid)','public.v2_timetable_property_current(uuid,text)'] LOOP
+  EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,mabhazi_api',f);
+  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',f,r);END IF;
   END LOOP;
  END LOOP;
 END;$$;

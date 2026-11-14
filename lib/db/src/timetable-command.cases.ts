@@ -77,7 +77,7 @@ export function registerTimetableCommandTests(context:()=>Context){
   const choices=(await q('SELECT v2_api_admin_timetable_operators($1,$2) r',[f.actor,f.p.operator])).rows[0].r as Array<{id:string;revision:string}>;
   assert.equal(choices.length,1);f.request=randomUUID();f.p.validFrom=(Number(f.p.validFrom.slice(0,4))+1)+'-01-01';f.p.validUntil=f.p.validFrom.slice(0,4)+'-12-31';
   assert.ok((await preview(f)).duplicates.some((d:{kind:string})=>d.kind==='operator'));
-  f.p.operatorRef=choices[0];assert.equal((await preview(f)).duplicates.length,0);await saved(f);
+  f.p.operatorRef={id:choices[0].id,revision:choices[0].revision};assert.equal((await preview(f)).duplicates.length,0);await saved(f);
   assert.equal((await q('SELECT count(*) n FROM v2_operators WHERE display_name=$1',[f.p.operator])).rows[0].n,'1');
   f.p.operatorRef={...choices[0],revision:String(Number(choices[0].revision)+1)};await invalid(()=>preview(f),['40001']);
  });
@@ -86,7 +86,7 @@ export function registerTimetableCommandTests(context:()=>Context){
    await invalid(()=>q('SELECT v2_api_admin_timetable_preview($1,$2)',[actor,f.p]),['42501']);
    await invalid(()=>q('SELECT v2_api_admin_timetable_action($1,$2,$3)',[actor,f.request,b]),['42501']);
    await invalid(()=>q('SELECT v2_api_admin_timetable_receipt($1,$2)',[actor,f.request]),['42501']);}
-  await saved(f);await q('UPDATE v2_review_roles SET revoked_at=now() WHERE user_id=$1',[f.actor]);await invalid(()=>apply(f,b),['42501']);
+  await saved(f);await q('UPDATE v2_review_roles SET revoked_at=now(),revoked_by_user_id=user_id WHERE user_id=$1',[f.actor]);await invalid(()=>apply(f,b),['42501']);
  });
  test('timetable command: outer rollback removes the entire command and all transport components',async()=>{
   const f=await setup(),before=(await q('SELECT count(*) n FROM v2_subjects')).rows[0].n;await q('SAVEPOINT rollback_timetable');await saved(f);
@@ -105,7 +105,45 @@ export function registerTimetableCommandTests(context:()=>Context){
   await q('DELETE FROM v2_contributions WHERE id=$1',[property.contribution_id]);
   const receipt=(await q('SELECT v2_api_admin_timetable_receipt($1,$2) r',[f.actor,f.request])).rows[0].r;
   assert.ok(receipt.entries[0].properties.some((p:{sourceErased:boolean})=>p.sourceErased));
-  assert.deepEqual(await apply(f,b),receipt);
+  assert.equal(receipt.sourceErased,true);await invalid(()=>apply(f,b));
+  const command=(await q('SELECT proposal,request_digest,erased FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0];
+  assert.equal(command.proposal,null);assert.equal(command.request_digest,null);assert.equal(command.erased,true);
+ });
+ test('timetable command: all exact property proofs are current after optional arrival and fare assembly',async()=>{
+  const f=await setup();f.p.departures[0].arrival='10:00';f.p.departures[0].fare={amount:'18',currency:'USD',kind:'quoted'};
+  const r=await saved(f),run=r.entries[0].runId;
+  assert.equal((await q('SELECT v2_read_created_subject($1) r',[run])).rows[0].r.status,'stale');
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,true);
+  const proofs=(await q('SELECT field_key,v2_timetable_property_current(run_subject_id,field_key) current FROM v2_admin_timetable_properties WHERE run_subject_id=$1',[run])).rows;
+  assert.equal(proofs.length,10);assert.ok(proofs.every(p=>p.current),JSON.stringify(proofs));
+ });
+ test('timetable command: an unreviewed run change cannot inherit the arrival review',async()=>{
+  const f=await setup();f.p.departures[0].arrival='10:00';const r=await saved(f),run=r.entries[0].runId;
+  await q('UPDATE v2_runs SET departure_seconds=departure_seconds+60 WHERE subject_id=$1',[run]);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,false);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'arrival.scheduled') r",[run])).rows[0].r,false);
+ });
+ test('timetable command: reversing only a fare keeps the independent boarding and schedule approvals',async()=>{
+  const f=await setup();f.p.departures[0].fare={amount:'18',currency:'USD',kind:'quoted'};const r=await saved(f),run=r.entries[0].runId;
+  const p=(await q("SELECT p.*,c.revision case_revision,s.revision subject_revision FROM v2_admin_timetable_properties p JOIN v2_review_decisions d ON d.id=p.review_id JOIN v2_review_cases c ON c.id=d.case_id JOIN v2_subjects s ON s.id=p.subject_id WHERE run_subject_id=$1 AND p.field_key='fare.quoted'",[run])).rows[0];
+  await q('SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision DEFERRED');
+  await q("SELECT v2_record_review($1,$2,$3,$4,'reverse','decision_incorrect',NULL,ARRAY[]::uuid[],'timetable-import/1',$5)",[f.actor,p.writer_id,p.case_revision,p.subject_revision,p.review_id]);
+  await q('SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE');
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'fare.quoted') r",[run])).rows[0].r,false);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'boarding.pickup') r",[run])).rows[0].r,true);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'departure.scheduled') r",[run])).rows[0].r,true);
+ });
+ test('timetable command: account erasure scrubs proposal copies and leaves no reviewed transport proof',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId;await q('DELETE FROM users WHERE id=$1',[f.actor]);
+  const command=(await q('SELECT actor_user_id,proposal,request_digest,erased FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0];
+  assert.equal(command.actor_user_id,null);assert.equal(command.proposal,null);assert.equal(command.request_digest,null);assert.equal(command.erased,true);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,false);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'boarding.pickup') r",[run])).rows[0].r,false);
+ });
+ test('timetable command: malformed days and paid fare cannot enter the privileged writer',async()=>{
+  const f=await setup();assert.equal((await q('SELECT v2_timetable_proposal_valid($1) r',[{...f.p,weekdays:null}])).rows[0].r,false);
+  assert.equal((await q('SELECT v2_timetable_proposal_valid($1) r',[{...f.p,departures:[{...f.p.departures[0],fare:{amount:'12',currency:'USD',kind:'paid'}}]}])).rows[0].r,false);
+  await invalid(()=>q('SELECT v2_api_admin_timetable_preview($1,$2)',[f.actor,{...f.p,weekdays:[]}]));
  });
  test('timetable command: raw backend and public roles cannot invoke private importers or read command proposals',async()=>{
   const f=await setup(),b=await input(f);for(const role of ['mabhazi_api','anon','authenticated']){
