@@ -236,7 +236,7 @@ END;$$;
 -- completed; no GRANT is included and this is not a registered migration.
 CREATE FUNCTION public.v2_timetable_accept(actor varchar,subject uuid,field text,observation uuid,contribution uuid)
 RETURNS uuid LANGUAGE plpgsql SET search_path=pg_catalog AS $$
-DECLARE c uuid;scope_key text;evidence uuid[];
+DECLARE c uuid;scope_key text;evidence uuid[];decision uuid;
 BEGIN
  PERFORM public.v2_admin_require(actor);
  IF field IN('route.origin','route.destination') THEN
@@ -248,8 +248,11 @@ BEGIN
   IF scope_key IS NULL THEN RAISE EXCEPTION 'v2_timetable_property_context_required' USING ERRCODE='23514';END IF;
   c:=public.v2_open_review_case(actor,subject,'correction',field,scope_key);evidence:=ARRAY[observation];
  END IF;
- RETURN public.v2_record_review(actor,c,1,(SELECT revision FROM public.v2_subjects WHERE id=subject),
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision DEFERRED;
+ decision:=public.v2_record_review(actor,c,1,(SELECT revision FROM public.v2_subjects WHERE id=subject),
   'accept','timetable_source_checked',NULL,evidence,'timetable-import/1');
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE;
+ RETURN decision;
 END;$$;
 
 CREATE FUNCTION public.v2_timetable_bind(actor varchar,run uuid,field text,subject uuid,observation uuid,contribution uuid,kind text,writer uuid,review uuid)
