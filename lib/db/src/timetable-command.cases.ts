@@ -12,7 +12,7 @@ export function registerTimetableCommandTests(context:()=>Context){
  }
  async function setup(){
   const c=context();await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','fixture')",[c.other]);
-  const day=(await q("SELECT (statement_timestamp() AT TIME ZONE 'Africa/Harare')::date::text day")).rows[0].day as string;
+  const day=(await q("SELECT (statement_timestamp() AT TIME ZONE 'Africa/Harare')::date::text AS checked_date")).rows[0].checked_date as string;
   return{actor:c.other,request:randomUUID(),p:{version:1,operator:'Command fixture '+randomUUID().slice(0,8),operatorRef:null as null|{id:string;revision:string},separateOperator:false,
    originCityId:c.origin,destinationCityId:c.destination,pickup:'Known command fixture boarding',dropoff:null as string|null,timezone:'Africa/Harare',weekdays:[1,3,5],
    validFrom:day,validUntil:day.slice(0,4)+'-12-31',source:{kind:'published_timetable',reference:'Synthetic test source only',checkedOn:day},
