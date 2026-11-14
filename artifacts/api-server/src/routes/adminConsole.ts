@@ -1,5 +1,6 @@
 import {adminVisibilityEnabled} from './adminVisibility';
 import {adminCoreEnabled} from './adminCoreCorrections';
+import {adminTimetablesEnabled} from './adminTimetables';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { renderAdminConsole, renderConsoleAccess, type ConsoleRoute } from './adminConsoleView';
@@ -113,7 +114,7 @@ router.get('/admin-console/data',async(req,res)=>{
     res.status(400).json({code:'INVALID_QUERY',error:'Use a city, operator or route reference.'});return;
   }
   try{
-    const routeVisibility=await adminVisibilityEnabled(),coreCorrections=await adminCoreEnabled();
+    const routeVisibility=await adminVisibilityEnabled(),coreCorrections=await adminCoreEnabled(),timetables=await adminTimetablesEnabled();
     const correctionColumn=coreCorrections?"coalesce((SELECT jsonb_agg(jsonb_build_object('field',a.field_key,'value',CASE WHEN a.field_key IN('route.origin','route.destination') AND a.proposed_value IS NOT NULL THEN (SELECT jsonb_build_object('id',ci.id,'name',ci.name) FROM public.cities ci WHERE ci.id=a.corrected_city_id) ELSE a.proposed_value END)) FROM public.v2_admin_current_core a WHERE a.route_subject_id=l.subject_id),'[]'::jsonb)":"'[]'::jsonb";
     const removalColumn=routeVisibility?'EXISTS(SELECT 1 FROM public.v2_admin_active_route_removals h WHERE h.route_subject_id=l.subject_id)':'false';
     const result=await pool.query(`SELECT ${removalColumn} removed,${correctionColumn} corrections,l.subject_id id,s.revision::text revision,s.lifecycle,
@@ -134,7 +135,7 @@ router.get('/admin-console/data',async(req,res)=>{
       ORDER BY l.subject_id LIMIT $4`,[q,cursor??null,req.user.id,limit+1]);
     const rows=result.rows.slice(0,limit),ids=rows.map(r=>r.id as string),data=ids.length?await readAdminClaims(req.user.id,ids):{claims:[],routes:[]};
     if(data.routes.length!==ids.length){res.status(409).json({code:'CATALOGUE_CHANGED',error:'The route list changed. Refresh to continue.'});return;}
-    res.json({rows,claims:data.claims,capabilities:{routeVisibility,coreCorrections},hasMore:result.rows.length>limit,...(result.rows.length>limit?{nextCursor:ids.at(-1)}:{})});
+    res.json({rows,claims:data.claims,capabilities:{routeVisibility,coreCorrections,timetables},hasMore:result.rows.length>limit,...(result.rows.length>limit?{nextCursor:ids.at(-1)}:{})});
   }catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Route records could not be checked.'});}
 });
 router.get('/admin-console/evidence',async(req,res)=>{

@@ -1,3 +1,4 @@
+import {registerReviewedCalendarTests} from './reviewed-calendar.cases';
 import {registerAdminCoreTests} from './admin-core.cases';
 import {registerAdminBootstrapTests} from './admin-bootstrap.cases';
 import {registerAdminVisibilityTests} from './admin-visibility.cases';
@@ -855,6 +856,7 @@ registerTransportCreationTests(() => ({ db, connectionString, user, other, origi
 registerRoutePatternTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 
 registerServiceRunTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
+registerReviewedCalendarTests(() => ({db,user,other,origin,destination,corridor}));
 
 registerActualIntakeTests(() => ({ db, connectionString, user, other, origin, destination, corridor }));
 

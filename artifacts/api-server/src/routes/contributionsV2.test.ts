@@ -1,3 +1,4 @@
+import '../lib/adminTimetable.test';
 import {registerAdminCoreApiTests} from './adminCore.cases';
 import {registerAdminConsoleTests} from './adminConsole.cases';
 import {registerAdminEvidenceTests} from './adminEvidence.cases';
