@@ -61,7 +61,15 @@ export function registerStaffTimetableTests(context:()=>Context){
   await invalid(()=>q('SELECT v2_timetable_source($1,$2,$3,$4,$5)',[s.actor,s.command,s.proposal,{name:'Fixture'},otherSource]));
  });
  test('staff timetable: current calendar proof permits an exact native run without changing strict origin history',async()=>{
-  const f=await service();assert.equal((await read(f.plan)).status,'stale');assert.equal(await current(f.plan),true);
+  const f=await service();assert.equal((await read(f.plan)).status,'stale');const ready=await current(f.plan);
+  const diagnosis=ready?null:(await q(`SELECT jsonb_build_object('reviewedEdit',public.v2_read_transport($1)->>'status',
+   'nativeDependencies',public.v2_creation_dependencies_live(o.creation_id),
+   'beforeMatchesOrigin',e.before_snapshot-'calendar'=o.snapshot,
+   'originHead',EXISTS(SELECT 1 FROM v2_transport_creation_heads WHERE subject_id=$1),
+   'editEpochs',(SELECT jsonb_agg(jsonb_build_array(action,resulting_revision,resulting_generation) ORDER BY revision) FROM v2_transport_edit_events WHERE edit_id=e.id),
+   'changeEpochs',(SELECT jsonb_agg(jsonb_build_object('table',c.source_table,'columns',c.changed_columns,'beforeRevision',s.previous_revision,'afterRevision',s.resulting_revision,'beforeGeneration',s.previous_generation,'afterGeneration',s.resulting_generation,'root',s.is_root,'originInvalidated',EXISTS(SELECT 1 FROM v2_transport_creation_events ce WHERE ce.creation_id=o.creation_id AND ce.cause_id=c.id AND ce.action='invalidate'))) FROM v2_transport_change_subjects s JOIN v2_transport_changes c ON c.id=s.change_id WHERE s.subject_id=$1)) diagnosis
+   FROM v2_transport_creation_origins o JOIN v2_transport_edit_heads h ON h.subject_id=o.subject_id JOIN v2_transport_edits e ON e.id=h.edit_id WHERE o.subject_id=$1`,[f.plan])).rows[0]?.diagnosis;
+  assert.equal(ready,true,JSON.stringify(diagnosis));
   const r=await run(f),result=await read(r.id);assert.equal(result.status,'reviewed_origin');assert.equal(result.snapshot.data.service_plan_subject_id,f.plan);
   assert.equal(result.snapshot.data.departure_seconds,25200);assert.equal(result.snapshot.data.arrival_seconds,null);
   assert.equal((await q('SELECT stops_complete FROM v2_pattern_versions WHERE pattern_subject_id=$1',[f.pattern])).rows[0].stops_complete,false);
@@ -83,6 +91,14 @@ export function registerStaffTimetableTests(context:()=>Context){
  });
  test('staff timetable: erasing the original operator proof invalidates the calendar-edited plan and its run',async()=>{
   const f=await service(),r=await run(f);await q("DELETE FROM v2_observations WHERE original_subject_id=$1 AND field_key='operator.reported'",[f.opSource.subjectId]);
+  assert.equal(await current(f.plan),false);assert.equal((await read(r.id)).status,'stale');
+ });
+ test('staff timetable: reversing the installed calendar invalidates descendants without reviving its original head',async()=>{
+  const f=await service(),r=await run(f);
+  const e=(await q('SELECT e.* FROM v2_transport_edits e JOIN v2_transport_edit_events a ON a.edit_id=e.id WHERE a.review_id=$1 AND a.action=$2',[f.calendarReview,'apply'])).rows[0],
+   c=(await q('SELECT revision FROM v2_review_cases WHERE id=$1',[e.case_id])).rows[0],s=(await q('SELECT revision FROM v2_subjects WHERE id=$1',[f.plan])).rows[0];
+  await q("SELECT v2_review_transport_edit($1,$2,$3,$4,'reverse','decision_incorrect',NULL,gen_random_uuid(),$5)",[f.s.actor,e.id,c.revision,s.revision,f.calendarReview]);
+  assert.equal((await q('SELECT calendar_id FROM v2_service_plans WHERE subject_id=$1',[f.plan])).rows[0].calendar_id,null);
   assert.equal(await current(f.plan),false);assert.equal((await read(r.id)).status,'stale');
  });
  test('staff timetable: private constructors and reviewed-parent helper stay denied to backend and public roles',async()=>{

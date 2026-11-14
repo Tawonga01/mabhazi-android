@@ -53,7 +53,7 @@ export function registerReviewedCalendarTests(context:()=>Context){
   assert.equal((await q('SELECT count(*) n FROM v2_field_assessments WHERE subject_id=$1',[f.plan])).rows[0].n,'0');
   assert.equal((await q('SELECT count(*) n FROM v2_runs WHERE service_plan_subject_id=$1',[f.plan])).rows[0].n,'0');
  });
- for(const value of [calendar({timezone:undefined}),calendar({endDate:undefined}),{dates:['2026-11-14'],timezone:'Africa/Harare'},calendar({exceptions:[{date:'2026-11-18',action:'remove'}]})])
+ for(const value of [calendar({weekdays:null}),calendar({timezone:undefined}),calendar({endDate:undefined}),{dates:['2026-11-14'],timezone:'Africa/Harare'},calendar({exceptions:[{date:'2026-11-18',action:'remove'}]})])
   test('calendar writer: partial or richer calendar is held without dropping source meaning '+JSON.stringify(value),async()=>{
    const f=await fixture(),o=await report(f.plan,value);await invalid(()=>proposal(f.plan,o));
    assert.equal((await q('SELECT calendar_id FROM v2_service_plans WHERE subject_id=$1',[f.plan])).rows[0].calendar_id,null);

@@ -41,7 +41,7 @@ BEGIN
   -- This first writer accepts a bounded recurring calendar only. Explicit
   -- dates/exceptions remain represented as observations, never silently lost.
   IF NOT o.value ?& ARRAY['weekdays','startDate','endDate','timezone']
-   OR o.value ?| ARRAY['dates','exceptions']
+   OR o.value ?| ARRAY['dates','exceptions'] OR jsonb_typeof(o.value->'weekdays') IS DISTINCT FROM 'array'
    OR NOT public.v2_calendar_observation_valid(o.value)
    OR NOT EXISTS(SELECT 1 FROM public.v2_timezones WHERE name=o.value->>'timezone')
    THEN RAISE EXCEPTION 'v2_edit_complete_recurring_calendar_required' USING ERRCODE='23514';END IF;

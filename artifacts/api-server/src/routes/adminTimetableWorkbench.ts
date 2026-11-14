@@ -35,6 +35,7 @@ export const adminTimetableWorkbench=String.raw`
  }
  async function ttOpen(){
   if(S.pending){message('Check the saved action receipt before starting another action.');return;}
+  await api('/timetables/state');
   const saved=await ttRead();TT.draft=saved?.proposal||ttBlank();TT.cities=saved?.cities||{originCityId:[],destinationCityId:[]};
   for(const k of ['originCityId','destinationCityId'])TT.queries[k]=TT.cities[k]?.find(c=>c.id===TT.draft[k])?.name||'';TT.preview=null;TT.issues=[];TT.saveError=false;ttWrites=Promise.resolve();if(!saved)await ttStore();S.view='timetable';message('');render();
  }
@@ -115,18 +116,26 @@ export const adminTimetableWorkbench=String.raw`
   if(action==='tt-apply'){
    if(!TT.preview?.writable||TT.preview.duplicates?.length)return true;
    await ttWrites;const body={clientRequestId:crypto.randomUUID(),previewToken:TT.preview.previewToken};
-   await savePending({account,kind:'timetable',body,at:Date.now()});await submit(body);return true;
+   await savePending({account,kind:'timetable',body,draftRevision:TT.revision,at:Date.now()});await submit(body);return true;
   }
   return true;
  }
  async function ttFinish(receipt){
-  if(!receipt||receipt.kind!=='timetable'||!['published','changed'].includes(receipt.outcome))throw Error('The timetable receipt could not be confirmed. Keep the saved action.');
-  if(receipt.outcome==='published'){
-   await stored('commands',ttDraftKey,null);TT.revision=0;TT.draft=ttBlank();TT.preview=null;
+  if(!receipt||receipt.kind!=='timetable'||receipt.id!==S.pending?.body.clientRequestId||!['approved','changed'].includes(receipt.outcome))throw Error('The timetable receipt could not be confirmed. Keep the saved action.');
+  let newerDraft=false;
+  if(receipt.outcome==='approved'){
+   const expected=S.pending.draftRevision;
+   // A receipt for this frozen command must not delete a newer draft that was
+   // edited in another tab while the request/recovery was in flight.
+   await new Promise((resolve,reject)=>{
+    const tx=cache.transaction('commands','readwrite'),store=tx.objectStore('commands'),get=store.get(ttDraftKey);
+    get.onsuccess=()=>{if(get.result&&get.result.revision===expected)store.delete(ttDraftKey);else if(get.result)newerDraft=true;};
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+   });
   }
-  await savePending(null);S.view='timetable';
-  message(receipt.outcome==='published'?receipt.departureCount+' departures published.': 'The matching records changed. Review this timetable again.');
-  S.busy=false;render();
+  await savePending(null);S.busy=false;await ttOpen();
+  message(receipt.outcome==='approved'?'Timetable saved and approved.'+(newerDraft?' Your newer draft is kept.':''):'The matching records changed. Review this timetable again.');
+  render();
  }
 `;
 

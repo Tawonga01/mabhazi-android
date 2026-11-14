@@ -33,7 +33,7 @@ export function parseTimetableProposal(raw:unknown,now=Date.now()):TimetablePars
   const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:raw.timezone,year:'numeric',month:'2-digit',day:'2-digit'});
   const parts=fmt.formatToParts(now),part=(type:string)=>parts.find(p=>p.type===type)?.value;
   today=part('year')+'-'+part('month')+'-'+part('day');
-  if(!raw.timezone.includes('/'))fail('timezone','Choose an IANA timezone, such as Africa/Harare.');
+  if(raw.timezone!=='UTC'&&!raw.timezone.includes('/'))fail('timezone','Choose an IANA timezone, such as Africa/Harare.');
  }catch{fail('timezone','Choose a valid IANA timezone.');}
  if(!Array.isArray(raw.weekdays)||raw.weekdays.length<1||raw.weekdays.length>7||raw.weekdays.some(d=>!Number.isInteger(d)||d<1||d>7)||new Set(raw.weekdays).size!==raw.weekdays.length)
   fail('weekdays','Select the operating days stated by the source.');
@@ -64,7 +64,7 @@ export function parseTimetableProposal(raw:unknown,now=Date.now()):TimetablePars
     if(!object(row.fare)||!own(row.fare,['amount','currency','kind']))fail(key+'.fare','Check the price and currency.');
     else{
      // This form captures an advertised whole-route fare, never a paid ticket.
-     if(typeof row.fare.amount!=='string'||!/^\d{1,9}(\.\d{1,2})?$/.test(row.fare.amount)||Number(row.fare.amount)<=0)fail(key+'.fare.amount','Enter a positive price, or leave it blank.');
+     if(typeof row.fare.amount!=='string'||!/^(0|[1-9]\d{0,8})(\.\d{1,2})?$/.test(row.fare.amount))fail(key+'.fare.amount','Enter a price such as 15 or 15.50, or leave it blank.');
      if(!['USD','ZAR','ZMW','MWK','BWP','ZWG'].includes(String(row.fare.currency)))fail(key+'.fare.currency','Choose the price currency.');
      if(!['advertised','quoted'].includes(String(row.fare.kind)))fail(key+'.fare.kind','Choose advertised or quoted price.');
     }

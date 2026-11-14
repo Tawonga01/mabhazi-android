@@ -18,7 +18,17 @@ BEGIN
  SELECT * INTO p FROM public.v2_transport_creations WHERE id=o.creation_id;
  IF o.creation_id IS NULL OR o.erased OR p.erased OR NOT public.v2_creation_evidence_live(p.id)
   OR NOT public.v2_creation_dependencies_live(p.id)
-  OR NOT EXISTS(SELECT 1 FROM public.v2_transport_creation_heads h WHERE h.subject_id=subject AND h.creation_id=p.id)
+  OR NOT EXISTS(SELECT 1 FROM public.v2_transport_edit_heads h
+   JOIN public.v2_transport_edits e ON e.id=h.edit_id AND e.subject_id=subject AND e.field_key='service.calendar' AND NOT e.erased
+   JOIN public.v2_transport_edit_events applied ON applied.id=h.event_id AND applied.action='apply'
+   JOIN public.v2_transport_edit_events approved ON approved.edit_id=e.id AND approved.action='review' AND approved.review_id=applied.review_id
+   JOIN public.v2_transport_change_subjects changed ON changed.subject_id=subject AND changed.is_root
+    AND changed.previous_revision=approved.resulting_revision AND changed.resulting_revision=applied.resulting_revision
+    AND changed.previous_generation=approved.resulting_generation AND changed.resulting_generation=applied.resulting_generation
+   JOIN public.v2_transport_changes cause ON cause.id=changed.change_id AND cause.source_table='v2_service_plans'
+    AND cause.operation='UPDATE' AND cause.changed_columns<@ARRAY['calendar_id','timezone']::text[]
+   JOIN public.v2_transport_creation_events invalidation ON invalidation.creation_id=p.id AND invalidation.action='invalidate' AND invalidation.cause_id=cause.id
+   WHERE h.subject_id=subject AND (e.before_snapshot-'calendar')=o.snapshot)
   OR NOT EXISTS(SELECT 1 FROM public.v2_review_decisions d JOIN public.v2_review_cases c ON c.id=d.case_id
    WHERE d.id=o.review_id AND d.action='accept' AND NOT d.evidence_erased AND c.last_decision_id=d.id AND c.state='resolved')
   THEN RETURN false;END IF;

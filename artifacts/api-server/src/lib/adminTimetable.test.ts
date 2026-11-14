@@ -31,16 +31,18 @@ test('invalid/unknown calendar cannot turn into daily operation',()=>{
  const p=example();p.weekdays=[];assert.ok(issues(p).includes('weekdays'));p.weekdays=[1,1];assert.ok(issues(p).includes('weekdays'));
  p.weekdays=[8];assert.ok(issues(p).includes('weekdays'));p.weekdays=[1];p.validFrom='2026-02-30';assert.ok(issues(p).includes('validFrom'));
  p.validFrom='2026-12-20';assert.ok(issues(p).includes('validUntil'));p.validFrom='2026-11-14';p.timezone='Europe/Unknown';assert.ok(issues(p).includes('timezone'));
+ p.timezone='UTC';assert.deepEqual(issues(p),[]);
 });
 test('no duplicate departure rows or endpoint/name placeholders',()=>{
  const p=example();p.departures[1].departure='17:00';assert.ok(issues(p).includes('departures.1.departure'));
  p.originCityId=p.destinationCityId;assert.ok(issues(p).includes('destinationCityId'));p.operator=' ';assert.ok(issues(p).includes('operator'));
  p.pickup='';assert.ok(issues(p).includes('pickup'));
 });
-test('provided fare retains advertised vs quoted and currency without accepting paid/zero/rounding',()=>{
+test('provided fare retains advertised vs quoted and currency without accepting paid or silent rounding',()=>{
  const p=example();p.departures[0].fare={amount:'15.50',currency:'USD',kind:'quoted'};
  const r=parseTimetableProposal(p,now);assert.deepEqual(r.issues,[]);assert.deepEqual(r.proposal?.departures[1].fare,p.departures[0].fare);
- for(const amount of ['0','-1','NaN','1e2','1.999','15,50']){p.departures[0].fare.amount=amount;assert.ok(issues(p).includes('departures.0.fare.amount'));}
+ p.departures[0].fare.amount='0';assert.deepEqual(issues(p),[]); // Explicit free fare, never a default for unknown.
+ for(const amount of ['-1','NaN','1e2','1.999','15,50','0015']){p.departures[0].fare.amount=amount;assert.ok(issues(p).includes('departures.0.fare.amount'));}
  p.departures[0].fare.amount='15';(p.departures[0].fare as unknown as {kind:string}).kind='paid';assert.ok(issues(p).includes('departures.0.fare.kind'));
 });
 test('unknown privilege/identity keys fail closed rather than becoming import instructions',()=>{

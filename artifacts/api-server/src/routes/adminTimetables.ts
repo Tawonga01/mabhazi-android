@@ -20,6 +20,9 @@ router.use(async(_req,res,next)=>{
  try{if(!await adminTimetablesEnabled()){res.status(503).json({code:'TIMETABLES_UNAVAILABLE',error:'Timetable entry is not available yet. Your draft stays saved.'});return;}next();}
  catch{res.status(503).json({code:'ADMIN_UNAVAILABLE',error:'Timetable entry could not be checked. Your draft stays saved.'});}
 });
+// Check the current named session/account before unlocking a local draft. An
+// old browser tab must not expose another account's draft after sign-in changes.
+router.get('/state',(_req,res)=>{res.json({available:true});});
 router.get('/cities',async(req,res)=>{
  if(!req.isAuthenticated())return;
  const q=req.query.q;
