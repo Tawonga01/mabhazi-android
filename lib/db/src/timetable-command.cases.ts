@@ -225,7 +225,8 @@ export function registerTimetableCommandTests(context:()=>Context){
  test('timetable discovery: removal and restore preserve originals and re-evaluate real eligibility',async()=>{
   const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),original=(await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal;
   const removed=await visibility(f,subject);assert.equal(removed.outcome,'removed');assert.equal(await discovery(subject),null);
-  assert.equal((await visibility(f,subject,'restore',removed.id)).outcome,'restored');assert.ok(await discovery(subject));
+  assert.equal((await visibility(f,subject,'restore',removed.id)).outcome,'restored');
+  const present=await discovery(subject);if(!present){const diag=(await q("SELECT jsonb_build_object('command',(SELECT to_jsonb(t)-'proposal' FROM v2_admin_timetables t WHERE id=$1),'lead',(SELECT to_jsonb(l) FROM v2_leads l WHERE subject_id=$2),'removals',(SELECT jsonb_agg(to_jsonb(a)) FROM v2_admin_active_route_removals a WHERE route_subject_id=$2),'properties',(SELECT jsonb_agg(jsonb_build_array(field_key,v2_timetable_property_current(run_subject_id,field_key))) FROM v2_admin_timetable_properties WHERE run_subject_id=$3)) r",[f.request,subject,r.entries[0].runId])).rows[0].r;assert.ok(present,JSON.stringify({state:diag,native:await diagnosis(r.entries[0].runId)}));}
   assert.deepEqual((await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal,original);
  });
  test('timetable discovery: restoring an administrator removal cannot clear an independent safety hide',async()=>{
