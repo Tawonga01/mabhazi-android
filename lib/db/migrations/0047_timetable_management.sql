@@ -152,7 +152,7 @@ DECLARE target jsonb;result jsonb;BEGIN
  END LOOP;
 END;$$;
 DO $$ DECLARE definition text;anchor text:=E' END LOOP;\n RETURN public.v2_api_admin_timetable_receipt(actor,request);';BEGIN
- definition:=pg_get_functiondef('public.v2_api_admin_timetable_action(varchar,uuid,jsonb)'::regprocedure);
+ definition:=replace(pg_get_functiondef('public.v2_api_admin_timetable_action(varchar,uuid,jsonb)'::regprocedure),E'\r\n',E'\n');
  IF strpos(definition,anchor)=0 THEN RAISE EXCEPTION 'timetable_action_baseline_changed';END IF;
  EXECUTE replace(definition,anchor,E' END LOOP;\n PERFORM public.v2_timetable_apply_replacements(actor,request,preview);\n RETURN public.v2_api_admin_timetable_receipt(actor,request);');
 END;$$;
