@@ -19,4 +19,5 @@ export interface V2LeadReceipt {
   associationStatus: V2LeadReceiptAssociationStatus;
   publicationStatus: V2LeadReceiptPublicationStatus;
   replayed: boolean;
+  targetAdvanced?: boolean;
 }

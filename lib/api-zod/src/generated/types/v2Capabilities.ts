@@ -11,4 +11,11 @@ export interface V2Capabilities {
   schemaVersion: V2CapabilitiesSchemaVersion;
   minimumLeadEnabled: boolean;
   actualJourneyEnabled?: boolean;
+  fareReportsEnabled?: boolean;
+  routeObservationsEnabled?: boolean;
+  placeReportsEnabled?: boolean;
+  pickupQuestionsEnabled?: boolean;
+  pickupInvitationsEnabled?: boolean;
+  promptControlsEnabled?: boolean;
+  reviewedTimetablesEnabled?: boolean;
 }

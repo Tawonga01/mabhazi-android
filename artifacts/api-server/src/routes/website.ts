@@ -9,11 +9,11 @@ router.get("/", (_req, res) => {
 <title>Mabhazi — Bus journeys in Zimbabwe</title>
 <meta name="description" content="Find bus journeys and share useful travel information with the Mabhazi community.">
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#14253d;font:18px/1.6 system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#F4F6F9;color:#172D46;font:18px/1.6 system-ui,sans-serif}
 main{max-width:760px;margin:0 auto;padding:72px 24px}header{border-bottom:1px solid #cbd5e1;padding-bottom:32px}
-.brand{font-weight:750;font-size:24px;color:#203e63}h1{font-size:clamp(32px,6vw,52px);line-height:1.15;letter-spacing:-.03em;margin:36px 0 24px}
-p{max-width:620px;color:#475569}nav{display:flex;flex-wrap:wrap;gap:14px 24px;margin-top:32px}
-a{color:#214e80;text-underline-offset:4px}a:focus-visible{outline:3px solid #214e80;outline-offset:5px}
+.brand{font-weight:750;font-size:24px;color:#102744}h1{font-size:clamp(32px,6vw,52px);line-height:1.15;letter-spacing:-.03em;margin:36px 0 24px}
+p{max-width:620px;color:#617186}nav{padding:16px 0;display:flex;flex-wrap:wrap;gap:14px 24px;margin-top:32px}
+a{display:inline-flex;align-items:center;min-height:44px;color:#102744;text-underline-offset:4px}a:focus-visible{outline:3px solid #214e80;outline-offset:5px}
 footer{margin-top:48px;font-size:14px;color:#64748b}.note{font-size:16px}
 </style></head><body><main><header><div class="brand">Mabhazi</div>
 <h1>Find your next bus journey.</h1>

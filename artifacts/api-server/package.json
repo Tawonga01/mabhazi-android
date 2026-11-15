@@ -12,7 +12,8 @@
     "test": "tsx --test src/routes/legal.test.ts && tsx --test src/routes/terms.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "worker:normalise": "tsx ./src/worker.ts drain",
-    "worker:health": "tsx ./src/worker.ts health"
+    "worker:health": "tsx ./src/worker.ts health",
+    "worker:assess": "tsx ./src/worker.ts assess"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

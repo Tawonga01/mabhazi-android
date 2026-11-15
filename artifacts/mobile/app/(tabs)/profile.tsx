@@ -1,3 +1,5 @@
+import {PromptSettingsEntry} from '@/components/PromptSettings';
+import { ui } from '@/constants/ui';
 import React, { useState, useRef } from "react";
 import {
   View,
@@ -91,13 +93,13 @@ function ProposalInbox({ colors }: { colors: Colors }) {
       <View style={styles.proposalHeader}>
         <View style={[styles.proposalBadge, { backgroundColor: "#FEF3C7", borderColor: "#FCD34D" }]}>
           <Feather name="link" size={12} color="#B45309" />
-          <Text style={[styles.proposalBadgeText, { color: "#B45309", fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.proposalBadgeText, { color: "#B45309", fontFamily: ui.type.semibold }]}>
             {proposals.length > 0
               ? `${proposals.length} route ${proposals.length === 1 ? "suggestion" : "suggestions"}`
               : `${resolved.length} confirmed ${resolved.length === 1 ? "association" : "associations"}`}
           </Text>
         </View>
-        <Text style={[styles.proposalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        <Text style={[styles.proposalSubtitle, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
           {proposals.length > 0
             ? "Another contributor submitted a route that may share your bus. Confirm to connect them."
             : "Review or reverse route associations connected to your routes."}
@@ -140,7 +142,7 @@ function ProposalInbox({ colors }: { colors: Colors }) {
       ))}
       {resolved.length > 0 ? (
         <View style={{ marginTop: 12 }}>
-          <Text style={[styles.proposalSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text style={[styles.proposalSubtitle, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
             Confirmed associations
           </Text>
           {resolved.map((p) => (
@@ -180,10 +182,10 @@ function ResolvedAssociationItem({
   return (
     <View style={[styles.proposalItem, { borderColor: colors.border }]}>
       <View style={styles.proposalRoute}>
-        <Text style={[styles.proposalRouteText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <Text style={[styles.proposalRouteText, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
           {p.parentFromCity} → {p.parentToCity}
         </Text>
-        <Text style={[styles.proposalOperator, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        <Text style={[styles.proposalOperator, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
           Stop added: {p.proposedStopCity}
         </Text>
       </View>
@@ -204,7 +206,7 @@ function ResolvedAssociationItem({
         ) : (
           <>
             <Feather name="rotate-ccw" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.rejectBtnText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text style={[styles.rejectBtnText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
               Reverse
             </Text>
           </>
@@ -236,19 +238,19 @@ function ProposalItem({
   return (
     <View style={[styles.proposalItem, { borderColor: colors.border }]}>
       <View style={styles.proposalRoute}>
-        <Text style={[styles.proposalRouteText, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <Text style={[styles.proposalRouteText, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
           {p.parentFromCity} → {p.parentToCity}
         </Text>
-        <Text style={[styles.proposalOperator, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        <Text style={[styles.proposalOperator, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
           {p.parentBusCompany} · {fmt12(p.parentDepartureTime)}
         </Text>
       </View>
 
       <View style={[styles.proposalQuestion, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
         <Feather name="map-pin" size={12} color={colors.accent} />
-        <Text style={[styles.proposalQuestionText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
+        <Text style={[styles.proposalQuestionText, { color: colors.foreground, fontFamily: ui.type.regular }]}>
           Does this bus stop in{" "}
-          <Text style={{ fontFamily: "Inter_600SemiBold" }}>{p.proposedStopCity}</Text>
+          <Text style={{ fontFamily: ui.type.semibold }}>{p.proposedStopCity}</Text>
           {p.proposedStopTime ? ` at ${fmt12(p.proposedStopTime)}` : ""}
           {" "}on its way to {p.parentToCity}?
         </Text>
@@ -263,7 +265,7 @@ function ProposalItem({
         >
           {busy === "reject"
             ? <ActivityIndicator size="small" color={colors.mutedForeground} />
-            : <><Feather name="x" size={14} color={colors.mutedForeground} /><Text style={[styles.rejectBtnText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>No</Text></>
+            : <><Feather name="x" size={14} color={colors.mutedForeground} /><Text style={[styles.rejectBtnText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>No</Text></>
           }
         </TouchableOpacity>
         <TouchableOpacity
@@ -274,7 +276,7 @@ function ProposalItem({
         >
           {busy === "confirm"
             ? <ActivityIndicator size="small" color="#fff" />
-            : <><Feather name="check" size={14} color="#fff" /><Text style={[styles.confirmBtnText, { fontFamily: "Inter_600SemiBold" }]}>Yes, add stop</Text></>
+            : <><Feather name="check" size={14} color={colors.accentForeground} /><Text style={[styles.confirmBtnText, { fontFamily: ui.type.semibold }]}>Yes, add stop</Text></>
           }
         </TouchableOpacity>
       </View>
@@ -304,11 +306,8 @@ function LegalLinks({ colors }: { colors: Colors }) {
 
   return (
     <View style={[styles.legalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[styles.legalTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+      <Text style={[styles.legalTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
         Mabhazi information
-      </Text>
-      <Text style={[styles.legalIntro, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-        Learn how community data works, review the terms, or get help.
       </Text>
       <View style={styles.legalLinks}>
         {links.map((link) => (
@@ -319,7 +318,7 @@ function LegalLinks({ colors }: { colors: Colors }) {
             activeOpacity={0.75}
           >
             <Feather name={link.icon} size={14} color={colors.primary} />
-            <Text style={[styles.legalLinkText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.legalLinkText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               {link.title}
             </Text>
           </TouchableOpacity>
@@ -523,7 +522,7 @@ export default function ProfileScreen() {
                 <Image source={{ uri: user.profileImageUrl }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatarPlaceholder, { backgroundColor: colors.secondary }]}>
-                  <Text style={[styles.avatarInitial, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
+                  <Text style={[styles.avatarInitial, { color: colors.primary, fontFamily: ui.type.bold }]}>
                     {currentDisplayName.charAt(0).toUpperCase() || "U"}
                   </Text>
                 </View>
@@ -533,13 +532,14 @@ export default function ProfileScreen() {
               {editing ? (
                 <View style={styles.editBlock}>
                   <TextInput
+                    accessibilityLabel="Display name"
                     style={[
                       styles.nameInput,
                       {
                         color: colors.foreground,
                         borderColor: saveError ? colors.destructive : colors.primary,
                         backgroundColor: colors.background,
-                        fontFamily: "Inter_600SemiBold",
+                        fontFamily: ui.type.semibold,
                       },
                     ]}
                     value={nameInput}
@@ -553,7 +553,7 @@ export default function ProfileScreen() {
                     selectTextOnFocus
                   />
                   {saveError ? (
-                    <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                    <Text style={[styles.errorText, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                       {saveError}
                     </Text>
                   ) : null}
@@ -562,7 +562,7 @@ export default function ProfileScreen() {
                       style={[styles.cancelBtn, { borderColor: colors.border }]}
                       onPress={handleCancelEdit}
                     >
-                      <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                      <Text style={[styles.cancelBtnText, { color: colors.mutedForeground, fontFamily: ui.type.medium }]}>
                         Cancel
                       </Text>
                     </TouchableOpacity>
@@ -573,18 +573,20 @@ export default function ProfileScreen() {
                     >
                       {saving
                         ? <ActivityIndicator size="small" color="#fff" />
-                        : <Text style={[styles.saveBtnText, { fontFamily: "Inter_600SemiBold" }]}>Save</Text>
+                        : <Text style={[styles.saveBtnText, { fontFamily: ui.type.semibold }]}>Save</Text>
                       }
                     </TouchableOpacity>
                   </View>
                 </View>
               ) : (
                 <View style={styles.nameRow}>
-                  <Text style={[styles.displayName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                  <Text style={[styles.displayName, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                     {currentDisplayName}
                   </Text>
                   {canChange ? (
                     <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit display name"
                       style={[styles.editBtn, { backgroundColor: colors.secondary }]}
                       onPress={handleStartEdit}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -597,14 +599,14 @@ export default function ProfileScreen() {
 
               {/* Success flash */}
               <Animated.View style={[styles.successBanner, { opacity: successOpacity, backgroundColor: "#DCFCE7", borderColor: "#86EFAC" }]}>
-                <Feather name="check-circle" size={13} color="#16A34A" />
-                <Text style={[styles.successText, { color: "#16A34A", fontFamily: "Inter_600SemiBold" }]}>
-                  Username updated on all your routes!
+                <Feather name="check-circle" size={13} color="#166534" />
+                <Text style={[styles.successText, { color: "#166534", fontFamily: ui.type.semibold }]}>
+                  Name updated.
                 </Text>
               </Animated.View>
 
               {user.email ? (
-                <Text style={[styles.email, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.email, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                   {user.email}
                 </Text>
               ) : null}
@@ -613,69 +615,38 @@ export default function ProfileScreen() {
               {nextAvailable && !canChange ? (
                 <View style={[styles.rateLimitBadge, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                   <Feather name="clock" size={12} color={colors.mutedForeground} />
-                  <Text style={[styles.rateLimitText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.rateLimitText, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                     Next name change in {daysUntil(nextAvailable)} day{daysUntil(nextAvailable) !== 1 ? "s" : ""}
                     {" "}· {formatDate(nextAvailable)}
                   </Text>
                 </View>
-              ) : !editing ? (
-                <Text style={[styles.changeHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Tap ✏️ to change your username — once every 30 days
+              ) : editing ? (
+                <Text style={[styles.changeHint, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+                  You can change your name once every 30 days.
                 </Text>
               ) : null}
             </View>
 
-            {/* ── Community card ── */}
-            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.infoTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                Community Member
-              </Text>
-              <Text style={[styles.infoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                You are part of the Mabhazi community. Every route you contribute
-                helps travelers find better connections across cities.
-              </Text>
-            </View>
-
-            <TermsAcceptanceCard terms={terms} />
+            {!terms.isAccepted ? <TermsAcceptanceCard terms={terms} /> : null}
 
             {/* ── Pending route association proposals ── */}
+            <PromptSettingsEntry />
             <ProposalInbox colors={colors} />
 
-            <TouchableOpacity
-              style={[styles.logoutBtn, { borderColor: colors.destructive }]}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Feather name="log-out" size={18} color={colors.destructive} />
-              <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-                Log out
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.deleteBtn, { borderColor: colors.destructive }]}
-              onPress={openDeleteModal}
-              activeOpacity={0.8}
-            >
-              <Feather name="trash-2" size={17} color={colors.destructive} />
-              <Text style={[styles.deleteText, { color: colors.destructive, fontFamily: "Inter_600SemiBold" }]}>
-                Delete my account
-              </Text>
-            </TouchableOpacity>
           </>
         ) : (
           <View style={styles.guestContainer}>
             <View style={[styles.guestIcon, { backgroundColor: colors.secondary }]}>
               <Feather name="user" size={36} color={colors.primary} />
             </View>
-            <Text style={[styles.guestTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            <Text style={[styles.guestTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
               Join Mabhazi
             </Text>
-            <Text style={[styles.guestSubtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Log in to contribute bus routes and help the community travel smarter.
+            <Text style={[styles.guestSubtitle, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
+              Sign in to contribute.
             </Text>
             <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: isLoggingIn ? colors.mutedForeground : colors.primary }]}
+              style={[styles.loginBtn, { backgroundColor: isLoggingIn ? colors.muted : colors.accent }]}
               onPress={handleLogin}
               activeOpacity={0.85}
               disabled={isLoggingIn || !!configurationError}
@@ -683,43 +654,24 @@ export default function ProfileScreen() {
               {isLoggingIn ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
-                <Feather name="log-in" size={18} color="#FFFFFF" />
+                <Feather name="log-in" size={18} color={colors.accentForeground} />
               )}
               <Text style={styles.loginBtnText}>{isLoggingIn ? "Opening sign in…" : "Log in"}</Text>
             </TouchableOpacity>
             {loginMessage || configurationError ? (
               <View style={[styles.loginStatus, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Feather name={(loginMessage ?? configurationError ?? "").startsWith("Could not") || (loginMessage ?? configurationError ?? "").startsWith("Sign-in unavailable") ? "alert-circle" : "external-link"} size={14} color={colors.primary} />
-                <Text style={[styles.loginStatusText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                <Text style={[styles.loginStatusText, { color: colors.primary, fontFamily: ui.type.medium }]}>
                   {loginMessage ?? configurationError}
                 </Text>
               </View>
             ) : null}
 
-            <View style={[styles.featuresList, { borderColor: colors.border }]}>
-              {[
-                { icon: "plus-circle", text: "Add new bus routes" },
-                { icon: "users", text: "Credited by your username" },
-                { icon: "globe", text: "Help travelers in your region" },
-              ].map((item) => (
-                <View key={item.icon} style={styles.featureItem}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: colors.secondary }]}>
-                    <Feather name={item.icon as any} size={16} color={colors.accent} />
-                  </View>
-                  <Text style={[styles.featureText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
-                    {item.text}
-                  </Text>
-                </View>
-              ))}
-            </View>
           </View>
         )}
         <View style={[styles.safetyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.infoTitle, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+          <Text style={[styles.infoTitle, { color: colors.primary, fontFamily: ui.type.semibold }]}>
             Safety controls
-          </Text>
-          <Text style={[styles.infoText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Blocked contributors are hidden from route searches, departures, route details, and comments on this device.
           </Text>
           <TouchableOpacity
             testID="manage-blocked-contributors"
@@ -728,12 +680,34 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
           >
             <Feather name="users" size={15} color={colors.primary} />
-            <Text style={[styles.manageBlocksText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.manageBlocksText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
               Manage blocked contributors
             </Text>
           </TouchableOpacity>
         </View>
         <LegalLinks colors={colors} />
+        {isAuthenticated && user ? <View style={{gap:8}}>            <TouchableOpacity
+              style={[styles.logoutBtn, { borderColor: colors.border, borderWidth: 0 }]}
+              onPress={handleLogout}
+              activeOpacity={0.8}
+            >
+              <Feather name="log-out" size={18} color={colors.primary} />
+              <Text style={[styles.logoutText, { color: colors.primary, fontFamily: ui.type.semibold }]}>
+                Log out
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.deleteBtn, { borderColor: colors.border, borderWidth: 0 }]}
+              onPress={openDeleteModal}
+              activeOpacity={0.8}
+            >
+              <Feather name="trash-2" size={17} color={colors.destructive} />
+              <Text style={[styles.deleteText, { color: colors.destructive, fontFamily: ui.type.semibold }]}>
+                Delete my account
+              </Text>
+            </TouchableOpacity>
+</View> : null}
       </ScrollView>
 
       <BlockedContributorsManager
@@ -748,16 +722,16 @@ export default function ProfileScreen() {
         onRequestClose={closeDeleteModal}
       >
         <View style={styles.deleteBackdrop}>
-          <View style={[styles.deleteModal, { backgroundColor: colors.card }]}>
+          <ScrollView style={[styles.deleteModal, { backgroundColor: colors.card, maxHeight: "100%", flexGrow: 0, padding: 0 }]} contentContainerStyle={{padding:24,gap:12}} keyboardShouldPersistTaps="handled">
             {deleteState === "success" ? (
               <>
                 <View style={[styles.deleteIcon, { backgroundColor: "#DCFCE7" }]}>
-                  <Feather name="check-circle" size={30} color="#16A34A" />
+                  <Feather name="check-circle" size={30} color="#166534" />
                 </View>
-                <Text style={[styles.deleteTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.deleteTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                   Account deleted
                 </Text>
-                <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                   Your Mabhazi account-linked data and sessions were permanently deleted. Shared routes may remain only anonymized. Your separate Google account is unaffected.
                 </Text>
                 <TouchableOpacity
@@ -765,7 +739,7 @@ export default function ProfileScreen() {
                   onPress={closeDeleteModal}
                   activeOpacity={0.85}
                 >
-                  <Text style={[styles.deleteCancelText, { color: "#FFFFFF", fontFamily: "Inter_600SemiBold" }]}>
+                  <Text style={[styles.deleteCancelText, { color: "#FFFFFF", fontFamily: ui.type.semibold }]}>
                     Done
                   </Text>
                 </TouchableOpacity>
@@ -775,13 +749,13 @@ export default function ProfileScreen() {
                 <View style={[styles.deleteIcon, { backgroundColor: "#FEE2E2" }]}>
                   <Feather name="alert-triangle" size={30} color={colors.destructive} />
                 </View>
-                <Text style={[styles.deleteTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                <Text style={[styles.deleteTitle, { color: colors.foreground, fontFamily: ui.type.bold }]}>
                   Delete your Mabhazi account?
                 </Text>
-                <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text style={[styles.deleteBody, { color: colors.mutedForeground, fontFamily: ui.type.regular }]}>
                   This permanently deletes your Mabhazi account, all sessions, signed-in searches, ratings, reports, corrections, and contributions. Shared route information can remain only without your attribution. This does not delete your separate Google account.
                 </Text>
-                <Text style={[styles.deleteLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                <Text style={[styles.deleteLabel, { color: colors.foreground, fontFamily: ui.type.semibold }]}>
                   Type DELETE MY ACCOUNT to confirm
                 </Text>
                 <TextInput
@@ -791,7 +765,7 @@ export default function ProfileScreen() {
                       color: colors.foreground,
                       borderColor: deleteError ? colors.destructive : colors.border,
                       backgroundColor: colors.background,
-                      fontFamily: "Inter_500Medium",
+                      fontFamily: ui.type.medium,
                     },
                   ]}
                   value={deleteConfirmation}
@@ -806,7 +780,7 @@ export default function ProfileScreen() {
                   placeholderTextColor={colors.mutedForeground}
                 />
                 {deleteError ? (
-                  <Text style={[styles.deleteError, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                  <Text style={[styles.deleteError, { color: colors.destructive, fontFamily: ui.type.regular }]}>
                     {deleteError}
                   </Text>
                 ) : null}
@@ -816,7 +790,7 @@ export default function ProfileScreen() {
                     onPress={closeDeleteModal}
                     disabled={deleteState === "deleting"}
                   >
-                    <Text style={[styles.deleteCancelText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                    <Text style={[styles.deleteCancelText, { color: colors.mutedForeground, fontFamily: ui.type.semibold }]}>
                       Cancel
                     </Text>
                   </TouchableOpacity>
@@ -836,7 +810,7 @@ export default function ProfileScreen() {
                     {deleteState === "deleting" ? (
                       <ActivityIndicator size="small" color="#FFFFFF" />
                     ) : (
-                      <Text style={[styles.deleteConfirmText, { fontFamily: "Inter_600SemiBold" }]}>
+                      <Text style={[styles.deleteConfirmText, { fontFamily: ui.type.semibold }]}>
                         Delete permanently
                       </Text>
                     )}
@@ -844,7 +818,7 @@ export default function ProfileScreen() {
                 </View>
               </>
             )}
-          </View>
+</ScrollView>
         </View>
       </Modal>
     </View>
@@ -854,37 +828,37 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { alignItems: "center", justifyContent: "center" },
-  header: { paddingHorizontal: 20, paddingBottom: 12 },
-  headerTitle: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
-  content: { padding: 16, gap: 12 },
+  header: { paddingHorizontal: 20, paddingBottom: 20 },
+  headerTitle: { fontSize: 26, fontFamily: ui.type.bold, color: "#FFFFFF" },
+  content: { padding: 16, gap: 20 },
   profileCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 24,
+    borderRadius: 16,
+    borderWidth: 0,
+    padding: 20,
     alignItems: "center",
     gap: 10,
   },
-  avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 4 },
+  avatar: { width: 64, height: 64, borderRadius: 32, marginBottom: 4 },
   avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
   avatarInitial: { fontSize: 32 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  displayName: { fontSize: 22 },
+  nameRow: {justifyContent: 'center', flexWrap: 'wrap',  flexDirection: "row", alignItems: "center", gap: 10 },
+  displayName: { fontSize: 26 },
   editBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   editBlock: { width: "100%", gap: 8 },
-  nameInput: {
+  nameInput: {minHeight: 50, 
     borderWidth: 1.5,
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -892,9 +866,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: "center",
   },
-  errorText: { fontSize: 12, textAlign: "center" },
+  errorText: {lineHeight: 21,  fontSize: 14, textAlign: "center" },
   editActions: { flexDirection: "row", gap: 10 },
-  cancelBtn: {
+  cancelBtn: {minHeight: 48, 
     flex: 1,
     paddingVertical: 11,
     borderRadius: 10,
@@ -902,13 +876,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelBtnText: { fontSize: 14 },
-  saveBtn: {
+  saveBtn: {minHeight: 48, 
     flex: 2,
     paddingVertical: 11,
     borderRadius: 10,
     alignItems: "center",
   },
-  saveBtnText: { color: "#fff", fontSize: 14 },
+  saveBtnText: { color: ui.color.ink, fontSize: 16 },
   successBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -918,7 +892,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  successText: { fontSize: 12 },
+  successText: { fontSize: 14 },
   email: { fontSize: 14 },
   rateLimitBadge: {
     flexDirection: "row",
@@ -929,23 +903,23 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  rateLimitText: { fontSize: 12 },
-  changeHint: { fontSize: 12, textAlign: "center" },
+  rateLimitText: { fontSize: 14 },
+  changeHint: { fontSize: 14, textAlign: "center" },
   infoCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 8 },
-  infoTitle: { fontSize: 13, textTransform: "uppercase", letterSpacing: 0.8 },
-  infoText: { fontSize: 14, lineHeight: 20 },
+  infoTitle: { fontSize: 19, textTransform: 'none', letterSpacing: 0 },
+  infoText: { fontSize: 16, lineHeight: 24 },
   safetyCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 9 },
   manageBlocksButton: {
-    minHeight: 40,
+    minHeight: 48,
     borderRadius: 10,
-    borderWidth: 1,
+    borderWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
     paddingHorizontal: 10,
   },
-  manageBlocksText: { fontSize: 13 },
+  manageBlocksText: { fontSize: 16 },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -969,29 +943,29 @@ const styles = StyleSheet.create({
   },
   deleteText: { fontSize: 14 },
   legalCard: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 8 },
-  legalTitle: { fontSize: 13, textTransform: "uppercase", letterSpacing: 0.8 },
-  legalIntro: { fontSize: 13, lineHeight: 18 },
-  legalLinks: { flexDirection: "row", gap: 8, marginTop: 4 },
-  legalLink: {
-    flex: 1,
-    minHeight: 38,
+  legalTitle: { fontSize: 19, textTransform: 'none', letterSpacing: 0 },
+  legalIntro: { fontSize: 14, lineHeight: 21 },
+  legalLinks: { flexDirection: 'column', gap: 0, marginTop: 4 },
+  legalLink: {flexDirection: 'row', 
+    flex: 0,
+    minHeight: 48,
     borderRadius: 10,
     alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
+    justifyContent: 'flex-start',
+    gap: 12,
   },
-  legalLinkText: { fontSize: 12 },
+  legalLinkText: { fontSize: 16 },
   deleteBackdrop: {
     flex: 1,
     backgroundColor: "rgba(15,22,41,0.58)",
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
   },
   deleteModal: {
     width: "100%",
     maxWidth: 460,
-    borderRadius: 20,
+    borderRadius: 26,
     padding: 24,
     gap: 12,
   },
@@ -1004,17 +978,17 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 2,
   },
-  deleteTitle: { fontSize: 21, textAlign: "center" },
+  deleteTitle: { fontSize: 23, textAlign: "center" },
   deleteBody: { fontSize: 14, lineHeight: 21, textAlign: "center" },
-  deleteLabel: { fontSize: 13, marginTop: 4 },
-  deleteInput: {
+  deleteLabel: { fontSize: 14, marginTop: 4 },
+  deleteInput: {minHeight: 50, 
     borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    fontSize: 14,
+    fontSize: 16,
   },
-  deleteError: { fontSize: 12, lineHeight: 17 },
+  deleteError: { fontSize: 14, lineHeight: 21 },
   deleteActions: { flexDirection: "row", gap: 10, marginTop: 4 },
   deleteCancelBtn: {
     flex: 1,
@@ -1033,10 +1007,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   deleteConfirmText: { color: "#FFFFFF", fontSize: 14 },
-  guestContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingTop: 40 },
-  guestIcon: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  guestTitle: { fontSize: 26, textAlign: "center" },
-  guestSubtitle: { fontSize: 14, textAlign: "center", lineHeight: 21, paddingHorizontal: 16 },
+  guestContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, paddingTop: 16 },
+  guestIcon: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  guestTitle: { fontSize: 28, textAlign: "center" },
+  guestSubtitle: { fontSize: 16, textAlign: "center", lineHeight: 24, paddingHorizontal: 16 },
   loginBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1046,7 +1020,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 4,
   },
-  loginBtnText: { color: "#FFFFFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  loginBtnText: { color: ui.color.ink, fontSize: 16, fontFamily: ui.type.semibold },
   loginStatus: {
     width: "100%",
     flexDirection: "row",
@@ -1076,11 +1050,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   proposalBadgeText: { fontSize: 12 },
-  proposalSubtitle: { fontSize: 13, lineHeight: 18 },
+  proposalSubtitle: { fontSize: 14, lineHeight: 21 },
   proposalItem: { borderTopWidth: 1, paddingTop: 12, gap: 10 },
   proposalRoute: { gap: 2 },
-  proposalRouteText: { fontSize: 15 },
-  proposalOperator: { fontSize: 12 },
+  proposalRouteText: { fontSize: 17 },
+  proposalOperator: { fontSize: 14 },
   proposalQuestion: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1089,9 +1063,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  proposalQuestionText: { fontSize: 13, lineHeight: 18, flex: 1 },
+  proposalQuestionText: { fontSize: 14, lineHeight: 21, flex: 1 },
   proposalActions: { flexDirection: "row", gap: 8 },
-  rejectBtn: {
+  rejectBtn: {minHeight: 44, 
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -1102,7 +1076,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   rejectBtnText: { fontSize: 14 },
-  confirmBtn: {
+  confirmBtn: {minHeight: 44, 
     flex: 2,
     flexDirection: "row",
     alignItems: "center",
@@ -1111,5 +1085,5 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
   },
-  confirmBtnText: { color: "#fff", fontSize: 14 },
+  confirmBtnText: { color: "#FFFFFF", fontSize: 14 },
 });

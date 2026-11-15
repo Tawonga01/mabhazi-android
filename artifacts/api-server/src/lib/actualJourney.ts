@@ -50,6 +50,7 @@ export function parseActualJourney(input: unknown) {
   if (!parsed.success) issues.push(...parsed.error.issues.map(i=>({field:i.path.join('.'),message:'Check this answer.'})));
   return parsed.success && !issues.length ? {success:true as const,data:parsed.data} : {success:false as const,fieldErrors:issues.slice(0,8)};
 }
-export function saveActualJourney(actor: string,input: unknown,database?: IntakePool) {
-  return saveIntake(actor,input,'v2_api_submit_actual_journey',database);
+export function saveActualJourney(actor: string,input: unknown,database?: IntakePool,blocked: string[] = []) {
+  const surface=(input as {entrySurface?:string}).entrySurface;
+  return saveIntake(actor,input,surface==='search_result'||surface==='route_detail'?'v2_api_submit_public_actual_journey':'v2_api_submit_actual_journey',database,blocked);
 }
