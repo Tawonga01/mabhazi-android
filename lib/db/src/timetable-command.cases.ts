@@ -347,7 +347,7 @@ export function registerTimetableCommandTests(context:()=>Context){
   assert.equal((await q('SELECT count(*) n FROM v2_api_timetable_card_claims(ARRAY[$1::uuid])',[subject])).rows[0].n,'1');
   await invalid(()=>q('SELECT v2_timetable_identity($1)',[subject]),['42501']);await q('RESET ROLE');
   for(const role of ['anon','authenticated']){await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT * FROM v2_public_supported_route_reports'),['42501']);
-   await invalid(()=>q('SELECT * FROM v2_api_public_timetable_reports()'),['42501']);await q('RESET ROLE');}
+   await invalid(()=>q('SELECT * FROM v2_api_public_timetable_reports()'),['42501']);await invalid(()=>q('SELECT * FROM v2_api_timetable_report_claims(ARRAY[$1::uuid])',[subject]),['42501']);await q('RESET ROLE');}
   await invalid(()=>q('SELECT * FROM v2_api_timetable_card_claims($1::uuid[])',[Array.from({length:21},()=>subject)]));
  });
 

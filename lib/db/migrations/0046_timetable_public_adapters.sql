@@ -142,6 +142,11 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
 $$;
 REVOKE ALL ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) FROM PUBLIC,mabhazi_api;
 GRANT EXECUTE ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) TO mabhazi_api;
+DO $timetable_claims_private$ DECLARE r text;BEGIN
+ FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+ IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) FROM %I',r);END IF;
+ END LOOP;
+END;$timetable_claims_private$;
 DO $$ DECLARE definition text;BEGIN
  definition:=rtrim(pg_get_viewdef('public.v2_fare_report_context'::regclass,true),E'; \n');
  EXECUTE 'CREATE OR REPLACE VIEW public.v2_fare_report_context AS '||definition||
