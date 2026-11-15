@@ -268,4 +268,86 @@ export function registerTimetableCommandTests(context:()=>Context){
    await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_api_admin_timetable_action($1,$2,$3)',[f.actor,f.request,b]),['42501']);
    await invalid(()=>q('SELECT * FROM v2_admin_timetables'),['42501']);await q('RESET ROLE');}
  });
+
+ test('timetable public: registered eligible aliases share discovery without exposing scaffolds to old readers',async()=>{
+  const f=await setup();f.p.dropoff='Known arrival';f.p.departures[0].arrival='09:15';f.p.departures[0].fare={amount:'18',currency:'USD',kind:'advertised'};
+  const r=await saved(f),subject=await alias(r.entries[0].runId);
+  const p=(await q('SELECT * FROM v2_api_public_timetable_reports() WHERE subject_id=$1',[subject])).rows[0];
+  assert.equal(p.subject_id,subject);assert.equal(p.timetable.runId,r.entries[0].runId);assert.equal(p.timetable.arrivalSeconds,33300);
+  assert.equal(p.reported_time.value,'07:00');assert.equal(p.reported_time.basis,'scheduled');assert.deepEqual(p.timetable.calendar.weekdays,21);
+  assert.equal((await q('SELECT count(*) n FROM v2_public_lead_reports WHERE subject_id=$1',[subject])).rows[0].n,'0');
+  assert.equal((await q('SELECT count(*) n FROM v2_public_supported_route_reports WHERE subject_id=$1',[subject])).rows[0].n,'1');
+  const cards=(await q('SELECT * FROM v2_api_timetable_card_claims(ARRAY[$1::uuid]) ORDER BY field_key',[subject])).rows;
+  assert.equal(cards.length,3);assert.equal(cards.find(c=>c.field_key==='boarding.pickup').original_value.name,f.p.pickup);
+  assert.equal(cards.find(c=>c.field_key==='fare.advertised').original_value.amount,'18');
+  assert.ok(cards.every(c=>/^[0-9a-f-]{36}$/.test(c.ref)));assert.ok(!JSON.stringify(cards).includes(f.actor));
+ });
+ test('timetable public: new public user contributes pickup with unchanged strict body and original receipt',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),actor=context().user,terms='2026-09-12';
+  await q('UPDATE users SET terms_accepted_version=$2,terms_accepted_at=now() WHERE id=$1',[actor,terms]);
+  const c=(await q('SELECT v2_api_route_contribution_context($1,$2,ARRAY[]::varchar[]) r',[actor,subject])).rows[0].r;
+  assert.match(c.identityKey,/^[a-f0-9]{64}$/);assert.equal(c.departureTime,'07:00');
+  const b={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{existing:{subjectId:subject,expectedRevision:Number(c.revision),identityKey:c.identityKey}},
+   observations:[{fieldKey:'boarding.pickup',value:{cityId:context().origin,name:'Traveller pickup report'},scope:{},knowledgeBasis:'observed_sign',observedDate:f.p.source.checkedOn}]};
+  await q('SET LOCAL ROLE mabhazi_api');
+  const first=(await q('SELECT v2_api_submit_route_observations($1,$2,$3,ARRAY[]::varchar[]) r',[actor,terms,b])).rows[0].r;
+  const replay=(await q('SELECT v2_api_submit_route_observations($1,$2,$3,ARRAY[]::varchar[]) r',[actor,terms,b])).rows[0].r;
+  assert.equal(first.saveStatus,'saved');assert.equal(replay.contributionId,first.contributionId);assert.equal(replay.replayed,true);
+  await q('RESET ROLE');assert.ok(await discovery(subject),'new evidence must not withdraw unchanged native proof');
+  assert.equal((await q('SELECT count(*) n FROM v2_api_place_report_context($1) WHERE place_author_id=$2',[subject,actor])).rows[0].n,'1');
+  const removed=await visibility(f,subject);assert.equal(removed.outcome,'removed');
+  assert.equal((await q('SELECT v2_api_submit_route_observations($1,$2,$3,ARRAY[]::varchar[]) r',[actor,terms,b])).rows[0].r.replayed,true);
+  await invalid(()=>q('SELECT v2_api_submit_route_observations($1,$2,$3,ARRAY[]::varchar[])',[actor,terms,{...b,clientSubmissionId:randomUUID()}]),['42501']);
+ });
+ test('timetable public: paid fare retains an intention, currency and service date without inventing a matched run',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),actor=context().user,terms='2026-09-12';
+  await q('UPDATE users SET terms_accepted_version=$2,terms_accepted_at=now() WHERE id=$1',[actor,terms]);
+  const revision=Number((await q('SELECT revision FROM v2_subjects WHERE id=$1',[subject])).rows[0].revision);
+  const b={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{newActualJourney:{intendedSubject:{id:subject,kind:'lead',expectedRevision:revision}}},
+   observations:[{fieldKey:'fare.paid',value:{amount:'20',currency:'USD'},scope:{schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:context().origin,destinationCityId:context().destination},
+   serviceDate:f.p.source.checkedOn,passengerCategory:'unknown',ticketBasis:'unknown'},knowledgeBasis:'travelled',observedDate:f.p.source.checkedOn}]};
+  const first=(await q('SELECT v2_api_submit_public_actual_journey($1,$2,$3,ARRAY[]::varchar[]) r',[actor,terms,b])).rows[0].r;
+  const a=(await q('SELECT * FROM v2_actual_journeys WHERE subject_id=$1',[first.subjectId])).rows[0];assert.equal(a.intended_subject_id,subject);assert.equal(a.matched_run_subject_id,null);
+  assert.equal((await q('SELECT count(*) n FROM v2_fare_report_context WHERE route_subject_id=$1 AND fare_author_id=$2',[subject,actor])).rows[0].n,'1');
+  await visibility(f,subject);assert.equal((await q('SELECT v2_api_submit_public_actual_journey($1,$2,$3,ARRAY[]::varchar[]) r',[actor,terms,b])).rows[0].r.replayed,true);
+  await invalid(()=>q('SELECT v2_api_submit_public_actual_journey($1,$2,$3,ARRAY[]::varchar[])',[actor,terms,{...b,clientSubmissionId:randomUUID()}]),['42501']);
+ });
+ test('timetable public: native card claims are individually reportable and hidden price never becomes zero',async()=>{
+  const f=await setup();f.p.departures[0].fare={amount:'18',currency:'USD',kind:'advertised'};const r=await saved(f),subject=await alias(r.entries[0].runId),actor=context().user;
+  const card=(await q("SELECT * FROM v2_api_timetable_card_claims(ARRAY[$1::uuid]) WHERE field_key='fare.advertised'",[subject])).rows[0];
+  assert.equal((await q("SELECT v2_api_fare_report_action($1,$2,$3,'report','inaccurate',ARRAY[]::varchar[]) r",[actor,subject,card.ref])).rows[0].r.status,'reported');
+  const report=(await q("SELECT id FROM abuse_reports WHERE target_type='fare_report' AND target_id=$1",[card.ref])).rows[0].id;
+  assert.equal((await q("SELECT v2_api_hide_reported_fare($1,'fixture') ok",[report])).rows[0].ok,true);
+  assert.equal((await q("SELECT count(*) n FROM v2_api_timetable_card_claims(ARRAY[$1::uuid]) WHERE field_key LIKE 'fare.%'",[subject])).rows[0].n,'0');
+  assert.ok(await discovery(subject));
+ });
+ test('timetable public: safety hides close boarding eligibility without destroying native proof and restore rechecks it',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run),actor=context().user;
+  const card=(await q("SELECT * FROM v2_api_timetable_card_claims(ARRAY[$1::uuid]) WHERE field_key='boarding.pickup'",[subject])).rows[0];
+  assert.equal((await q("SELECT v2_api_place_report_action($1,$2,$3,'report','unsafe',ARRAY[]::varchar[]) r",[actor,subject,card.ref])).rows[0].r.status,'reported');
+  const report=(await q("SELECT id FROM abuse_reports WHERE target_type='place_report' AND target_id=$1",[card.ref])).rows[0].id;
+  await q("SELECT v2_api_hide_reported_place($1,'fixture')",[report]);assert.equal(await discovery(subject),null);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) ok',[run])).rows[0].ok,true);
+  await q('DELETE FROM v2_place_report_hides WHERE place_ref=$1',[card.ref]);assert.ok(await discovery(subject));
+ });
+ test('timetable public: blocked authors, pending account deletion and stale identity cannot bypass current context',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),actor=context().user;
+  await invalid(()=>q('SELECT v2_api_route_contribution_context($1,$2,$3::varchar[])',[actor,subject,[f.actor]]),['42501']);
+  await q('INSERT INTO v2_route_report_blocks(blocker_id,blocked_user_id) VALUES($1,$2)',[actor,f.actor]);
+  await invalid(()=>q('SELECT v2_api_route_contribution_context($1,$2,ARRAY[]::varchar[])',[actor,subject]),['42501']);
+  await q('DELETE FROM v2_route_report_blocks WHERE blocker_id=$1',[actor]);
+  const c=(await q('SELECT v2_api_route_contribution_context($1,$2,ARRAY[]::varchar[]) r',[actor,subject])).rows[0].r;
+  await q('UPDATE v2_runs SET departure_seconds=departure_seconds+60 WHERE subject_id=$1',[r.entries[0].runId]);
+  await invalid(()=>q('SELECT v2_api_route_contribution_context($1,$2,ARRAY[]::varchar[])',[actor,subject]),['42501']);
+  assert.match(c.identityKey,/^[a-f0-9]{64}$/);
+ });
+ test('timetable public: only the backend receives bounded projection privileges; raw identities remain private',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId);
+  await q('SET LOCAL ROLE mabhazi_api');assert.equal((await q('SELECT count(*) n FROM v2_public_supported_route_reports WHERE subject_id=$1',[subject])).rows[0].n,'1');
+  assert.equal((await q('SELECT count(*) n FROM v2_api_timetable_card_claims(ARRAY[$1::uuid])',[subject])).rows[0].n,'1');
+  await invalid(()=>q('SELECT v2_timetable_identity($1)',[subject]),['42501']);await q('RESET ROLE');
+  for(const role of ['anon','authenticated']){await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT * FROM v2_public_supported_route_reports'),['42501']);
+   await invalid(()=>q('SELECT * FROM v2_api_public_timetable_reports()'),['42501']);await q('RESET ROLE');}
+  await invalid(()=>q('SELECT * FROM v2_api_timetable_card_claims($1::uuid[])',[Array.from({length:21},()=>subject)]));
+ });
 }
