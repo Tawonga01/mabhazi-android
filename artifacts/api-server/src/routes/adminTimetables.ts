@@ -15,7 +15,9 @@ export async function adminTimetablesEnabled(){
   'public.v2_api_admin_timetable_preview(varchar,jsonb)',
   'public.v2_api_admin_timetable_action(varchar,uuid,jsonb)',
   'public.v2_api_admin_timetable_receipt(varchar,uuid)',
-  'public.v2_api_admin_timetable_operators(varchar,text)']) f`);
+  'public.v2_api_admin_timetable_operators(varchar,text)',
+  'public.v2_api_admin_timetable_records(varchar,uuid)','public.v2_api_admin_timetable_command(varchar,uuid,jsonb)',
+  'public.v2_api_admin_timetable_command_receipt(varchar,uuid)']) f`);
  return rows[0]?.enabled===true;
 }
 router.use(async(_req,res,next)=>{
@@ -51,11 +53,11 @@ router.post('/preview',async(req,res)=>{
   const p=parsed.proposal,{rows}=await pool.query('SELECT public.v2_api_admin_timetable_preview($1,$2) preview',[req.user.id,p]);
   const state=rows[0]?.preview;
   if(!state||typeof state.stateDigest!=='string'||!/^[a-f0-9]{64}$/.test(state.stateDigest)||!Array.isArray(state.duplicates)||!state.cities){throw Error('timetable_state_invalid');}
-  res.json({proposal:p,cities:state.cities,duplicates:state.duplicates,operatorOptions:state.operatorOptions??[],writable:state.duplicates.length===0,
+  res.json({proposal:p,cities:state.cities,duplicates:state.duplicates,operatorOptions:state.operatorOptions??[],replacements:state.replacements??[],writable:state.duplicates.length===0,
    previewToken:createTimetablePreview(p,req.user.id,state.stateDigest,process.env.ADMIN_SECRET??'')});
  }catch(err){
   if((err as Error).message==='v2_admin_required'){res.status(403).json({code:'ADMIN_REQUIRED',error:'Your administrative access changed.'});return;}
-  if(['v2_timetable_operator_changed','v2_timetable_preview_changed'].includes((err as Error).message)){res.status(409).json({code:'PREVIEW_CHANGED',error:'The operator or timetable changed. Review the saved draft again.'});return;}
+  if(['v2_timetable_operator_changed','v2_timetable_preview_changed','v2_timetable_replacement_changed'].includes((err as Error).message)){res.status(409).json({code:'PREVIEW_CHANGED',error:'The operator or timetable changed. Review the saved draft again.'});return;}
   if(['v2_timetable_proposal_invalid','v2_timetable_city_unavailable'].includes((err as Error).message)){res.status(422).json({code:'INVALID_TIMETABLE',error:'Check the timetable and selected cities.'});return;}
   res.status(503).json({code:'PREVIEW_UNAVAILABLE',error:'The timetable review could not load. No departures were published.'});
  }
@@ -91,5 +93,31 @@ router.post('/actions',async(req,res)=>{
   if(message==='v2_admin_preview_expired'){res.status(409).json({code:'PREVIEW_EXPIRED',error:'Refresh the timetable review before applying.'});return;}
   res.status(503).json({code:'SAVE_UNCONFIRMED',error:'The save could not be confirmed. Check its receipt before retrying.'});
  }
+});
+
+router.get('/records',async(req,res)=>{
+ if(!req.isAuthenticated())return;const cursor=req.query.cursor;
+ if(Object.keys(req.query).some(k=>k!=='cursor')||cursor!==undefined&&!validAdminId(cursor)){res.status(400).json({code:'INVALID_CURSOR',error:'Reopen Timetables.'});return;}
+ try{const {rows}=await pool.query('SELECT public.v2_api_admin_timetable_records($1,$2) result',[req.user.id,cursor??null]);res.json(rows[0].result);}
+ catch{res.status(503).json({code:'RECORDS_UNAVAILABLE',error:'Timetables could not load. Your draft stays saved.'});}
+});
+router.get('/commands/:requestId',async(req,res)=>{
+ if(!req.isAuthenticated())return;
+ if(!validAdminId(req.params.requestId)||Object.keys(req.query).length){res.status(400).json({code:'INVALID_REQUEST',error:'Use the saved reference.'});return;}
+ try{const {rows}=await pool.query('SELECT public.v2_api_admin_timetable_command_receipt($1,$2) result',[req.user.id,req.params.requestId]);res.json(rows[0].result);}
+ catch{res.status(503).json({code:'RECEIPT_UNAVAILABLE',error:'Keep the saved action and check its receipt again.'});}
+});
+router.post('/commands',async(req,res)=>{
+ if(!req.isAuthenticated())return;const b=req.body as Record<string,unknown>;
+ if(!b||typeof b!=='object'||Array.isArray(b)||Object.keys(b).sort().join(',')!=='clientRequestId,input'||!validAdminId(b.clientRequestId)||!b.input||typeof b.input!=='object'||Array.isArray(b.input)||Object.keys(req.query).length){res.status(422).json({code:'INVALID_ACTION',error:'Review one timetable action first.'});return;}
+ try{const client=await pool.connect();try{await client.query('BEGIN');await client.query("SET LOCAL statement_timeout='30s'");
+ const {rows}=await client.query('SELECT public.v2_api_admin_timetable_command($1,$2,$3) receipt',[req.user.id,b.clientRequestId,b.input]);await client.query('COMMIT');res.json(rows[0].receipt);
+ }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error;}finally{client.release();}}
+ catch(error){const e=error as {code?:string;message?:string};if(e.message==='v2_admin_required'){res.status(403).json({code:'ADMIN_REQUIRED',error:'Your administrative access changed.'});return;}
+ if(e.code==='40001'){res.status(409).json({code:'RECORD_CHANGED',error:'The record changed. Check the saved receipt, then reopen Timetables.'});return;}
+ if(e.message==='v2_admin_request_conflict'){res.status(409).json({code:'IDEMPOTENCY_CONFLICT',error:'This action reference belongs to different answers. Check its receipt.'});return;}
+ if(e.message==='v2_admin_preview_expired'){res.status(409).json({code:'PREVIEW_EXPIRED',error:'Reopen the action review. Your draft is kept.'});return;}
+ if(e.code==='23514'||e.code==='23503'){res.status(422).json({code:'INVALID_ACTION',error:'This action is unavailable. Reopen the current record.'});return;}
+ res.status(503).json({code:'SAVE_UNCONFIRMED',error:'The action could not be confirmed. Keep it and check its receipt before retrying.'});}
 });
 export default router;

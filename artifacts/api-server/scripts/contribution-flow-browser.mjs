@@ -852,6 +852,28 @@ try {
     results.push('actual logout clears prior dirty settings; a separately authenticated synthetic account loads only its own choices after restart');
   }
 
+
+  // Isolated native timetable fixture: never inserts services in a hosted app.
+  {
+    process.env.REVIEWED_TIMETABLES_ENABLED='true';
+    await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) SELECT $1,'administrator','browser_fixture' WHERE NOT EXISTS(SELECT 1 FROM v2_review_roles WHERE user_id=$1 AND revoked_at IS NULL)",[users[0]]);
+    const ids=(await admin.query("INSERT INTO cities(name,place_type) VALUES('Timetable Origin fixture','city'),('Timetable Destination fixture','city') RETURNING id")).rows.map(r=>r.id);
+    const day=(await admin.query("SELECT (statement_timestamp() AT TIME ZONE 'Africa/Harare')::date::text d")).rows[0].d;
+    const p={version:1,operator:'Timetable fixture coach',operatorRef:null,separateOperator:false,originCityId:ids[0],destinationCityId:ids[1],pickup:'Fixture timetable boarding',dropoff:'Fixture timetable arrival',timezone:'Africa/Harare',weekdays:[1,2,3,4,5,6,7],validFrom:day,validUntil:String(Number(day.slice(0,4))+1)+'-12-31',source:{kind:'published_timetable',reference:'Synthetic rendered fixture only',checkedOn:day},departures:[{departure:'07:00',arrival:'09:15',arrivalDay:0,fare:{amount:'18',currency:'USD',kind:'advertised'}}]};
+    const preview=(await admin.query('SELECT v2_api_admin_timetable_preview($1,$2) r',[users[0],p])).rows[0].r;
+    await admin.query('SELECT v2_api_admin_timetable_action($1,$2,$3)',[users[0],randomUUID(),{proposal:p,stateDigest:preview.stateDigest,expiresAt:Date.now()+300000}]);
+    const s=await session(0,false,'search');
+    for(const [label,name] of [['From city','Timetable Origin fixture'],['To city','Timetable Destination fixture']]){await s.page.getByText(label,{exact:true}).click();await s.page.getByPlaceholder('Type a city name…',{exact:true}).fill(name);await s.page.getByText(name,{exact:true}).click();}
+    await s.page.getByText('Search Routes',{exact:true}).click();const card=s.page.getByRole('button',{name:'Open route report Timetable fixture coach 07:00',exact:true});await card.waitFor();
+    await card.getByText('09:15',{exact:true}).waitFor();await card.getByText('2h 15m',{exact:true}).waitFor();await card.getByText('USD 18',{exact:true}).waitFor();await card.getByText('Fixture timetable boarding',{exact:true}).waitFor();await takeShot(s.page,'reviewed-timetable-search.png');
+    await s.page.setViewportSize({width:320,height:700});await takeShot(s.page,'reviewed-timetable-card-320.png');assert.equal(await s.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await s.page.setViewportSize({width:390,height:844});
+    await card.click();await s.page.getByRole('heading',{name:'Timetable',exact:true}).waitFor();await s.page.getByText('Daily',{exact:true}).waitFor();assert.equal(await s.page.getByText('Days not confirmed',{exact:true}).count(),0);await takeShot(s.page,'reviewed-timetable-detail.png');
+    await s.page.getByRole('button',{name:'Add pickup / drop-off',exact:true}).click();await s.page.getByRole('heading',{name:'Pickup or drop-off',exact:true}).waitFor();await takeShot(s.page,'reviewed-timetable-capture.png');await s.context.close();
+    results.push('reviewed timetable actual card shows approved price and real boarding/arrival/duration at390/320; route opens with explicit days and preserves ordinary pickup capture');
+    const d=await session(null,false,'departures');await d.page.getByRole('button',{name:'Choose departure city',exact:true}).click();await d.page.getByLabel('Search available departure cities',{exact:true}).fill('Timetable Origin fixture');await d.page.getByRole('button',{name:'Departures from Timetable Origin fixture',exact:true}).click();await d.page.getByText('7:00 AM',{exact:true}).waitFor();await takeShot(d.page,'reviewed-timetable-board.png');await d.context.close();
+    results.push('reviewed timetable shares the genuine dynamic departure origin and countdown board; no fake daily inference or matched actual service');
+  }
+
   // Owned public web pages: actual local backend HTML with the same real
   // CSS, without signing in, sending mail or changing administrative records.
   {

@@ -8,7 +8,8 @@ export function registerAdminTimetableApiTests(context:()=>Context){
  const owner=randomUUID(),token=randomBytes(32).toString('hex');
  const q=(sql:string,args:unknown[]=[])=>context().admin.query(sql,args);
  const facades=['v2_api_admin_timetable_preview(varchar,jsonb)','v2_api_admin_timetable_action(varchar,uuid,jsonb)',
-  'v2_api_admin_timetable_receipt(varchar,uuid)','v2_api_admin_timetable_operators(varchar,text)'];
+  'v2_api_admin_timetable_receipt(varchar,uuid)','v2_api_admin_timetable_operators(varchar,text)',
+  'v2_api_admin_timetable_records(varchar,uuid)','v2_api_admin_timetable_command(varchar,uuid,jsonb)','v2_api_admin_timetable_command_receipt(varchar,uuid)'];
  // Test-only grants in isolated CI PostgreSQL. No migration grants these rights.
  async function enabled<T>(fn:()=>Promise<T>,grant=true){
   const a=process.env.NAMED_ADMIN_CONSOLE_ENABLED,b=process.env.NAMED_ADMIN_TIMETABLES_ENABLED,c=process.env.REVIEWED_TIMETABLES_ENABLED;
@@ -113,5 +114,24 @@ export function registerAdminTimetableApiTests(context:()=>Context){
   await q('REVOKE ALL ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) FROM mabhazi_api');
   try{assert.equal((await publicCall('/capabilities')).value.reviewedTimetablesEnabled,false);assert.equal((await call('/state')).status,503);assert.equal((await publicCall('/search')).status,200);}
   finally{await q('GRANT EXECUTE ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) TO mabhazi_api');}
+ }));
+
+ test('timetable management HTTP: named owner withdraws only price with exact receipt recovery and ordinary users remain denied',async()=>enabled(async()=>{
+  const p=await proposal();p.operator+=' management';p.departures=[{departure:'10:00',arrival:null,arrivalDay:0,fare:{amount:'15',currency:'USD',kind:'advertised'}}];
+  const review=await call('/preview',p),r=await call('/actions',{clientRequestId:randomUUID(),previewToken:review.value.previewToken});assert.equal(r.status,200);
+  const records=await call('/records');assert.equal(records.status,200);const record=records.value.items.find((x:any)=>x.timetableId===r.value.id);assert.ok(record);
+  const property=record.properties.find((x:any)=>x.field==='fare.advertised'),body={clientRequestId:randomUUID(),input:{routeId:record.routeId,revision:record.revision,operation:'withdraw',reason:'incorrect_information',expiresAt:Date.now()+300000,field:property.field,reviewId:property.reviewId,caseRevision:property.caseRevision,subjectRevision:property.subjectRevision,impactDigest:property.impactDigest}};
+  assert.equal((await call('/records',undefined,{},context().tokens[0])).status,403);
+  const done=await call('/commands',body);assert.equal(done.status,200);assert.equal(done.value.outcome,'withdrawn');assert.deepEqual((await call('/commands',body)).value,done.value);
+  assert.deepEqual((await call('/commands/'+body.clientRequestId)).value,done.value);
+  const read=await publicCall('/subjects/'+record.routeId);assert.equal(read.status,200);assert.equal(read.value.subject.cardDetails.fare,undefined);assert.equal(read.value.subject.cardDetails.pickup.name,p.pickup);
+ }));
+ test('timetable replacement HTTP: each matching record is explicitly chosen and its removal shares the import transaction',async()=>enabled(async()=>{
+  const p=await proposal();p.operator+=' replacement';p.departures=p.departures.slice(0,1);const original=await call('/preview',p),saved=await call('/actions',{clientRequestId:randomUUID(),previewToken:original.value.previewToken});assert.equal(saved.status,200);
+  const lookup=await call('/operators?q='+encodeURIComponent(p.operator)),operator=lookup.value.operators.find((x:any)=>x.name===p.operator);p.operatorRef={id:operator.id,revision:operator.revision};
+  const duplicates=await call('/preview',p);assert.equal(duplicates.value.writable,false);const match=duplicates.value.duplicates.find((x:any)=>x.kind==='timetable');assert.ok(match);
+  const replacement={...p,replacements:[{kind:match.kind,id:match.id,revision:match.revision}]},next=await call('/preview',replacement);assert.equal(next.value.writable,true);assert.equal(next.value.replacements.length,1);
+  const result=await call('/actions',{clientRequestId:randomUUID(),previewToken:next.value.previewToken});assert.equal(result.status,200);assert.equal(result.value.replacedRecords.length,1);
+  const records=(await call('/records')).value.items;assert.ok(records.find((x:any)=>x.timetableId===saved.value.id).removalId);assert.equal(records.find((x:any)=>x.timetableId===result.value.id).publiclyAvailable,true);
  }));
 }

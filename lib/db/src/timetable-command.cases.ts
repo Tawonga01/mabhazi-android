@@ -350,4 +350,61 @@ export function registerTimetableCommandTests(context:()=>Context){
    await invalid(()=>q('SELECT * FROM v2_api_public_timetable_reports()'),['42501']);await q('RESET ROLE');}
   await invalid(()=>q('SELECT * FROM v2_api_timetable_card_claims($1::uuid[])',[Array.from({length:21},()=>subject)]));
  });
+
+ const records=async(actor:string)=>(await q('SELECT v2_api_admin_timetable_records($1,NULL) r',[actor])).rows[0].r.items as any[];
+ const command=async(f:Fixture,request:string,b:unknown)=>(await q('SELECT v2_api_admin_timetable_command($1,$2,$3) r',[f.actor,request,b])).rows[0].r;
+ const withdrawal=(r:any,field:string)=>{const p=r.properties.find((p:any)=>p.field===field);return{routeId:r.routeId,revision:r.revision,operation:'withdraw',reason:'incorrect_information',expiresAt:Date.now()+300000,field,reviewId:p.reviewId,caseRevision:p.caseRevision,subjectRevision:p.subjectRevision,impactDigest:p.impactDigest};};
+ test('timetable management: imported rows expose exact individual proof history and shared effects to named admins only',async()=>{
+  const f=await setup();f.p.departures.push({...f.p.departures[0],departure:'12:00'});await saved(f);const rows=await records(f.actor);assert.equal(rows.length,2);assert.ok(rows.every(r=>r.publiclyAvailable&&r.properties.length===8));
+  assert.equal(rows[0].properties.find((p:any)=>p.field==='service.calendar').impact.length,2);assert.equal(rows[0].source.reference,f.p.source.reference);
+  await invalid(()=>records(context().user),['42501']);
+ });
+ test('timetable management: withdrawing just fare approval preserves other facts, original evidence and exact receipt',async()=>{
+  const f=await setup();f.p.departures[0].fare={amount:'18',currency:'USD',kind:'advertised'};const savedReceipt=await saved(f),r=(await records(f.actor))[0],b=withdrawal(r,'fare.advertised'),request=randomUUID();
+  const result=await command(f,request,b);assert.equal(result.outcome,'withdrawn');assert.equal(result.field,'fare.advertised');
+  assert.ok(await discovery(r.routeId));assert.equal((await q("SELECT count(*) n FROM v2_api_timetable_card_claims(ARRAY[$1::uuid]) WHERE field_key LIKE 'fare.%'",[r.routeId])).rows[0].n,'0');
+  assert.equal((await q('SELECT count(*) n FROM v2_observations WHERE id=(SELECT observation_id FROM v2_admin_timetable_properties WHERE run_subject_id=$1 AND field_key=$2)',[savedReceipt.entries[0].runId,'fare.advertised'])).rows[0].n,'1');
+  assert.deepEqual(await command(f,request,{...b,expiresAt:Date.now()-1}),result);
+  assert.deepEqual((await q('SELECT v2_api_admin_timetable_command_receipt($1,$2) r',[f.actor,request])).rows[0].r,result);
+  await invalid(()=>command(f,request,{...b,reason:'other'}));
+ });
+ test('timetable management: withdrawing required clock approval suppresses the schedule without withdrawing unrelated reviews',async()=>{
+  const f=await setup();await saved(f);const r=(await records(f.actor))[0],before=r.properties.map((p:any)=>p.reviewId);await command(f,randomUUID(),withdrawal(r,'departure.scheduled'));
+  assert.equal(await discovery(r.routeId),null);assert.deepEqual((await records(f.actor))[0].properties.map((p:any)=>p.reviewId),before);
+  assert.equal((await records(f.actor))[0].properties.find((p:any)=>p.field==='departure.scheduled').history.at(-1).action,'reverse');
+ });
+ test('timetable management: shared calendar withdrawal states its exact affected departures',async()=>{
+  const f=await setup();f.p.departures.push({...f.p.departures[0],departure:'12:00'});await saved(f);const rows=await records(f.actor),b=withdrawal(rows[0],'service.calendar');
+  assert.equal(rows[0].properties.find((p:any)=>p.field==='service.calendar').impact.length,2);await command(f,randomUUID(),b);
+  assert.ok((await records(f.actor)).every(r=>!r.publiclyAvailable));
+ });
+ test('timetable management: changed impact, case, subject and route revisions cannot withdraw a newer approval',async()=>{
+  const f=await setup();await saved(f);const r=(await records(f.actor))[0],b=withdrawal(r,'boarding.pickup');
+  for(const wrong of [{...b,impactDigest:'0'.repeat(64)},{...b,revision:String(Number(r.revision)+1)},{...b,caseRevision:'999999'},{...b,subjectRevision:'999999'}])await invalid(()=>command(f,randomUUID(),wrong),['40001']);
+  assert.ok(await discovery(r.routeId));
+ });
+ test('timetable management: restorable removal keeps native proof and command receipts',async()=>{
+  const f=await setup();const savedReceipt=await saved(f),r=(await records(f.actor))[0],request=randomUUID();
+  const remove=await command(f,request,{routeId:r.routeId,revision:r.revision,operation:'remove',reason:'duplicate',expiresAt:Date.now()+300000});assert.equal(remove.outcome,'removed');assert.equal(await discovery(r.routeId),null);
+  const current=(await records(f.actor))[0];assert.equal(current.removalId,remove.id);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) ok',[savedReceipt.entries[0].runId])).rows[0].ok,true);
+  assert.equal((await command(f,randomUUID(),{routeId:r.routeId,revision:current.revision,operation:'restore',reason:'record_rechecked',removalId:remove.id,expiresAt:Date.now()+300000})).outcome,'restored');assert.ok(await discovery(r.routeId));
+ });
+ test('timetable replacement: explicit exact native candidate is replaced atomically, originals remain restorable and replay creates no second removal',async()=>{
+  const f=await setup(),oldReceipt=await saved(f),oldSubject=await alias(oldReceipt.entries[0].runId),next={...f,request:randomUUID(),p:structuredClone(f.p)};next.p.operator=f.p.operator;
+  const op=(await q('SELECT o.subject_id,s.revision FROM v2_operators o JOIN v2_subjects s ON s.id=o.subject_id WHERE display_name=$1',[f.p.operator])).rows[0];next.p.operatorRef={id:op.subject_id,revision:String(op.revision)};
+  const match=(await preview(next)).duplicates.find((d:any)=>d.kind==='timetable');assert.ok(match);
+  const proposed=next.p as typeof next.p & {replacements:any[]};proposed.replacements=[{kind:match.kind,id:match.id,revision:match.revision}];const body=await input(next),result=await apply(next,body);
+  assert.equal(result.replacedRecords.length,1);assert.equal(await discovery(oldSubject),null);const current=await alias(result.entries[0].runId);assert.ok(await discovery(current));
+  assert.equal((await q('SELECT count(*) n FROM v2_admin_active_route_removals WHERE route_subject_id=$1',[oldSubject])).rows[0].n,'1');
+  assert.deepEqual(await apply(next,body),result);assert.equal((await q('SELECT count(*) n FROM v2_admin_route_actions WHERE route_subject_id=$1',[oldSubject])).rows[0].n,'1');
+  assert.ok((await records(next.actor)).some(r=>r.routeId===oldSubject&&r.removalId));
+ });
+ test('timetable replacement: stale, unrelated and unsupported replacement IDs cannot waive duplicates',async()=>{
+  const f=await setup();await saved(f);const next={...f,request:randomUUID(),p:structuredClone(f.p)};(next.p as any).replacements=[{kind:'lead',id:randomUUID(),revision:'1'}];await invalid(()=>preview(next),['40001']);
+  (next.p as any).replacements=[{kind:'legacy',id:randomUUID(),revision:'1'}];await invalid(()=>preview(next));
+ });
+ test('timetable management: backend cannot invoke new command facades before explicit grants or read private command table',async()=>{
+  const f=await setup();await saved(f);for(const role of ['mabhazi_api','anon','authenticated']){await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_api_admin_timetable_records($1,NULL)',[f.actor]),['42501']);await invalid(()=>q('SELECT * FROM v2_admin_timetable_commands'),['42501']);await q('RESET ROLE');}
+ });
 }

@@ -3,7 +3,7 @@ import {createHmac,timingSafeEqual} from 'node:crypto';
 export type TimetableRow={departure:string;arrival:string|null;arrivalDay:0|1;fare:{amount:string;currency:string;kind:'advertised'|'quoted'}|null};
 export type TimetableProposal={version:1;operator:string;operatorRef:{id:string;revision:string}|null;separateOperator:boolean;originCityId:number;destinationCityId:number;
  pickup:string;dropoff:string|null;timezone:string;weekdays:number[];validFrom:string;validUntil:string;
- source:{kind:'published_timetable'|'operator_confirmation';reference:string;checkedOn:string};departures:TimetableRow[]};
+ source:{kind:'published_timetable'|'operator_confirmation';reference:string;checkedOn:string};departures:TimetableRow[];replacements?:{kind:'lead'|'timetable';id:string;revision:string}[]};
 export type TimetableIssue={field:string;message:string};
 export type TimetableParse={proposal:TimetableProposal|null;issues:TimetableIssue[]};
 const own=(p:Record<string,unknown>,keys:string[])=>Object.keys(p).sort().join(',')===keys.sort().join(',');
@@ -19,6 +19,12 @@ const domain='mabhazi-admin-timetable/1\0';
 export function parseTimetableProposal(raw:unknown,now=Date.now()):TimetableParse{
  const issues:TimetableIssue[]=[];
  const fail=(field:string,message:string)=>issues.push({field,message});
+ if(object(raw)&&raw.replacements!==undefined){
+  const {replacements,...base}=raw,checked=parseTimetableProposal(base,now);
+  if(!checked.proposal)return checked;
+  if(!Array.isArray(replacements)||replacements.length>100||replacements.some(r=>!object(r)||!own(r,['kind','id','revision'])||!['lead','timetable'].includes(String(r.kind))||typeof r.id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.id)||typeof r.revision!=='string'||!/^([1-9][0-9]{0,15})$/.test(r.revision)||Number(r.revision)>Number.MAX_SAFE_INTEGER)||new Set(replacements.map(r=>(r as {id:string}).id)).size!==replacements.length)return{proposal:null,issues:[{field:'replacements',message:'Review the exact matching records again.'}]};
+  return{proposal:{...checked.proposal,replacements:replacements as NonNullable<TimetableProposal['replacements']>},issues:[]};
+ }
  if(!object(raw)||!own(raw,['version','operator','operatorRef','separateOperator','originCityId','destinationCityId','pickup','dropoff','timezone','weekdays','validFrom','validUntil','source','departures'])||raw.version!==1)
   return{proposal:null,issues:[{field:'form',message:'Use the timetable entry form.'}]};
  if(!text(raw.operator,120))fail('operator','Enter the operator name.');

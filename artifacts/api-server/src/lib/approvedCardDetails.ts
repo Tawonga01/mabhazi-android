@@ -67,7 +67,7 @@ export function projectApprovedCards(rows:Claim[]){
 export async function readApprovedCards(routes:{subjectId:string;revision:unknown}[],blocked:string[],owner:string|null,timetables=false){
  if(!routes.length)return new Map<string,Record<string,unknown>>();
  if(routes.length>20)throw Error('card_page_too_large');
- const {rows}=await pool.query(timetables?approvedCardSql.replace('public.v2_public_reviewed_lead_reports','public.v2_public_supported_route_reports'):approvedCardSql,[JSON.stringify(routes.map(r=>({id:r.subjectId,revision:Number(r.revision)}))),blocked,owner]);
+ let rows:Claim[];try{({rows}=await pool.query(timetables?approvedCardSql.replace('public.v2_public_reviewed_lead_reports','public.v2_public_supported_route_reports'):approvedCardSql,[JSON.stringify(routes.map(r=>({id:r.subjectId,revision:Number(r.revision)}))),blocked,owner]));}catch(error){if(!timetables&&(error as {code?:string}).code==='42501')return new Map<string,Record<string,unknown>>();throw error;}
  if(timetables){const native=await pool.query('SELECT * FROM public.v2_api_timetable_card_claims($1::uuid[])',[routes.map(r=>r.subjectId)]);rows.push(...native.rows);}
  return projectApprovedCards(rows);
 }

@@ -55,7 +55,7 @@ SELECT jsonb_build_object(
    'key',v.entry_key,'kind',v.kind,'originKey',v.origin_key,
    'subjectId',v.subject_id,'journeyId',v.journey_id,
    'destination',v.destination,'operator',v.operator,'reportedTime',v.clock,
-   'coreCorrections',v.core_corrections,'scheduledDays',v.scheduled_days,'pickupPoint',v.pickup_point,'timetable',v.timetable,'scheduleClock',CASE WHEN v.kind='legacy' AND v.data_status='active' THEN v.reported_time ELSE NULL END,'timedDepartureEligible',v.timetable IS NOT NULL))
+   'coreCorrections',v.core_corrections,'scheduledDays',v.scheduled_days,'pickupPoint',v.pickup_point,'scheduleClock',CASE WHEN v.kind='legacy' AND v.data_status='active' THEN v.reported_time ELSE NULL END,'timedDepartureEligible',v.timetable IS NOT NULL)) || CASE WHEN v.timetable IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('timetable',v.timetable) END
    ORDER BY coalesce(v.clock,'99:99'),lower(v.destination),lower(v.operator),v.entry_key)
    FROM visible v JOIN chosen c ON c.origin_key=v.origin_key),'[]'::jsonb)
 ) board`;
