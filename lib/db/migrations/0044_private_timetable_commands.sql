@@ -75,7 +75,9 @@ END;$$;
 -- Historical entry/property IDs survive, while replay can never restore it.
 CREATE FUNCTION public.v2_timetable_forget_payload() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
- IF public.v2_json_uuid(OLD.payload->'timetableCommandId') THEN
+ -- During account cascade the users row is already absent. Its own command
+ -- FK SET NULL trigger will redact the payload; do not recheck that FK early.
+ IF public.v2_json_uuid(OLD.payload->'timetableCommandId') AND EXISTS(SELECT 1 FROM public.users WHERE id=OLD.user_id) THEN
   UPDATE public.v2_admin_timetables SET proposal=NULL,request_digest=NULL,erased=true
    WHERE id=(OLD.payload->>'timetableCommandId')::uuid AND actor_user_id=OLD.user_id AND NOT erased;
  END IF;

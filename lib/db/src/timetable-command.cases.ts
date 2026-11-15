@@ -23,6 +23,14 @@ export function registerTimetableCommandTests(context:()=>Context){
  async function input(f:Fixture){const p=await preview(f);return{proposal:f.p,stateDigest:p.stateDigest,expiresAt:Date.now()+300000};}
  const apply=async(f:Fixture,b:unknown)=>(await q('SELECT v2_api_admin_timetable_action($1,$2,$3) r',[f.actor,f.request,b])).rows[0].r;
  async function saved(f:Fixture){return await apply(f,await input(f));}
+ async function diagnosis(run:string){return(await q(`SELECT jsonb_agg(jsonb_build_object('subject',s.id,'kind',s.kind,'current',v2_current_reviewed_creation(s.id),
+  'strict',v2_read_created_subject(s.id),'edit',v2_read_transport(s.id),'origin',to_jsonb(o),'creationEvidence',v2_creation_evidence_live(o.creation_id),
+  'dependenciesLive',v2_creation_dependencies_live(o.creation_id),
+  'dependencies',(SELECT jsonb_agg(jsonb_build_object('expected',to_jsonb(d),'liveRevision',a.revision,'liveGeneration',a.input_generation,'current',v2_current_reviewed_creation(a.id))) FROM v2_transport_creation_dependencies d JOIN v2_subjects a ON a.id=d.subject_id WHERE d.creation_id=o.creation_id),
+  'changes',(SELECT jsonb_agg(jsonb_build_object('table',c.source_table,'columns',c.changed_columns,'change',c.id,'epochs',to_jsonb(cs))) FROM v2_transport_change_subjects cs JOIN v2_transport_changes c ON c.id=cs.change_id WHERE cs.subject_id=s.id))) r
+  FROM v2_subjects s JOIN v2_transport_creation_origins o ON o.subject_id=s.id
+  WHERE s.id=$1 OR s.id=(SELECT service_plan_subject_id FROM v2_runs WHERE subject_id=$1)`,[run])).rows[0].r;}
+
  test('timetable command: all supplied departures assemble atomically with distinct source identities and independent reviews',async()=>{
   const f=await setup();f.p.departures.push({...f.p.departures[0],departure:'12:00'});const receipt=await saved(f);
   assert.equal(receipt.id,f.request);assert.equal(receipt.outcome,'approved');assert.equal(receipt.departureCount,2);
@@ -79,7 +87,7 @@ export function registerTimetableCommandTests(context:()=>Context){
   assert.ok((await preview(f)).duplicates.some((d:{kind:string})=>d.kind==='operator'));
   f.p.operatorRef={id:choices[0].id,revision:choices[0].revision};assert.equal((await preview(f)).duplicates.length,0);await saved(f);
   assert.equal((await q('SELECT count(*) n FROM v2_operators WHERE display_name=$1',[f.p.operator])).rows[0].n,'1');
-  f.p.operatorRef={...choices[0],revision:String(Number(choices[0].revision)+1)};await invalid(()=>preview(f),['40001']);
+  f.p.operatorRef={id:choices[0].id,revision:String(Number(choices[0].revision)+1)};await invalid(()=>preview(f),['40001']);
  });
  test('timetable command: ordinary app accounts and revoked owners cannot preview, apply or recover private receipts',async()=>{
   const f=await setup(),b=await input(f);for(const actor of [context().user]){
@@ -113,7 +121,7 @@ export function registerTimetableCommandTests(context:()=>Context){
   const f=await setup();f.p.departures[0].arrival='10:00';f.p.departures[0].fare={amount:'18',currency:'USD',kind:'quoted'};
   const r=await saved(f),run=r.entries[0].runId;
   assert.equal((await q('SELECT v2_read_created_subject($1) r',[run])).rows[0].r.status,'stale');
-  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,true);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,true,JSON.stringify(await diagnosis(run)));
   const proofs=(await q('SELECT field_key,v2_timetable_property_current(run_subject_id,field_key) current FROM v2_admin_timetable_properties WHERE run_subject_id=$1',[run])).rows;
   assert.equal(proofs.length,10);assert.ok(proofs.every(p=>p.current),JSON.stringify(proofs));
  });
@@ -131,7 +139,7 @@ export function registerTimetableCommandTests(context:()=>Context){
   await q('SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE');
   assert.equal((await q("SELECT v2_timetable_property_current($1,'fare.quoted') r",[run])).rows[0].r,false);
   assert.equal((await q("SELECT v2_timetable_property_current($1,'boarding.pickup') r",[run])).rows[0].r,true);
-  assert.equal((await q("SELECT v2_timetable_property_current($1,'departure.scheduled') r",[run])).rows[0].r,true);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'departure.scheduled') r",[run])).rows[0].r,true,JSON.stringify(await diagnosis(run)));
  });
  test('timetable command: account erasure scrubs proposal copies and leaves no reviewed transport proof',async()=>{
   const f=await setup(),r=await saved(f),run=r.entries[0].runId;await q('DELETE FROM users WHERE id=$1',[f.actor]);
