@@ -161,6 +161,9 @@ export const adminTimetableWorkbench=String.raw`
 `+adminTimetableManagement;
 
 export const adminTimetableStyles=String.raw`
+#mabhazi-admin-design .tt-records-table th,#mabhazi-admin-design .tt-records-table td{padding:14px 12px}
+#mabhazi-admin-design .tt-records-table td:nth-child(3),#mabhazi-admin-design .tt-records-table td:nth-child(5),#mabhazi-admin-design .tt-records-table td:nth-child(8){white-space:nowrap}
+
 #mabhazi-admin-design .tt-layout{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;align-items:start}
 #mabhazi-admin-design .tt-layout .ad-panel{margin-bottom:24px}
 #mabhazi-admin-design .tt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px}

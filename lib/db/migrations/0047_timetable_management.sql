@@ -33,7 +33,7 @@ BEGIN
  'caseRevision',c.revision::text,'subjectRevision',cs.revision::text,'current',public.v2_timetable_property_current(e.run_subject_id,p.field_key),'value',(SELECT o.value FROM public.v2_observations o WHERE o.id=p.observation_id),'scope',(SELECT o.scope FROM public.v2_observations o WHERE o.id=p.observation_id),'placeName',(SELECT stop.name FROM public.v2_observations o JOIN public.v2_stops stop ON stop.subject_id=CASE WHEN o.value ? 'stopId' THEN (o.value->>'stopId')::uuid END WHERE o.id=p.observation_id),
  'impact',public.v2_timetable_review_impact(p.review_id),'impactDigest',public.v2_assessment_hash(public.v2_timetable_review_impact(p.review_id)),
  'withdrawable',c.last_decision_id=p.review_id AND d.action='accept' AND NOT d.evidence_erased,
- 'history',(SELECT jsonb_agg(jsonb_build_object('id',h.id,'action',h.action,'reason',h.reason_code,'at',h.created_at,'evidenceErased',h.evidence_erased) ORDER BY h.created_at,h.id)
+ 'history',(SELECT jsonb_agg(jsonb_build_object('id',h.id,'action',h.action,'reason',h.reason_code,'at',h.created_at,'evidenceErased',h.evidence_erased) ORDER BY h.expected_revision,h.id)
  FROM public.v2_review_decisions h WHERE h.case_id=c.id)) ORDER BY p.field_key),'[]'::jsonb)
  FROM public.v2_admin_timetable_properties p JOIN public.v2_review_decisions d ON d.id=p.review_id JOIN public.v2_review_cases c ON c.id=d.case_id
  JOIN public.v2_subjects cs ON cs.id=c.subject_id WHERE p.run_subject_id=e.run_subject_id)) item
@@ -80,9 +80,11 @@ BEGIN
  SELECT * INTO c FROM public.v2_review_cases WHERE id=(SELECT case_id FROM public.v2_review_decisions WHERE id=p.review_id);
  SELECT * INTO s FROM public.v2_subjects WHERE id=c.subject_id;
  IF c.last_decision_id IS DISTINCT FROM p.review_id THEN RAISE EXCEPTION 'v2_timetable_record_changed' USING ERRCODE='40001';END IF;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid DEFERRED;
  IF p.writer_kind='creation' THEN result:=public.v2_review_transport_creation(actor,p.writer_id,(input->>'caseRevision')::bigint,(input->>'subjectRevision')::bigint,'reverse',input->>'reason',NULL,request,p.review_id);
  ELSIF p.writer_kind='edit' THEN result:=public.v2_review_transport_edit(actor,p.writer_id,(input->>'caseRevision')::bigint,(input->>'subjectRevision')::bigint,'reverse',input->>'reason',NULL,request,p.review_id);
  ELSE result:=public.v2_record_review(actor,c.id,(input->>'caseRevision')::bigint,(input->>'subjectRevision')::bigint,'reverse',input->>'reason',NULL,ARRAY[]::uuid[],'review/1',p.review_id);END IF;
+ SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision,public.v2_current_field_valid,public.v2_current_association_valid IMMEDIATE;
  response:=jsonb_build_object('kind','timetable-command','id',request,'outcome','withdrawn','routeId',route,'field',p.field_key,'reviewId',result,'reverses',p.review_id,'impact',public.v2_timetable_review_impact(p.review_id));
  ELSE
  IF input-ARRAY['routeId','revision','operation','reason','expiresAt','removalId']<>'{}'::jsonb THEN RAISE EXCEPTION 'v2_timetable_command_invalid' USING ERRCODE='23514';END IF;

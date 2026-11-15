@@ -856,7 +856,7 @@ try {
   // Isolated native timetable fixture: never inserts services in a hosted app.
   {
     process.env.REVIEWED_TIMETABLES_ENABLED='true';
-    await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) SELECT $1,'administrator','browser_fixture' WHERE NOT EXISTS(SELECT 1 FROM v2_review_roles WHERE user_id=$1 AND revoked_at IS NULL)",[users[0]]);
+    await admin.query("INSERT INTO v2_review_roles(user_id,role,reason_code) SELECT $1::varchar,'administrator','browser_fixture' WHERE NOT EXISTS(SELECT 1 FROM v2_review_roles WHERE user_id=$1::varchar AND revoked_at IS NULL)",[users[0]]);
     const ids=(await admin.query("INSERT INTO cities(name,place_type) VALUES('Timetable Origin fixture','city'),('Timetable Destination fixture','city') RETURNING id")).rows.map(r=>r.id);
     const day=(await admin.query("SELECT (statement_timestamp() AT TIME ZONE 'Africa/Harare')::date::text d")).rows[0].d;
     const p={version:1,operator:'Timetable fixture coach',operatorRef:null,separateOperator:false,originCityId:ids[0],destinationCityId:ids[1],pickup:'Fixture timetable boarding',dropoff:'Fixture timetable arrival',timezone:'Africa/Harare',weekdays:[1,2,3,4,5,6,7],validFrom:day,validUntil:String(Number(day.slice(0,4))+1)+'-12-31',source:{kind:'published_timetable',reference:'Synthetic rendered fixture only',checkedOn:day},departures:[{departure:'07:00',arrival:'09:15',arrivalDay:0,fare:{amount:'18',currency:'USD',kind:'advertised'}}]};
