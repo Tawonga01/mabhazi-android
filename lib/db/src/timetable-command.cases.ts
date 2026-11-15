@@ -407,4 +407,21 @@ export function registerTimetableCommandTests(context:()=>Context){
  test('timetable management: backend cannot invoke new command facades before explicit grants or read private command table',async()=>{
   const f=await setup();await saved(f);for(const role of ['mabhazi_api','anon','authenticated']){await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_api_admin_timetable_records($1,NULL)',[f.actor]),['42501']);await invalid(()=>q('SELECT * FROM v2_admin_timetable_commands'),['42501']);await q('RESET ROLE');}
  });
+
+ test('timetable replacement: a matching original community report is explicitly removed while its evidence stays saved',async()=>{
+  const f=await setup(),actor=context().user,terms='2026-09-12';await q('UPDATE users SET terms_accepted_version=$2,terms_accepted_at=now() WHERE id=$1',[actor,terms]);
+  const lead=(await q('SELECT v2_api_submit_minimum_lead($1,$2,$3) r',[actor,terms,{schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',target:{newLead:{originCityId:f.p.originCityId,destinationCityId:f.p.destinationCityId,departureTime:'07:00',operator:{name:f.p.operator}}},observations:[]}])).rows[0].r;
+  const candidate=(await preview(f)).duplicates.find((d:any)=>d.kind==='lead');assert.equal(candidate.id,lead.subjectId);
+  (f.p as any).replacements=[{kind:candidate.kind,id:candidate.id,revision:candidate.revision}];const r=await saved(f);assert.equal(r.replacedRecords.length,1);
+  assert.equal((await q('SELECT count(*) n FROM v2_public_lead_reports WHERE subject_id=$1',[lead.subjectId])).rows[0].n,'0');
+  assert.equal((await q('SELECT count(*) n FROM v2_contributions WHERE id=$1',[lead.contributionId])).rows[0].n,'1');assert.ok(await discovery(await alias(r.entries[0].runId)));
+ });
+ test('timetable management: command receipt is account-bound and account erasure leaves no copied actor or actor-derived request hash',async()=>{
+  const f=await setup();await saved(f);const r=(await records(f.actor))[0],request=randomUUID();const removed=await command(f,request,{routeId:r.routeId,revision:r.revision,operation:'remove',reason:'duplicate',expiresAt:Date.now()+300000});
+  assert.ok(!JSON.stringify(removed).includes(f.actor));
+  await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','fixture_other_admin')",[context().user]);
+  assert.deepEqual((await q('SELECT v2_api_admin_timetable_command_receipt($1,$2) r',[context().user,request])).rows[0].r,{found:false});
+  await q('DELETE FROM users WHERE id=$1',[f.actor]);const row=(await q('SELECT * FROM v2_admin_timetable_commands WHERE id=$1',[request])).rows[0];
+  assert.equal(row.actor_user_id,null);assert.equal(row.request_digest,null);assert.ok(!JSON.stringify(row.receipt).includes(f.actor));assert.equal(await discovery(r.routeId),null);
+ });
 }

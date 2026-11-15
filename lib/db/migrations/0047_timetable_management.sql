@@ -2,14 +2,15 @@
 CREATE TABLE public.v2_admin_timetable_commands(
  id uuid PRIMARY KEY,actor_user_id varchar REFERENCES public.users(id) ON DELETE SET NULL,
  route_subject_id uuid REFERENCES public.v2_leads(subject_id) ON DELETE SET NULL,
- request_digest text NOT NULL CHECK(request_digest~'^[a-f0-9]{64}$'),receipt jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+ request_digest text CHECK(request_digest~'^[a-f0-9]{64}$'),receipt jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),
+ CHECK((actor_user_id IS NULL AND request_digest IS NULL) OR (actor_user_id IS NOT NULL AND request_digest IS NOT NULL)));
 ALTER TABLE public.v2_admin_timetable_commands ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.v2_admin_timetable_commands FROM PUBLIC,mabhazi_api;
 CREATE FUNCTION public.v2_timetable_command_guard() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
  IF TG_OP='UPDATE' AND pg_trigger_depth()>1 AND (NEW.actor_user_id IS NOT DISTINCT FROM OLD.actor_user_id OR NEW.actor_user_id IS NULL)
  AND (NEW.route_subject_id IS NOT DISTINCT FROM OLD.route_subject_id OR NEW.route_subject_id IS NULL)
- AND to_jsonb(NEW)-ARRAY['actor_user_id','route_subject_id']=to_jsonb(OLD)-ARRAY['actor_user_id','route_subject_id'] THEN RETURN NEW;END IF;
+ AND to_jsonb(NEW)-ARRAY['actor_user_id','route_subject_id']=to_jsonb(OLD)-ARRAY['actor_user_id','route_subject_id'] THEN IF NEW.actor_user_id IS NULL THEN NEW.request_digest:=NULL;END IF;RETURN NEW;END IF;
  RAISE EXCEPTION 'v2_timetable_command_immutable' USING ERRCODE='23514';
 END;$$;
 CREATE TRIGGER timetable_command_immutable BEFORE UPDATE OR DELETE ON public.v2_admin_timetable_commands FOR EACH ROW EXECUTE FUNCTION public.v2_timetable_command_guard();
@@ -89,7 +90,7 @@ BEGIN
  ELSE
  IF input-ARRAY['routeId','revision','operation','reason','expiresAt','removalId']<>'{}'::jsonb THEN RAISE EXCEPTION 'v2_timetable_command_invalid' USING ERRCODE='23514';END IF;
  visibility:=public.v2_api_admin_route_action(actor,request,jsonb_build_object('routeId',route,'revision',input->>'revision','operation',input->>'operation','reason',input->>'reason','expiresAt',input->'expiresAt','removalId',coalesce(input->'removalId','null'::jsonb)));
- response:=visibility||jsonb_build_object('kind','timetable-command');
+ response:=(visibility-ARRAY['actorId','actorErased','sourceErased'])||jsonb_build_object('kind','timetable-command');
  END IF;
  INSERT INTO public.v2_admin_timetable_commands(id,actor_user_id,route_subject_id,request_digest,receipt) VALUES(request,actor,route,digest,response);
  RETURN response;
