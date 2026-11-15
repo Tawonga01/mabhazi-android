@@ -492,7 +492,7 @@ BEGIN
   OR NOT EXISTS(SELECT 1 FROM public.v2_review_decisions d JOIN public.v2_review_cases c ON c.id=d.case_id
    WHERE d.id=o.review_id AND d.action='accept' AND NOT d.evidence_erased AND c.last_decision_id=d.id AND c.state='resolved') THEN RETURN false;END IF;
  IF (o.snapshot->'data')-columns IS DISTINCT FROM (current_edit->'snapshot'->'data')-columns THEN RETURN false;END IF;
- IF s.kind='run' THEN RETURN o.snapshot-'data'=current_edit->'snapshot'-'data';END IF;
+ IF s.kind='run' THEN RETURN (o.snapshot-'data')=((current_edit->'snapshot')-'data');END IF;
  RETURN COALESCE(current_edit->'snapshot'->'calendar'->>'id'=current_edit->'snapshot'->'data'->>'calendar_id'
   AND current_edit->'snapshot'->'calendar'->>'timezone'=current_edit->'snapshot'->'data'->>'timezone',false);
 END;$$;
