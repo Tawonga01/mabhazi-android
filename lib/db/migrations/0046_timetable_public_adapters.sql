@@ -126,7 +126,7 @@ END;$$;
 CREATE FUNCTION public.v2_api_timetable_report_claims(subjects uuid[]) RETURNS TABLE(
  route_subject_id uuid,author_id varchar,observation_id uuid,subject_id uuid,field_key text,scope_key text,scope jsonb,original_value jsonb,
  knowledge_basis text,observed_from date,observed_to date,effective_from date,effective_to date,submitted_at timestamptz,ref uuid,field_read jsonb,city jsonb)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
  SELECT card.route_subject_id,t.actor_user_id,o.id,o.original_subject_id,o.field_key,o.scope_key,o.scope,card.original_value,
  o.knowledge_basis,o.observed_from,o.observed_to,o.effective_from,o.effective_to,o.submitted_at,card.ref,
  jsonb_build_object('status','assessed','reviewed',true,'dispute','none','provenance','reviewed_timetable','value',card.original_value,
