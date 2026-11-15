@@ -7,7 +7,7 @@
  */
 import type { V2CoreCorrection } from "./v2CoreCorrection";
 import type { V2DepartureEntryKind } from "./v2DepartureEntryKind";
-import type { V2DepartureEntryScheduleTimezone } from "./v2DepartureEntryScheduleTimezone";
+import type { V2ReviewedTimetable } from "./v2ReviewedTimetable";
 
 export interface V2DepartureEntry {
   key: string;
@@ -23,12 +23,13 @@ export interface V2DepartureEntry {
   reportedTime?: string | null;
   scheduledDays?: string | null;
   pickupPoint?: string;
-  /** Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. */
+  /** Explicit applicable operating days and timezone yield an unambiguous next instant. Missing days or ambiguous local DST time have no countdown. */
   countdownEligible?: boolean;
   nextDepartureAt?: Date;
-  scheduleTimezone?: V2DepartureEntryScheduleTimezone;
-  /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
+  scheduleTimezone?: string;
+  /** True only for a currently eligible registered reviewed timetable; Search eligibility alone is insufficient. */
   timedDepartureEligible: boolean;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
+  timetable?: V2ReviewedTimetable;
 }

@@ -11,4 +11,5 @@ export type ReviewedRouteDisplayHeaderParameter =
 
 export const ReviewedRouteDisplayHeaderParameter = {
   "reviewed-core/1": "reviewed-core/1",
+  "reviewed-timetable/1": "reviewed-timetable/1",
 } as const;

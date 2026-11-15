@@ -13,6 +13,7 @@ import type { V2PublicLeadKind } from "./v2PublicLeadKind";
 import type { V2PublicLeadMissingDetailsItem } from "./v2PublicLeadMissingDetailsItem";
 import type { V2PublicLeadPublicationStatus } from "./v2PublicLeadPublicationStatus";
 import type { V2PublicOperatorReport } from "./v2PublicOperatorReport";
+import type { V2ReviewedTimetable } from "./v2ReviewedTimetable";
 
 export interface V2PublicLead {
   kind: V2PublicLeadKind;
@@ -33,4 +34,5 @@ export interface V2PublicLead {
   cardDetails?: V2ApprovedCardDetails;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
+  timetable?: V2ReviewedTimetable;
 }

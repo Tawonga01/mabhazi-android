@@ -11,10 +11,11 @@ export function registerAdminTimetableApiTests(context:()=>Context){
   'v2_api_admin_timetable_receipt(varchar,uuid)','v2_api_admin_timetable_operators(varchar,text)'];
  // Test-only grants in isolated CI PostgreSQL. No migration grants these rights.
  async function enabled<T>(fn:()=>Promise<T>,grant=true){
-  const a=process.env.NAMED_ADMIN_CONSOLE_ENABLED,b=process.env.NAMED_ADMIN_TIMETABLES_ENABLED;
-  process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';process.env.NAMED_ADMIN_TIMETABLES_ENABLED='true';
+  const a=process.env.NAMED_ADMIN_CONSOLE_ENABLED,b=process.env.NAMED_ADMIN_TIMETABLES_ENABLED,c=process.env.REVIEWED_TIMETABLES_ENABLED;
+  process.env.REVIEWED_TIMETABLES_ENABLED='true';process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';process.env.NAMED_ADMIN_TIMETABLES_ENABLED='true';
   try{if(grant)for(const f of facades)await q('GRANT EXECUTE ON FUNCTION public.'+f+' TO mabhazi_api');return await fn();}
   finally{if(grant)for(const f of facades)await q('REVOKE ALL ON FUNCTION public.'+f+' FROM mabhazi_api');
+   if(c===undefined)delete process.env.REVIEWED_TIMETABLES_ENABLED;else process.env.REVIEWED_TIMETABLES_ENABLED=c;
    if(a===undefined)delete process.env.NAMED_ADMIN_CONSOLE_ENABLED;else process.env.NAMED_ADMIN_CONSOLE_ENABLED=a;
    if(b===undefined)delete process.env.NAMED_ADMIN_TIMETABLES_ENABLED;else process.env.NAMED_ADMIN_TIMETABLES_ENABLED=b;}
  }
@@ -75,5 +76,42 @@ export function registerAdminTimetableApiTests(context:()=>Context){
   try{assert.equal((await call('/actions',{clientRequestId:randomUUID(),previewToken:review.value.previewToken})).status,403);
    assert.equal((await call('/receipts/'+randomUUID())).status,403);}
   finally{await q("INSERT INTO v2_review_roles(user_id,role,reason_code) VALUES($1,'administrator','test_regrant')",[owner]);}
+ }));
+
+ async function publicCall(url:string,body?:unknown,extra:Record<string,string>={},actor:number|null=null){
+  const r=await fetch(context().base+'/v2'+url,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json','X-Mabhazi-Route-Display':'reviewed-timetable/1',Origin:'https://api.mabhazi.com',
+  ...(actor===null?{}:{Authorization:'Bearer '+context().tokens[actor],'X-Mabhazi-Account':context().accounts[actor]}),...extra},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  return{status:r.status,value:await r.json() as any};
+ }
+ test('timetable public HTTP: new display exposes approved price, pickup, arrival and explicit calendar; old display withholds',async()=>enabled(async()=>{
+  const p=await proposal();p.operator+=' public';p.departures=[{departure:'07:00',arrival:'09:15',arrivalDay:0,fare:{amount:'18.00',currency:'USD',kind:'advertised'}}];p.dropoff='Known API arrival';p.weekdays=[1,2,3,4,5,6,7];
+  const review=await call('/preview',p),r=await call('/actions',{clientRequestId:randomUUID(),previewToken:review.value.previewToken});assert.equal(r.status,200);
+  const subject=(await q('SELECT source_subject_id id FROM v2_admin_timetable_entries WHERE timetable_id=$1',[r.value.id])).rows[0].id;
+  const result=await publicCall('/search?operator='+encodeURIComponent(p.operator));assert.equal(result.status,200);assert.equal(result.value.items.length,1);
+  const item=result.value.items[0];assert.equal(item.subjectId,subject);assert.equal(item.publicationStatus,'reviewed_timetable');assert.equal(item.timedDepartureEligible,true);assert.equal(item.contributionTargetEligible,true);
+  assert.equal(item.timetable.arrivalSeconds,33300);assert.equal(item.cardDetails.fare.amount,'18');assert.equal(item.cardDetails.pickup.name,p.pickup);assert.equal(item.cardDetails.dropoff.name,p.dropoff);
+  assert.equal(item.cardDetails.fare.freshness,'fresh');assert.deepEqual(item.missingDetails,[]);assert.ok(!JSON.stringify(result.value).includes(owner));
+  assert.equal((await publicCall('/subjects/'+subject)).value.subject.subjectId,subject);
+  assert.equal((await publicCall('/search?operator='+encodeURIComponent(p.operator),undefined,{'X-Mabhazi-Route-Display':'reviewed-core/1'})).value.items.length,0);
+  const board=await publicCall('/departure-board?originKey=city:'+p.originCityId);assert.equal(board.status,200);
+  const entry=board.value.entries.find((e:any)=>e.subjectId===subject);assert.equal(entry.countdownEligible,true);assert.equal(entry.scheduleTimezone,'Africa/Harare');assert.ok(entry.nextDepartureAt);assert.equal(entry.pickupPoint,p.pickup);
+  assert.equal((await publicCall('/subjects/'+subject+'/fares')).value.items[0].amount,'18');assert.equal((await publicCall('/subjects/'+subject+'/places')).value.items.find((x:any)=>x.kind==='pickup').name,p.pickup);
+  const caps=await publicCall('/capabilities');assert.equal(caps.value.reviewedTimetablesEnabled,true);
+ }));
+ test('timetable public HTTP: ordinary Google account saves pickup and recovers receipt on the same real source alias',async()=>enabled(async()=>{
+  const p=await proposal();p.operator+=' traveller';p.departures=p.departures.slice(0,1);const review=await call('/preview',p),r=await call('/actions',{clientRequestId:randomUUID(),previewToken:review.value.previewToken});assert.equal(r.status,200);
+  const subject=(await q('SELECT source_subject_id id FROM v2_admin_timetable_entries WHERE timetable_id=$1',[r.value.id])).rows[0].id;
+  const c=await publicCall('/subjects/'+subject+'/contribution-context',undefined,{},0);assert.equal(c.status,200);assert.equal(c.value.operatorName,p.operator);
+  const body={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'route_detail',target:{existing:{subjectId:subject,expectedRevision:c.value.revision,identityKey:c.value.identityKey}},observations:[{fieldKey:'boarding.pickup',value:{cityId:p.originCityId,name:'Traveller endpoint'},scope:{},knowledgeBasis:'observed_sign'}]};
+  const saved=await publicCall('/route-observations',body,{},0);assert.equal(saved.status,200);assert.equal(saved.value.saveStatus,'saved');
+  const replay=await publicCall('/route-observations',body,{},0);assert.equal(replay.value.contributionId,saved.value.contributionId);assert.equal(replay.value.replayed,true);
+  assert.equal((await publicCall('/subjects/'+subject)).status,200);
+  assert.equal((await publicCall('/subjects/'+subject+'/places/'+(await publicCall('/subjects/'+subject)).value.subject.cardDetails.pickup.id+'/safety',{action:'report',reason:'inaccurate'},{},0)).status,200);
+  assert.equal((await call('/state',undefined,{},context().tokens[0])).status,403);
+ }));
+ test('timetable public HTTP: readiness requires all adapters; paused timetable display does not break old community reads',async()=>enabled(async()=>{
+  await q('REVOKE ALL ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) FROM mabhazi_api');
+  try{assert.equal((await publicCall('/capabilities')).value.reviewedTimetablesEnabled,false);assert.equal((await call('/state')).status,503);assert.equal((await publicCall('/search')).status,200);}
+  finally{await q('GRANT EXECUTE ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) TO mabhazi_api');}
  }));
 }

@@ -1905,10 +1905,10 @@ export const SearchV2RoutesHeader = zod.object({
       "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
   "X-Mabhazi-Route-Display": zod
-    .enum(["reviewed-core/1"])
+    .enum(["reviewed-core/1", "reviewed-timetable/1"])
     .optional()
     .describe(
-      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+      "Opt into corrected community reports; reviewed-timetable\/1 additionally represents registered reviewed native timetables. Older readers withhold timetables. Original evidence stays unchanged.",
     ),
 });
 
@@ -1943,6 +1943,20 @@ export const searchV2RoutesResponseItemsItemCoreCorrectionsItemObservedDateOneRe
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const searchV2RoutesResponseItemsItemCoreCorrectionsMax = 4;
 
+export const searchV2RoutesResponseItemsItemTimetableDepartureSecondsMin = 0;
+export const searchV2RoutesResponseItemsItemTimetableDepartureSecondsMax = 86399;
+
+export const searchV2RoutesResponseItemsItemTimetableArrivalSecondsMin = 0;
+export const searchV2RoutesResponseItemsItemTimetableArrivalSecondsMax = 172799;
+
+export const searchV2RoutesResponseItemsItemTimetableCalendarTimezoneMax = 100;
+
+export const searchV2RoutesResponseItemsItemTimetableCalendarWeekdaysMax = 127;
+
+export const searchV2RoutesResponseItemsItemTimetableCalendarValidFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const searchV2RoutesResponseItemsItemTimetableCalendarValidUntilRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const searchV2RoutesResponseItemsMax = 20;
 
 export const searchV2RoutesResponseMatchingCountMin = 0;
@@ -2003,8 +2017,8 @@ export const SearchV2RoutesResponse = zod.object({
             .nullable(),
           basis: zod.enum(["unspecified", "scheduled", "actual"]),
         }),
-        publicationStatus: zod.enum(["details_needed"]),
-        timedDepartureEligible: zod.literal(false),
+        publicationStatus: zod.enum(["details_needed", "reviewed_timetable"]),
+        timedDepartureEligible: zod.boolean(),
         contributionTargetEligible: zod.boolean(),
         missingDetails: zod.array(
           zod.enum(["selected_fare", "operating_days", "boarding_location"]),
@@ -2114,6 +2128,47 @@ export const SearchV2RoutesResponse = zod.object({
           )
           .max(searchV2RoutesResponseItemsItemCoreCorrectionsMax)
           .optional(),
+        timetable: zod
+          .object({
+            runId: zod.string().uuid(),
+            departureSeconds: zod
+              .number()
+              .min(searchV2RoutesResponseItemsItemTimetableDepartureSecondsMin)
+              .max(searchV2RoutesResponseItemsItemTimetableDepartureSecondsMax),
+            arrivalSeconds: zod
+              .number()
+              .min(searchV2RoutesResponseItemsItemTimetableArrivalSecondsMin)
+              .max(searchV2RoutesResponseItemsItemTimetableArrivalSecondsMax)
+              .nullable(),
+            calendar: zod.object({
+              timezone: zod
+                .string()
+                .min(1)
+                .max(
+                  searchV2RoutesResponseItemsItemTimetableCalendarTimezoneMax,
+                ),
+              weekdays: zod
+                .number()
+                .min(1)
+                .max(
+                  searchV2RoutesResponseItemsItemTimetableCalendarWeekdaysMax,
+                )
+                .describe(
+                  "Monday bit 0 through Sunday bit 6; explicitly supplied service days.",
+                ),
+              validFrom: zod
+                .string()
+                .regex(
+                  searchV2RoutesResponseItemsItemTimetableCalendarValidFromRegExp,
+                ),
+              validUntil: zod
+                .string()
+                .regex(
+                  searchV2RoutesResponseItemsItemTimetableCalendarValidUntilRegExp,
+                ),
+            }),
+          })
+          .optional(),
       }),
     )
     .max(searchV2RoutesResponseItemsMax),
@@ -2155,10 +2210,10 @@ export const GetV2SubjectHeader = zod.object({
       "Optional assertion for an authenticated viewer. A missing or different current identity fails closed instead of falling back to guest block preferences.",
     ),
   "X-Mabhazi-Route-Display": zod
-    .enum(["reviewed-core/1"])
+    .enum(["reviewed-core/1", "reviewed-timetable/1"])
     .optional()
     .describe(
-      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+      "Opt into corrected community reports; reviewed-timetable\/1 additionally represents registered reviewed native timetables. Older readers withhold timetables. Original evidence stays unchanged.",
     ),
 });
 
@@ -2193,6 +2248,21 @@ export const getV2SubjectResponseSubjectCardDetailsDropoffTwoNameMax = 180;
 export const getV2SubjectResponseSubjectCoreCorrectionsItemObservedDateOneRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const getV2SubjectResponseSubjectCoreCorrectionsMax = 4;
+
+export const getV2SubjectResponseSubjectTimetableDepartureSecondsMin = 0;
+export const getV2SubjectResponseSubjectTimetableDepartureSecondsMax = 86399;
+
+export const getV2SubjectResponseSubjectTimetableArrivalSecondsMin = 0;
+export const getV2SubjectResponseSubjectTimetableArrivalSecondsMax = 172799;
+
+export const getV2SubjectResponseSubjectTimetableCalendarTimezoneMax = 100;
+
+export const getV2SubjectResponseSubjectTimetableCalendarWeekdaysMax = 127;
+
+export const getV2SubjectResponseSubjectTimetableCalendarValidFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2SubjectResponseSubjectTimetableCalendarValidUntilRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 
 export const GetV2SubjectResponse = zod.object({
   subject: zod.object({
@@ -2235,8 +2305,8 @@ export const GetV2SubjectResponse = zod.object({
         .nullable(),
       basis: zod.enum(["unspecified", "scheduled", "actual"]),
     }),
-    publicationStatus: zod.enum(["details_needed"]),
-    timedDepartureEligible: zod.literal(false),
+    publicationStatus: zod.enum(["details_needed", "reviewed_timetable"]),
+    timedDepartureEligible: zod.boolean(),
     contributionTargetEligible: zod.boolean(),
     missingDetails: zod.array(
       zod.enum(["selected_fare", "operating_days", "boarding_location"]),
@@ -2337,6 +2407,41 @@ export const GetV2SubjectResponse = zod.object({
         }),
       )
       .max(getV2SubjectResponseSubjectCoreCorrectionsMax)
+      .optional(),
+    timetable: zod
+      .object({
+        runId: zod.string().uuid(),
+        departureSeconds: zod
+          .number()
+          .min(getV2SubjectResponseSubjectTimetableDepartureSecondsMin)
+          .max(getV2SubjectResponseSubjectTimetableDepartureSecondsMax),
+        arrivalSeconds: zod
+          .number()
+          .min(getV2SubjectResponseSubjectTimetableArrivalSecondsMin)
+          .max(getV2SubjectResponseSubjectTimetableArrivalSecondsMax)
+          .nullable(),
+        calendar: zod.object({
+          timezone: zod
+            .string()
+            .min(1)
+            .max(getV2SubjectResponseSubjectTimetableCalendarTimezoneMax),
+          weekdays: zod
+            .number()
+            .min(1)
+            .max(getV2SubjectResponseSubjectTimetableCalendarWeekdaysMax)
+            .describe(
+              "Monday bit 0 through Sunday bit 6; explicitly supplied service days.",
+            ),
+          validFrom: zod
+            .string()
+            .regex(getV2SubjectResponseSubjectTimetableCalendarValidFromRegExp),
+          validUntil: zod
+            .string()
+            .regex(
+              getV2SubjectResponseSubjectTimetableCalendarValidUntilRegExp,
+            ),
+        }),
+      })
       .optional(),
   }),
 });
@@ -2587,6 +2692,7 @@ export const GetV2CapabilitiesResponse = zod.object({
   pickupQuestionsEnabled: zod.boolean().optional(),
   pickupInvitationsEnabled: zod.boolean().optional(),
   promptControlsEnabled: zod.boolean().optional(),
+  reviewedTimetablesEnabled: zod.boolean().optional(),
 });
 
 /**
@@ -3266,10 +3372,10 @@ export const GetV2DepartureBoardHeader = zod.object({
     .optional()
     .describe("Opaque session token — Bearer <sid>."),
   "X-Mabhazi-Route-Display": zod
-    .enum(["reviewed-core/1"])
+    .enum(["reviewed-core/1", "reviewed-timetable/1"])
     .optional()
     .describe(
-      "Opt into current core values with field-specific administrator correction provenance. Older readers omit corrected routes; the original contribution stays unchanged.",
+      "Opt into corrected community reports; reviewed-timetable\/1 additionally represents registered reviewed native timetables. Older readers withhold timetables. Original evidence stays unchanged.",
     ),
 });
 
@@ -3280,6 +3386,21 @@ export const getV2DepartureBoardResponseEntriesItemReportedTimeRegExp =
 export const getV2DepartureBoardResponseEntriesItemCoreCorrectionsItemObservedDateOneRegExp =
   new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 export const getV2DepartureBoardResponseEntriesItemCoreCorrectionsMax = 4;
+
+export const getV2DepartureBoardResponseEntriesItemTimetableDepartureSecondsMin = 0;
+export const getV2DepartureBoardResponseEntriesItemTimetableDepartureSecondsMax = 86399;
+
+export const getV2DepartureBoardResponseEntriesItemTimetableArrivalSecondsMin = 0;
+export const getV2DepartureBoardResponseEntriesItemTimetableArrivalSecondsMax = 172799;
+
+export const getV2DepartureBoardResponseEntriesItemTimetableCalendarTimezoneMax = 100;
+
+export const getV2DepartureBoardResponseEntriesItemTimetableCalendarWeekdaysMax = 127;
+
+export const getV2DepartureBoardResponseEntriesItemTimetableCalendarValidFromRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+export const getV2DepartureBoardResponseEntriesItemTimetableCalendarValidUntilRegExp =
+  new RegExp("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
 
 export const GetV2DepartureBoardResponse = zod.object({
   generatedAt: zod.coerce.date().optional(),
@@ -3317,14 +3438,14 @@ export const GetV2DepartureBoardResponse = zod.object({
         .boolean()
         .optional()
         .describe(
-          "Legacy timetable has explicit recognised operating days and user-selected Africa\/Harare timezone; this is not canonical approval.",
+          "Explicit applicable operating days and timezone yield an unambiguous next instant. Missing days or ambiguous local DST time have no countdown.",
         ),
       nextDepartureAt: zod.coerce.date().optional(),
-      scheduleTimezone: zod.enum(["Africa/Harare"]).optional(),
+      scheduleTimezone: zod.string().optional(),
       timedDepartureEligible: zod
         .boolean()
         .describe(
-          "False for these original community reports and legacy schedules. Canonical service calendar\/timezone publication remains a separate gate.",
+          "True only for a currently eligible registered reviewed timetable; Search eligibility alone is insufficient.",
         ),
       coreCorrections: zod
         .array(
@@ -3355,6 +3476,55 @@ export const GetV2DepartureBoardResponse = zod.object({
           }),
         )
         .max(getV2DepartureBoardResponseEntriesItemCoreCorrectionsMax)
+        .optional(),
+      timetable: zod
+        .object({
+          runId: zod.string().uuid(),
+          departureSeconds: zod
+            .number()
+            .min(
+              getV2DepartureBoardResponseEntriesItemTimetableDepartureSecondsMin,
+            )
+            .max(
+              getV2DepartureBoardResponseEntriesItemTimetableDepartureSecondsMax,
+            ),
+          arrivalSeconds: zod
+            .number()
+            .min(
+              getV2DepartureBoardResponseEntriesItemTimetableArrivalSecondsMin,
+            )
+            .max(
+              getV2DepartureBoardResponseEntriesItemTimetableArrivalSecondsMax,
+            )
+            .nullable(),
+          calendar: zod.object({
+            timezone: zod
+              .string()
+              .min(1)
+              .max(
+                getV2DepartureBoardResponseEntriesItemTimetableCalendarTimezoneMax,
+              ),
+            weekdays: zod
+              .number()
+              .min(1)
+              .max(
+                getV2DepartureBoardResponseEntriesItemTimetableCalendarWeekdaysMax,
+              )
+              .describe(
+                "Monday bit 0 through Sunday bit 6; explicitly supplied service days.",
+              ),
+            validFrom: zod
+              .string()
+              .regex(
+                getV2DepartureBoardResponseEntriesItemTimetableCalendarValidFromRegExp,
+              ),
+            validUntil: zod
+              .string()
+              .regex(
+                getV2DepartureBoardResponseEntriesItemTimetableCalendarValidUntilRegExp,
+              ),
+          }),
+        })
         .optional(),
     }),
   ),

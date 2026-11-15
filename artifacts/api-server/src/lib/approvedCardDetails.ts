@@ -45,6 +45,7 @@ export function cardFreshness(observed:string|null,asOf:string):'fresh'|'older'|
 type Claim={route_subject_id:string;field_key:string;ref:string;original_value:Record<string,unknown>;scope:Record<string,unknown>;observed_date:string|null;as_of:string};
 export function projectApprovedCards(rows:Claim[]){
  const result=new Map<string,Record<string,unknown>>();
+ rows=[...new Map(rows.map(r=>[r.route_subject_id+'|'+r.field_key+'|'+r.ref,r])).values()];
  for(const id of new Set(rows.map(r=>r.route_subject_id))){
   const details:Record<string,unknown>={};
   for(const [key,fields] of Object.entries({fare:['fare.paid','fare.quoted','fare.advertised'],pickup:['boarding.pickup'],dropoff:['alighting.dropoff']})){
@@ -63,9 +64,10 @@ export function projectApprovedCards(rows:Claim[]){
  }
  return result;
 }
-export async function readApprovedCards(routes:{subjectId:string;revision:unknown}[],blocked:string[],owner:string|null){
+export async function readApprovedCards(routes:{subjectId:string;revision:unknown}[],blocked:string[],owner:string|null,timetables=false){
  if(!routes.length)return new Map<string,Record<string,unknown>>();
  if(routes.length>20)throw Error('card_page_too_large');
- const {rows}=await pool.query(approvedCardSql,[JSON.stringify(routes.map(r=>({id:r.subjectId,revision:Number(r.revision)}))),blocked,owner]);
+ const {rows}=await pool.query(timetables?approvedCardSql.replace('public.v2_public_reviewed_lead_reports','public.v2_public_supported_route_reports'):approvedCardSql,[JSON.stringify(routes.map(r=>({id:r.subjectId,revision:Number(r.revision)}))),blocked,owner]);
+ if(timetables){const native=await pool.query('SELECT * FROM public.v2_api_timetable_card_claims($1::uuid[])',[routes.map(r=>r.subjectId)]);rows.push(...native.rows);}
  return projectApprovedCards(rows);
 }

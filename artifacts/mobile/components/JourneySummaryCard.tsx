@@ -5,8 +5,8 @@ import {useColors} from '@/hooks/useColors';
 type Fact={freshness:'fresh'|'older'|'unknown';observedDate?:string|null};
 export function factContext(fact:Fact){return fact.freshness==='fresh'?'approved, observed within 14 days':fact.freshness==='older'?'approved, observation at least 14 days old':'approved, observation date unknown';}
 function Dot({fact}:{fact:Fact}){return <View accessible={false} style={[styles.freshness,{backgroundColor:fact.freshness==='fresh'?'#24844C':'#B17A0B'}]}/>;}
-export function JourneySummaryCard({operator,departure,arrival,boarding,alighting,fare,pickup,dropoff,label,context,disabled,onPress}:{
- operator:string;departure:string;arrival?:string;boarding:string;alighting:string;
+export function JourneySummaryCard({operator,departure,arrival,arrivalDay,duration,boarding,alighting,fare,pickup,dropoff,label,context,disabled,onPress}:{
+ operator:string;departure:string;arrival?:string;arrivalDay?:number;duration?:string;boarding:string;alighting:string;
  fare?:Fact&{amount:string;currency:string};pickup?:Fact;dropoff?:Fact;
  label?:string;context:string;disabled?:boolean;onPress?:()=>void;
 }){
@@ -19,8 +19,8 @@ export function JourneySummaryCard({operator,departure,arrival,boarding,alightin
   </View>
   <View style={styles.journey}>
    <View style={styles.endpoint}><Text style={[styles.time,{color:colors.foreground}]}>{departure}</Text><View style={styles.place}>{pickup?<Dot fact={pickup}/>:null}<Text numberOfLines={2} style={[styles.stop,{color:colors.mutedForeground}]}>{boarding}</Text></View></View>
-   <View accessible={false} style={styles.connection}><View style={[styles.endDot,{backgroundColor:colors.border}]}/><View style={[styles.line,{backgroundColor:colors.border}]}/><View style={[styles.endDot,{backgroundColor:colors.border}]}/></View>
-   <View style={[styles.endpoint,styles.right]}><Text style={[styles.time,{color:colors.foreground}]}>{arrival??'—'}</Text><View style={[styles.place,styles.placeRight]}>{dropoff?<Dot fact={dropoff}/>:null}<Text numberOfLines={2} style={[styles.stop,styles.rightText,{color:colors.mutedForeground}]}>{alighting}</Text></View></View>
+   <View accessible={false} style={styles.connection}>{duration?<Text style={[styles.duration,{color:colors.mutedForeground}]}>{duration}</Text>:null}<View style={styles.routeLine}><View style={[styles.endDot,{backgroundColor:colors.border}]}/><View style={[styles.line,{backgroundColor:colors.border}]}/><View style={[styles.endDot,{backgroundColor:colors.border}]}/></View></View>
+   <View style={[styles.endpoint,styles.right]}><Text style={[styles.time,{color:colors.foreground}]}>{arrival??'—'}{arrivalDay?<Text style={styles.dayOffset}> +{arrivalDay}</Text>:null}</Text><View style={[styles.place,styles.placeRight]}>{dropoff?<Dot fact={dropoff}/>:null}<Text numberOfLines={2} style={[styles.stop,styles.rightText,{color:colors.mutedForeground}]}>{alighting}</Text></View></View>
   </View>
  </Pressable>;
 }
@@ -31,7 +31,7 @@ const styles=StyleSheet.create({
  initials:{fontFamily:ui.type.bold,fontSize:10},operatorName:{fontFamily:ui.type.medium,fontSize:13,flexShrink:1},
  fare:{flexDirection:'row',alignItems:'center',gap:6,flexShrink:0},price:{fontSize:18,fontFamily:ui.type.bold},
  journey:{flexDirection:'row',alignItems:'center',gap:12},endpoint:{flex:1,minWidth:0,gap:6},right:{alignItems:'flex-end'},time:{fontSize:28,fontFamily:ui.type.bold,fontVariant:['tabular-nums']},
- connection:{flexDirection:'row',alignItems:'center',width:'20%',paddingBottom:25},line:{height:1,flex:1},endDot:{width:5,height:5,borderRadius:3},
+ connection:{alignItems:'center',width:'20%',paddingBottom:25,gap:7},routeLine:{flexDirection:'row',alignItems:'center',width:'100%'},duration:{fontSize:11,fontFamily:ui.type.regular},dayOffset:{fontSize:12,fontFamily:ui.type.medium},line:{height:1,flex:1},endDot:{width:5,height:5,borderRadius:3},
  place:{flexDirection:'row',alignItems:'center',gap:5,minHeight:20},placeRight:{justifyContent:'flex-end'},stop:{fontSize:13,lineHeight:18,fontFamily:ui.type.regular,flexShrink:1},rightText:{textAlign:'right'},
  freshness:{width:6,height:6,borderRadius:3,flexShrink:0}
 });

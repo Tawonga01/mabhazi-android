@@ -82,13 +82,6 @@ export const V2DepartureEntryKind = {
   legacy: "legacy",
 } as const;
 
-export type V2DepartureEntryScheduleTimezone =
-  (typeof V2DepartureEntryScheduleTimezone)[keyof typeof V2DepartureEntryScheduleTimezone];
-
-export const V2DepartureEntryScheduleTimezone = {
-  "Africa/Harare": "Africa/Harare",
-} as const;
-
 export type V2CoreCorrectionField =
   (typeof V2CoreCorrectionField)[keyof typeof V2CoreCorrectionField];
 
@@ -118,6 +111,39 @@ export interface V2CoreCorrection {
   observedDate: string | null;
 }
 
+export type V2ReviewedTimetableCalendar = {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  timezone: string;
+  /**
+   * Monday bit 0 through Sunday bit 6; explicitly supplied service days.
+   * @minimum 1
+   * @maximum 127
+   */
+  weekdays: number;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  validFrom: string;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  validUntil: string;
+};
+
+export interface V2ReviewedTimetable {
+  runId: string;
+  /**
+   * @minimum 0
+   * @maximum 86399
+   */
+  departureSeconds: number;
+  /**
+   * @minimum 0
+   * @maximum 172799
+   */
+  arrivalSeconds: number | null;
+  calendar: V2ReviewedTimetableCalendar;
+}
+
 export interface V2DepartureEntry {
   key: string;
   kind: V2DepartureEntryKind;
@@ -132,14 +158,15 @@ export interface V2DepartureEntry {
   reportedTime?: string | null;
   scheduledDays?: string | null;
   pickupPoint?: string;
-  /** Legacy timetable has explicit recognised operating days and user-selected Africa/Harare timezone; this is not canonical approval. */
+  /** Explicit applicable operating days and timezone yield an unambiguous next instant. Missing days or ambiguous local DST time have no countdown. */
   countdownEligible?: boolean;
   nextDepartureAt?: string;
-  scheduleTimezone?: V2DepartureEntryScheduleTimezone;
-  /** False for these original community reports and legacy schedules. Canonical service calendar/timezone publication remains a separate gate. */
+  scheduleTimezone?: string;
+  /** True only for a currently eligible registered reviewed timetable; Search eligibility alone is insufficient. */
   timedDepartureEligible: boolean;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
+  timetable?: V2ReviewedTimetable;
 }
 
 export interface V2DepartureBoard {
@@ -773,6 +800,7 @@ export interface V2Capabilities {
   pickupQuestionsEnabled?: boolean;
   pickupInvitationsEnabled?: boolean;
   promptControlsEnabled?: boolean;
+  reviewedTimetablesEnabled?: boolean;
 }
 
 export interface V2Cities {
@@ -1486,6 +1514,7 @@ export type V2PublicLeadPublicationStatus =
 
 export const V2PublicLeadPublicationStatus = {
   details_needed: "details_needed",
+  reviewed_timetable: "reviewed_timetable",
 } as const;
 
 export type V2PublicLeadMissingDetailsItem =
@@ -1516,6 +1545,7 @@ export interface V2PublicLead {
   cardDetails?: V2ApprovedCardDetails;
   /** @maxItems 4 */
   coreCorrections?: V2CoreCorrection[];
+  timetable?: V2ReviewedTimetable;
 }
 
 export interface V2PublicSearch {
@@ -1793,6 +1823,7 @@ export type ReviewedRouteDisplayHeaderParameter =
 
 export const ReviewedRouteDisplayHeaderParameter = {
   "reviewed-core/1": "reviewed-core/1",
+  "reviewed-timetable/1": "reviewed-timetable/1",
 } as const;
 
 export type ListV2PlaceReportsParams = {

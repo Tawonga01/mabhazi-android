@@ -1,3 +1,4 @@
+import {timetableRoutesAvailable,timetableRoutesVersion,reviewedRoutesHeader} from '../lib/reviewedRoutes';
 import promptControls,{promptControlsEnabled} from './promptControlsV2';
 import departureBoard from './departureBoardV2';
 import pickupQuestions, {pickupQuestionsEnabled,pickupInvitationsEnabled} from './pickupQuestionsV2';
@@ -45,10 +46,12 @@ async function actualEnabled() {
   return rows[0]?.enabled===true;
 }
 router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
-router.get('/capabilities', async (_req, res) => {
+router.get('/capabilities', async (req, res) => {
   let ready = false, actualReady=false, fareReady=false, routeReady=false, placeReadReady=false, pickupReady=false,pickupInviteReady=false,promptReady=false;
   try { ready = await enabled(); actualReady=ready && await actualEnabled(); fareReady=actualReady && await fareReportsEnabled(); routeReady=ready && await routeObservationsEnabled(); placeReadReady=ready && await placeReportsEnabled(); pickupReady=ready && await pickupQuestionsEnabled(); promptReady=await promptControlsEnabled(); pickupInviteReady=pickupReady&&await pickupInvitationsEnabled(); } catch { /* Fail closed during unavailable schema/database. */ }
-  res.json({ schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady,routeObservationsEnabled:routeReady,placeReportsEnabled:placeReadReady,pickupQuestionsEnabled:pickupReady,pickupInvitationsEnabled:pickupInviteReady,promptControlsEnabled:promptReady });
+  res.vary(reviewedRoutesHeader);const timetableDisplay=req.get(reviewedRoutesHeader)===timetableRoutesVersion;let timetableReady=false;
+  try{timetableReady=ready&&actualReady&&fareReady&&routeReady&&placeReadReady&&await timetableRoutesAvailable();}catch{/* fail closed */}
+  res.json({ ...(timetableDisplay?{reviewedTimetablesEnabled:timetableReady}:{}),schemaVersion: '1.0', minimumLeadEnabled: ready, actualJourneyEnabled:actualReady,fareReportsEnabled:fareReady,routeObservationsEnabled:routeReady,placeReportsEnabled:placeReadReady,pickupQuestionsEnabled:pickupReady,pickupInvitationsEnabled:pickupInviteReady,promptControlsEnabled:promptReady });
 });
 // History and receipt recovery remain readable when new intake is paused.
 router.use('/my-routes', ownRoutes);

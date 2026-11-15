@@ -1,3 +1,4 @@
+import {timetableRoutesAvailable} from '../lib/reviewedRoutes';
 import { Router,type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { ListV2FareReportsParams,ListV2FareReportsQueryParams,ListV2FareReportsResponse,FareV2SafetyBody,FareV2SafetyParams } from '@workspace/api-zod';
@@ -30,7 +31,8 @@ router.get('/subjects/:subjectId/fares',async(req,res)=>{
  if(!params.success||!query.success||req.query.cursor!==undefined&&typeof req.query.cursor!=='string'){res.status(400).json({code:'INVALID_QUERY',error:'Reopen fare reports from this route.'});return;}
  try{
   if(!await fareReportsEnabled()){res.status(503).json({code:'CAPABILITY_UNAVAILABLE',error:'Fare reports are not available yet.'});return;}
-  const result=await pool.query(`WITH root AS MATERIALIZED(SELECT * FROM public.v2_public_lead_reports p WHERE p.subject_id=$1
+  const reports=await timetableRoutesAvailable()?'public.v2_public_contributable_route_reports':'public.v2_public_lead_reports';
+  const result=await pool.query(`WITH root AS MATERIALIZED(SELECT * FROM ${reports} p WHERE p.subject_id=$1
    AND NOT(p.author_user_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=p.author_user_id)),
   contexts AS MATERIALIZED(SELECT c.* FROM public.v2_fare_report_context c JOIN root ON root.subject_id=c.route_subject_id),
   visible AS MATERIALIZED(SELECT c.* FROM contexts c WHERE NOT(c.fare_author_id=ANY($2::varchar[]))

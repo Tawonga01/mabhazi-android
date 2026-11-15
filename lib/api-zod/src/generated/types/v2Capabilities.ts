@@ -17,4 +17,5 @@ export interface V2Capabilities {
   pickupQuestionsEnabled?: boolean;
   pickupInvitationsEnabled?: boolean;
   promptControlsEnabled?: boolean;
+  reviewedTimetablesEnabled?: boolean;
 }

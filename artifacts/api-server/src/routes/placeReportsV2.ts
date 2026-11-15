@@ -1,3 +1,4 @@
+import {timetableRoutesAvailable} from '../lib/reviewedRoutes';
 import {Router,type IRouter} from 'express';
 import {pool} from '@workspace/db';
 import {ListV2PlaceReportsParams,ListV2PlaceReportsQueryParams,ListV2PlaceReportsResponse,ListV2OwnPlaceReportsParams,PlaceV2SafetyBody,PlaceV2SafetyParams} from '@workspace/api-zod';
@@ -26,11 +27,12 @@ for(const own of [false,true])router.get(own?'/my-routes/:clientSubmissionId/pla
  if(own&&(!req.isAuthenticated()||req.get('X-Mabhazi-Account')!==req.user.id)){res.status(req.isAuthenticated()?409:401).json({code:req.isAuthenticated()?'ACCOUNT_CHANGED':'AUTH_REQUIRED',error:'Sign in to see your saved locations.'});return;}
  const params=own?ListV2OwnPlaceReportsParams.safeParse(req.params):ListV2PlaceReportsParams.safeParse(req.params),query=ListV2PlaceReportsQueryParams.strict().safeParse(req.query);
  if(!params.success||!query.success||req.query.cursor!==undefined&&typeof req.query.cursor!=='string'){res.status(400).json({code:'INVALID_QUERY',error:'Reopen locations from this route.'});return;}
+ const reports=await timetableRoutesAvailable()?'public.v2_public_contributable_route_reports':'public.v2_public_lead_reports';
  const root=own?`SELECT l.subject_id FROM public.v2_receipts r JOIN public.v2_contributions initial ON initial.id=r.contribution_id AND initial.user_id=r.user_id AND initial.client_submission_id=r.client_submission_id
   JOIN public.v2_leads l ON l.initial_contribution_id=initial.id AND l.subject_id=initial.original_subject_id JOIN public.v2_subjects s ON s.id=l.subject_id AND s.lifecycle='active'
   WHERE r.user_id=$3 AND r.client_submission_id=$1 AND l.intake_kind='community' AND NOT l.attribution_erased
    AND NOT EXISTS(SELECT 1 FROM public.auth_deletion_jobs WHERE user_id=$3)`:
- `SELECT p.subject_id FROM public.v2_public_lead_reports p WHERE p.subject_id=$1 AND NOT(p.author_user_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=p.author_user_id)`;
+ `SELECT p.subject_id FROM ${reports} p WHERE p.subject_id=$1 AND NOT(p.author_user_id=ANY($2::varchar[])) AND NOT EXISTS(SELECT 1 FROM public.v2_route_report_blocks b WHERE b.blocker_id=$3 AND b.blocked_user_id=p.author_user_id)`;
  try{
   if(!await placeReportsEnabled()){res.status(503).json({code:'CAPABILITY_UNAVAILABLE',error:'Location reports are not available yet.'});return;}
   const {rows}=await pool.query(`WITH root AS MATERIALIZED(${root}),contexts AS MATERIALIZED(SELECT c.* FROM root r CROSS JOIN LATERAL public.v2_api_place_report_context(r.subject_id) c ${own?'WHERE c.place_author_id=$3':''}),

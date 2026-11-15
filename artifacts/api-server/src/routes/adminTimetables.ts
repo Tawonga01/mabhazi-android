@@ -1,3 +1,4 @@
+import {timetableRoutesAvailable} from '../lib/reviewedRoutes';
 import {Router,type IRouter} from 'express';
 import {pool} from '@workspace/db';
 import {validAdminId} from '../lib/adminEvidence';
@@ -8,7 +9,7 @@ import {parseTimetableProposal,createTimetablePreview,readTimetablePreview} from
 // under the transport guard. Ordinary app/legacy-secret sessions cannot opt in.
 const router:IRouter=Router();
 export async function adminTimetablesEnabled(){
- if(process.env.NAMED_ADMIN_CONSOLE_ENABLED!=='true'||process.env.NAMED_ADMIN_TIMETABLES_ENABLED!=='true')return false;
+ if(process.env.NAMED_ADMIN_CONSOLE_ENABLED!=='true'||process.env.NAMED_ADMIN_TIMETABLES_ENABLED!=='true'||!await timetableRoutesAvailable())return false;
  const {rows}=await pool.query(`SELECT bool_and(CASE WHEN to_regprocedure(f) IS NULL THEN false
   ELSE has_function_privilege(current_user,f,'EXECUTE') END) enabled FROM unnest(ARRAY[
   'public.v2_api_admin_timetable_preview(varchar,jsonb)',

@@ -94,7 +94,7 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  IF subjects IS NULL OR cardinality(subjects)>20 THEN RAISE EXCEPTION 'timetable_card_page_invalid' USING ERRCODE='23514';END IF;
  RETURN QUERY SELECT e.source_subject_id,p.field_key,coalesce(f.id,place.id),
- CASE WHEN p.field_key IN('boarding.pickup','alighting.dropoff') THEN jsonb_build_object('name',stop.name) ELSE o.value END,o.scope,o.observed_from::text,
+ CASE WHEN p.field_key IN('boarding.pickup','alighting.dropoff') THEN jsonb_build_object('name',stop.name) ELSE jsonb_set(o.value,'{amount}',to_jsonb(trim_scale((o.value->>'amount')::numeric)::text)) END,o.scope,o.observed_from::text,
  (statement_timestamp() AT TIME ZONE (d->'calendar'->>'timezone'))::date::text
  FROM public.v2_admin_timetable_entries e CROSS JOIN LATERAL (SELECT public.v2_timetable_discovery(e.source_subject_id) d) available
  JOIN public.v2_admin_timetable_properties p ON p.run_subject_id=e.run_subject_id
@@ -123,10 +123,10 @@ DO $$ DECLARE f text;r text;t text;BEGIN
  END LOOP;
 END;$$;
 
-CREATE FUNCTION public.v2_timetable_report_claims(subjects uuid[]) RETURNS TABLE(
+CREATE FUNCTION public.v2_api_timetable_report_claims(subjects uuid[]) RETURNS TABLE(
  route_subject_id uuid,author_id varchar,observation_id uuid,subject_id uuid,field_key text,scope_key text,scope jsonb,original_value jsonb,
  knowledge_basis text,observed_from date,observed_to date,effective_from date,effective_to date,submitted_at timestamptz,ref uuid,field_read jsonb,city jsonb)
-LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $
  SELECT card.route_subject_id,t.actor_user_id,o.id,o.original_subject_id,o.field_key,o.scope_key,o.scope,card.original_value,
  o.knowledge_basis,o.observed_from,o.observed_to,o.effective_from,o.effective_to,o.submitted_at,card.ref,
  jsonb_build_object('status','assessed','reviewed',true,'dispute','none','provenance','reviewed_timetable','value',card.original_value,
@@ -140,15 +140,16 @@ LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
  JOIN public.v2_observations o ON o.id=p.observation_id
  CROSS JOIN LATERAL (SELECT public.v2_timetable_discovery(e.source_subject_id) projection) d;
 $$;
-REVOKE ALL ON FUNCTION public.v2_timetable_report_claims(uuid[]) FROM PUBLIC,mabhazi_api;
+REVOKE ALL ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) FROM PUBLIC,mabhazi_api;
+GRANT EXECUTE ON FUNCTION public.v2_api_timetable_report_claims(uuid[]) TO mabhazi_api;
 DO $$ DECLARE definition text;BEGIN
  definition:=rtrim(pg_get_viewdef('public.v2_fare_report_context'::regclass,true),E'; \n');
  EXECUTE 'CREATE OR REPLACE VIEW public.v2_fare_report_context AS '||definition||
  ' UNION ALL SELECT c.ref,c.route_subject_id,c.author_id,c.author_id,c.observation_id,c.subject_id,c.field_key,c.scope_key,c.scope,c.original_value,
  c.knowledge_basis,c.observed_from,c.observed_to,c.effective_from,c.effective_to,c.submitted_at,p.origin,p.destination,p.operator_report,p.reported_time,true,c.field_read
- FROM public.v2_api_public_timetable_reports() p CROSS JOIN LATERAL public.v2_timetable_report_claims(ARRAY[p.subject_id]) c WHERE c.field_key LIKE ''fare.%''';
+ FROM public.v2_api_public_timetable_reports() p CROSS JOIN LATERAL public.v2_api_timetable_report_claims(ARRAY[p.subject_id]) c WHERE c.field_key LIKE ''fare.%''';
  definition:=rtrim(pg_get_viewdef('public.v2_place_report_context'::regclass,true),E'; \n');
  EXECUTE 'CREATE OR REPLACE VIEW public.v2_place_report_context AS '||definition||
  ' UNION ALL SELECT c.ref,c.route_subject_id,c.author_id,c.author_id,c.observation_id,c.field_key,c.scope_key,c.original_value,c.knowledge_basis,c.observed_from,c.submitted_at,c.city,true,c.field_read,false
- FROM public.v2_api_public_timetable_reports() p CROSS JOIN LATERAL public.v2_timetable_report_claims(ARRAY[p.subject_id]) c WHERE c.field_key IN(''boarding.pickup'',''alighting.dropoff'')';
+ FROM public.v2_api_public_timetable_reports() p CROSS JOIN LATERAL public.v2_api_timetable_report_claims(ARRAY[p.subject_id]) c WHERE c.field_key IN(''boarding.pickup'',''alighting.dropoff'')';
 END;$$;

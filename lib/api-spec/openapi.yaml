@@ -34,10 +34,7 @@ paths:
               "200":
                 {
                   "description": "Authenticated account controls only; no-store",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferences" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferences" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -62,20 +59,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferencesRequest" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferencesRequest" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Authenticated account controls only; no-store",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferences" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptPreferences" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -93,8 +84,7 @@ paths:
       "post":
         {
           "operationId": "recordV2PromptActivity",
-          "summary": "Record foreground interaction at server time without revealing
-            session identity",
+          "summary": "Record foreground interaction at server time without revealing session identity",
           "parameters":
             [
               { "$ref": "#/components/parameters/ExpectedAccountHeader" },
@@ -104,20 +94,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptActivityRequest" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptActivityRequest" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Authenticated account controls only; no-store",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptActivityResult" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PromptActivityResult" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -135,18 +119,14 @@ paths:
       "post":
         {
           "operationId": "reserveV2PickupInvitation",
-          "summary": "Reserve at most one supported optional pickup invitation within
-            account limits",
-          "description": "Requires explicit volunteered pickup knowledge and the displayed
-            route revision/identity. Existing server-owned activity-session and
-            rolling24h caps, preferences, dismissal and scoped unknown
-            suppression apply atomically across devices. The highest-priority
-            eligible task must be supported before reserving; unsupported tasks
-            spend no invitation budget. Stable request retry returns the current
-            owned state or original none. Reservation is not
-            shown/opened/answered. Existing manual pickup questions and
-            independent capture remain exempt. No UI or travel inference is
-            implied.",
+          "summary": "Reserve at most one supported optional pickup invitation within account limits",
+          "description": "Requires explicit volunteered pickup knowledge and the displayed route
+            revision/identity. Existing server-owned activity-session and rolling24h caps,
+            preferences, dismissal and scoped unknown suppression apply atomically across devices.
+            The highest-priority eligible task must be supported before reserving; unsupported tasks
+            spend no invitation budget. Stable request retry returns the current owned state or
+            original none. Reservation is not shown/opened/answered. Existing manual pickup
+            questions and independent capture remain exempt. No UI or travel inference is implied.",
           "parameters":
             [
               { "$ref": "#/components/parameters/ExpectedAccountHeader" },
@@ -167,10 +147,7 @@ paths:
               "200":
                 {
                   "description": "Account-bound result; saving responds only after COMMIT",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -190,12 +167,11 @@ paths:
         {
           "operationId": "reserveV2PickupQuestion",
           "summary": "Start an optional manual pickup question for a displayed route",
-          "description": "User-initiated only. Requires explicit volunteered context for
-            the displayed subject; route interest is not travel. Supports
-            pickup_place/prompts/1 on visible own/community-public leads only.
-            Exact request retries retain the same question or none result.
-            Manual help does not spend unsolicited invitation budgets. No UI
-            exposure or answered event is inferred.",
+          "description": "User-initiated only. Requires explicit volunteered context for the displayed
+            subject; route interest is not travel. Supports pickup_place/prompts/1 on visible
+            own/community-public leads only. Exact request retries retain the same question or none
+            result. Manual help does not spend unsolicited invitation budgets. No UI exposure or
+            answered event is inferred.",
           "parameters":
             [
               { "$ref": "#/components/parameters/ExpectedAccountHeader" },
@@ -206,20 +182,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionReservation" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionReservation" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Account-bound result; saving responds only after COMMIT",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -239,10 +209,9 @@ paths:
         {
           "operationId": "getV2PickupQuestion",
           "summary": "Read the current safe state of an owned supported pickup question",
-          "description": "Account/visibility/identity checked. Terminal or unavailable
-            states expose no route/private task content. Use alongside the
-            normal private contribution receipt after an uncertain answer
-            response.",
+          "description": "Account/visibility/identity checked. Terminal or unavailable states expose no
+            route/private task content. Use alongside the normal private contribution receipt after
+            an uncertain answer response.",
           "parameters":
             [
               {
@@ -261,10 +230,7 @@ paths:
               "200":
                 {
                   "description": "Account-bound result; saving responds only after COMMIT",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionState" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -284,9 +250,9 @@ paths:
         {
           "operationId": "recordV2PickupQuestionEvent",
           "summary": "Record explicit shown/opened/skip/dismiss/unknown feedback",
-          "description": "Feedback creates no route fact. Current Terms are not required
-            for these controls. Server time, IANA timezone and existing
-            prompts/1 suppression rules apply. Clients cannot record answered.",
+          "description": "Feedback creates no route fact. Current Terms are not required for these controls.
+            Server time, IANA timezone and existing prompts/1 suppression rules apply. Clients
+            cannot record answered.",
           "parameters":
             [
               {
@@ -313,10 +279,7 @@ paths:
               "200":
                 {
                   "description": "Account-bound result; saving responds only after COMMIT",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionEventResult" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PickupQuestionEventResult" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -336,13 +299,12 @@ paths:
         {
           "operationId": "submitV2PickupQuestionAnswer",
           "summary": "Atomically save a typed pickup report and its question answer",
-          "description": "Uses the existing strict route-place body. The account, route
-            identity, explicit invitation and matching pickup field/scope are
-            checked before and after intake in one transaction. Compatible late
-            independent answers remain valid. An independent old receipt or
-            another invitation cannot be relinked. Current Terms apply. Use
-            receipt lookup and safe question read on commit ambiguity; never
-            generate a new submission key automatically.",
+          "description": "Uses the existing strict route-place body. The account, route identity, explicit
+            invitation and matching pickup field/scope are checked before and after intake in one
+            transaction. Compatible late independent answers remain valid. An independent old
+            receipt or another invitation cannot be relinked. Current Terms apply. Use receipt
+            lookup and safe question read on commit ambiguity; never generate a new submission key
+            automatically.",
           "parameters":
             [
               {
@@ -359,20 +321,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteObservationRequest" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteObservationRequest" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Account-bound result; saving responds only after COMMIT",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2LeadReceipt" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2LeadReceipt" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -393,10 +349,9 @@ paths:
         {
           "operationId": "listV2PlaceReports",
           "summary": "Read assessed endpoint place reports for this exact public route",
-          "description": "Direct route-observations/1 evidence only. Current identity,
-            assessment membership, original state, safety and moderation apply.
-            No canonical boarding instruction, travel, timetable or confidence
-            is inferred. No-store; removed live cursors require refresh.",
+          "description": "Direct route-observations/1 evidence only. Current identity, assessment membership,
+            original state, safety and moderation apply. No canonical boarding instruction, travel,
+            timetable or confidence is inferred. No-store; removed live cursors require refresh.",
           "parameters":
             [
               {
@@ -405,11 +360,7 @@ paths:
                   "required": true,
                   "schema": { "type": "string", "format": "uuid" }
                 },
-              {
-                  "name": "cursor",
-                  "in": "query",
-                  "schema": { "type": "string", "format": "uuid" }
-                },
+              { "name": "cursor", "in": "query", "schema": { "type": "string", "format": "uuid" } },
               { "$ref": "#/components/parameters/OptionalExpectedAccountHeader" },
               { "$ref": "#/components/parameters/BlockedContributorsHeader" }
             ],
@@ -417,12 +368,8 @@ paths:
             {
               "200":
                 {
-                  "description": "Current scoped location reports, without private evidence
-                    identities",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PlaceReportPage" } }
-                    }
+                  "description": "Current scoped location reports, without private evidence identities",
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PlaceReportPage" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -437,12 +384,10 @@ paths:
       "get":
         {
           "operationId": "listV2OwnPlaceReports",
-          "summary": "Read only your saved direct location reports for your original
-            route",
-          "description": "Both account and original route receipt are bound. Original
-            active same-identity reports are Saved, not assessed public facts.
-            No other account reports, private source references or receipts are
-            returned.",
+          "summary": "Read only your saved direct location reports for your original route",
+          "description": "Both account and original route receipt are bound. Original active same-identity
+            reports are Saved, not assessed public facts. No other account reports, private source
+            references or receipts are returned.",
           "parameters":
             [
               {
@@ -451,11 +396,7 @@ paths:
                   "required": true,
                   "schema": { "type": "string", "format": "uuid" }
                 },
-              {
-                  "name": "cursor",
-                  "in": "query",
-                  "schema": { "type": "string", "format": "uuid" }
-                },
+              { "name": "cursor", "in": "query", "schema": { "type": "string", "format": "uuid" } },
               { "$ref": "#/components/parameters/ExpectedAccountHeader" },
               { "$ref": "#/components/parameters/BlockedContributorsHeader" }
             ],
@@ -463,12 +404,8 @@ paths:
             {
               "200":
                 {
-                  "description": "Current scoped location reports, without private evidence
-                    identities",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PlaceReportPage" } }
-                    }
+                  "description": "Current scoped location reports, without private evidence identities",
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PlaceReportPage" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -484,9 +421,9 @@ paths:
         {
           "operationId": "placeV2Safety",
           "summary": "Report a public location report or hide its anonymous contributor",
-          "description": "Authenticated safety action without contribution Terms. Exact
-            original report/current route, assessment and both author safety
-            gates rechecked. Opaque reference confers no access.",
+          "description": "Authenticated safety action without contribution Terms. Exact original
+            report/current route, assessment and both author safety gates rechecked. Opaque
+            reference confers no access.",
           "parameters":
             [
               {
@@ -507,21 +444,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyAction" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyAction" } } }
             },
           "responses":
             {
               "200":
                 {
-                  "description": "Current scoped location reports, without private evidence
-                    identities",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyResult" } }
-                    }
+                  "description": "Current scoped location reports, without private evidence identities",
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyResult" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -536,12 +466,10 @@ paths:
       "get":
         {
           "operationId": "getV2RouteContributionContext",
-          "summary": "Read the exact visible or owned route context before a typed
-            contribution",
-          "description": "Authenticated safe context only. The structural identity key
-            binds the displayed target; it never confers access or asserts
-            travel, review or schedule approval. No-store. Recheck before saving
-            after account/target changes.",
+          "summary": "Read the exact visible or owned route context before a typed contribution",
+          "description": "Authenticated safe context only. The structural identity key binds the displayed
+            target; it never confers access or asserts travel, review or schedule approval.
+            No-store. Recheck before saving after account/target changes.",
           "parameters":
             [
               {
@@ -558,10 +486,7 @@ paths:
               "200":
                 {
                   "description": "Safe route context and identity",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteContributionContext" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteContributionContext" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -581,15 +506,12 @@ paths:
       "post":
         {
           "operationId": "submitV2RouteObservations",
-          "summary": "Save endpoint pickup or drop-off knowledge without creating an
-            actual journey",
-          "description": "One or two explicit endpoint places on an existing
-            own/community-public lead. Server binds account, current Terms,
-            visibility and safety. Same-identity revision advance is accepted;
-            structural changes require reconfirmation. Scope is unscoped
-            endpoint knowledge; no intermediate stops, travel, fare, calendar,
-            approval or publication is inferred. Use the existing private
-            receipt lookup after an uncertain response.",
+          "summary": "Save endpoint pickup or drop-off knowledge without creating an actual journey",
+          "description": "One or two explicit endpoint places on an existing own/community-public lead. Server
+            binds account, current Terms, visibility and safety. Same-identity revision advance is
+            accepted; structural changes require reconfirmation. Scope is unscoped endpoint
+            knowledge; no intermediate stops, travel, fare, calendar, approval or publication is
+            inferred. Use the existing private receipt lookup after an uncertain response.",
           "parameters":
             [
               { "$ref": "#/components/parameters/ExpectedAccountHeader" },
@@ -600,20 +522,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteObservationRequest" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteObservationRequest" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Committed private receipt or identical historical replay",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2LeadReceipt" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2LeadReceipt" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -634,13 +550,11 @@ paths:
         {
           "operationId": "listV2FareReports",
           "summary": "Read assessed dated fare reports for one visible route",
-          "description": "Paid experiences, quotes and advertised fares remain scoped
-            reports, not a current ticket price or canonical service.
-            Current-time assessment/evidence and both route/fare contributor
-            safety gates apply. Opaque presentation IDs never expose
-            observation, receipt, source or author identity. Unready/date-held
-            evidence is signalled without an amount. Refresh when a live cursor
-            is no longer available.",
+          "description": "Paid experiences, quotes and advertised fares remain scoped reports, not a current
+            ticket price or canonical service. Current-time assessment/evidence and both route/fare
+            contributor safety gates apply. Opaque presentation IDs never expose observation,
+            receipt, source or author identity. Unready/date-held evidence is signalled without an
+            amount. Refresh when a live cursor is no longer available.",
           "parameters":
             [
               {
@@ -649,11 +563,7 @@ paths:
                   "required": true,
                   "schema": { "type": "string", "format": "uuid" }
                 },
-              {
-                  "name": "cursor",
-                  "in": "query",
-                  "schema": { "type": "string", "format": "uuid" }
-                },
+              { "name": "cursor", "in": "query", "schema": { "type": "string", "format": "uuid" } },
               { "$ref": "#/components/parameters/BlockedContributorsHeader" },
               { "$ref": "#/components/parameters/OptionalExpectedAccountHeader" }
             ],
@@ -661,12 +571,8 @@ paths:
             {
               "200":
                 {
-                  "description": "At most twenty scoped reported amounts with independent
-                    pending/hidden states",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2PublicFarePage" } }
-                    }
+                  "description": "At most twenty scoped reported amounts with independent pending/hidden states",
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2PublicFarePage" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -682,10 +588,9 @@ paths:
         {
           "operationId": "fareV2Safety",
           "summary": "Report a fare or hide its anonymous contributor",
-          "description": "Authenticated safety exception without contribution Terms;
-            resolves the opaque report reference privately and rechecks route,
-            observation, assessment and contributor visibility. No private
-            author ID is returned.",
+          "description": "Authenticated safety exception without contribution Terms; resolves the opaque
+            report reference privately and rechecks route, observation, assessment and contributor
+            visibility. No private author ID is returned.",
           "parameters":
             [
               {
@@ -706,20 +611,14 @@ paths:
           "requestBody":
             {
               "required": true,
-              "content":
-                {
-                  "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyAction" } }
-                }
+              "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyAction" } } }
             },
           "responses":
             {
               "200":
                 {
                   "description": "Safety action saved",
-                  "content":
-                    {
-                      "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyResult" } }
-                    }
+                  "content": { "application/json": { "schema": { "$ref": "#/components/schemas/V2RouteSafetyResult" } } }
                 },
               "400": { "$ref": "#/components/responses/V2Error" },
               "401": { "$ref": "#/components/responses/V2Error" },
@@ -736,14 +635,12 @@ paths:
     post:
       operationId: submitV2ActualJourney
       summary: Save a typed actual-journey report without inferring a timetable
-      description: Authenticated public accounts can report actual clocks, named
-        operator/places and scoped fares. Unknown trip context stays unknown.
-        Public search_result/route_detail reports require an exact currently
-        visible lead and revision; other surfaces retain the existing own-lead
-        boundary. Device and account contributor blocks and moderation are
-        rechecked transactionally. Save is durable intake, not travel
-        verification, service matching or publication. Reuse the account-scoped
-        receipt lookup after an uncertain response.
+      description: Authenticated public accounts can report actual clocks, named operator/places and
+        scoped fares. Unknown trip context stays unknown. Public search_result/route_detail reports
+        require an exact currently visible lead and revision; other surfaces retain the existing
+        own-lead boundary. Device and account contributor blocks and moderation are rechecked
+        transactionally. Save is durable intake, not travel verification, service matching or
+        publication. Reuse the account-scoped receipt lookup after an uncertain response.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -773,13 +670,12 @@ paths:
     get:
       operationId: searchV2Routes
       summary: Discover initial community route reports
-      description: Basic validated lead reports only. Selected city IDs are exact;
-        custom city text is bounded literal discovery, never a contribution
-        identity. Without a city filter this is bounded public discovery; do not
-        mix an ID and text for the same endpoint. No canonical service identity,
-        canonical fares or timed departures. The reviewed-core reader optionally
-        includes individually approved, scoped card facts with a 14-day observation
-        freshness window. Approval dates do not refresh observation age. UUID keyset pages may see concurrent
+      description: Basic validated lead reports only. Selected city IDs are exact; custom city text is
+        bounded literal discovery, never a contribution identity. Without a city filter this is
+        bounded public discovery; do not mix an ID and text for the same endpoint. No canonical
+        service identity, canonical fares or timed departures. The reviewed-core reader optionally
+        includes individually approved, scoped card facts with a 14-day observation freshness
+        window. Approval dates do not refresh observation age. UUID keyset pages may see concurrent
         inserts after their cursor; refresh starts a new enumeration.
       parameters:
         - name: originCityId
@@ -818,10 +714,9 @@ paths:
     get:
       operationId: getV2Subject
       summary: Recheck one currently visible public lead
-      description: Uses the same visibility and safety rules as Search. Public
-        contextual contribution eligibility is enforced separately in the fenced
-        writer. Canonical service projections remain a separate publication
-        producer.
+      description: Uses the same visibility and safety rules as Search. Public contextual contribution
+        eligibility is enforced separately in the fenced writer. Canonical service projections
+        remain a separate publication producer.
       parameters:
         - name: subjectId
           in: path
@@ -845,9 +740,9 @@ paths:
     post:
       operationId: routeV2Safety
       summary: Report a public route or hide its anonymous contributor's route reports
-      description: Authenticated safety exception without current contribution Terms.
-        Resolves the contributor privately; never returns an author ID. Same
-        pending report reason and repeated block are idempotent.
+      description: Authenticated safety exception without current contribution Terms. Resolves the
+        contributor privately; never returns an author ID. Same pending report reason and repeated
+        block are idempotent.
       parameters:
         - name: subjectId
           in: path
@@ -892,8 +787,7 @@ paths:
   /v2/blocked-route-reporters/{blockId}:
     delete:
       operationId: unblockV2RouteReporter
-      summary: Unblock a route-report contributor using this account's private block
-        reference
+      summary: Unblock a route-report contributor using this account's private block reference
       parameters:
         - name: blockId
           in: path
@@ -915,9 +809,9 @@ paths:
     get:
       operationId: listV2OwnRoutes
       summary: List this account's submitted community routes
-      description: Private keyset pagination over owned initial route receipts.
-        Submitted is not review or publication status. Erased attribution is
-        excluded and retired routes cannot accept follow-up.
+      description: Private keyset pagination over owned initial route receipts. Submitted is not review or
+        publication status. Erased attribution is excluded and retired routes cannot accept
+        follow-up.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -969,8 +863,7 @@ paths:
       summary: Discover the enabled minimum-lead intake contract
       responses:
         '200':
-          description: Capability is false until explicitly enabled with the installed
-            writer
+          description: Capability is false until explicitly enabled with the installed writer
           content:
             application/json:
               schema:
@@ -996,10 +889,9 @@ paths:
     post:
       operationId: submitV2Lead
       summary: Atomically save the four-answer lead and its initial receipt
-      description: Server binds the authenticated account and current Terms. Saved
-        does not mean associated, verified or published. This first capability
-        supports minimum new leads only; other observations and target types
-        remain separate future capabilities. No legacy fallback.
+      description: Server binds the authenticated account and current Terms. Saved does not mean
+        associated, verified or published. This first capability supports minimum new leads only;
+        other observations and target types remain separate future capabilities. No legacy fallback.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -1030,9 +922,9 @@ paths:
     get:
       operationId: getV2LeadReceipt
       summary: Check this account's initial committed receipt before retrying
-      description: Returns found=false for missing or other-account keys. The initial
-        receipt is historical save confirmation, not a current processing or
-        publication status. Erasure removes the receipt.
+      description: Returns found=false for missing or other-account keys. The initial receipt is
+        historical save confirmation, not a current processing or publication status. Erasure
+        removes the receipt.
       parameters:
         - $ref: '#/components/parameters/ExpectedAccountHeader'
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
@@ -1412,8 +1304,8 @@ paths:
       operationId: submitAbuseReport
       tags: [ journeys ]
       summary: Report objectionable journey, comment, or contributor content
-      description: Safety exception — abuse reports remain available to authenticated
-        users without accepting the current community-contribution terms.
+      description: Safety exception — abuse reports remain available to authenticated users without
+        accepting the current community-contribution terms.
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - name: id
@@ -1606,12 +1498,10 @@ paths:
     post:
       operationId: deleteMabhaziAccount
       tags: [ Legal ]
-      summary: Permanently delete the authenticated Mabhazi account and account-linked
-        data
-      description: Requires an explicit confirmation phrase. Browser-cookie requests
-        also require the same-origin CSRF token issued by GET /delete-account.
-        Shared route records can remain only after contributor attribution is
-        anonymized.
+      summary: Permanently delete the authenticated Mabhazi account and account-linked data
+      description: Requires an explicit confirmation phrase. Browser-cookie requests also require the
+        same-origin CSRF token issued by GET /delete-account. Shared route records can remain only
+        after contributor attribution is anonymized.
       parameters:
         - $ref: '#/components/parameters/AuthorizationSessionHeader'
         - $ref: '#/components/parameters/SessionCookie'
@@ -1664,11 +1554,10 @@ paths:
       operationId: getV2DepartureBoard
       tags: [ contributions ]
       summary: Read visible route origins and their reported schedules from one snapshot
-      description: Origins come from the same moderation and account/device-safe rows
-        as the board. A community clock or legacy schedule is not a canonical
-        timed departure. No countdown or daily recurrence is inferred. An
-        unavailable explicit origin never silently switches cities. No-store;
-        old journey/city APIs are unchanged.
+      description: Origins come from the same moderation and account/device-safe rows as the board. A
+        community clock or legacy schedule is not a canonical timed departure. No countdown or daily
+        recurrence is inferred. An unavailable explicit origin never silently switches cities.
+        No-store; old journey/city APIs are unchanged.
       parameters:
         - name: originKey
           in: query
@@ -1723,8 +1612,8 @@ paths:
           required: false
           schema:
             type: string
-          description: Search query — returns cities whose name starts with or contains
-            this string (case-insensitive). Returns up to 10 results.
+          description: Search query — returns cities whose name starts with or contains this string
+            (case-insensitive). Returns up to 10 results.
       responses:
         "200":
           description: List of matching city names
@@ -1887,24 +1776,22 @@ components:
     OptionalExpectedAccountHeader:
       name: X-Mabhazi-Account
       in: header
-      description: Optional assertion for an authenticated viewer. A missing or
-        different current identity fails closed instead of falling back to guest
-        block preferences.
+      description: Optional assertion for an authenticated viewer. A missing or different current identity
+        fails closed instead of falling back to guest block preferences.
       schema: { type: string, minLength: 1, maxLength: 200 }
     BlockedContributorsHeader:
       name: X-Mabhazi-Blocked-Contributors
       in: header
-      description: JSON string array of already-held device-local contributor block
-        IDs; at most 200 IDs and 10000 UTF-8 bytes. Never logged or returned.
-        Malformed safety settings fail closed.
+      description: JSON string array of already-held device-local contributor block IDs; at most 200 IDs
+        and 10000 UTF-8 bytes. Never logged or returned. Malformed safety settings fail closed.
       schema: { type: string, maxLength: 10000 }
     ExpectedAccountHeader:
       name: X-Mabhazi-Account
       in: header
       required: true
-      description: Expected signed-in account ID to reject a token/account switch
-        during a pending operation. The server actor always comes from the
-        authenticated session, never this assertion.
+      description: Expected signed-in account ID to reject a token/account switch during a pending
+        operation. The server actor always comes from the authenticated session, never this
+        assertion.
       schema: { type: string, minLength: 1, maxLength: 256 }
     AuthorizationSessionHeader:
       name: Authorization
@@ -1924,13 +1811,14 @@ components:
       in: header
       name: X-Mabhazi-Route-Display
       required: false
-      description: Opt into current core values with field-specific administrator
-        correction provenance. Older readers omit corrected routes; the original
-        contribution stays unchanged.
+      description: Opt into corrected community reports; reviewed-timetable/1 additionally represents
+        registered reviewed native timetables. Older readers withhold timetables. Original evidence
+        stays unchanged.
       schema:
         type: string
         enum:
           - reviewed-core/1
+          - reviewed-timetable/1
 
   schemas:
     V2PromptQuestionType:
@@ -1953,14 +1841,7 @@ components:
       {
         "type": "object",
         "additionalProperties": false,
-        "required":
-          [
-            "policyVersion",
-            "revision",
-            "invitationsEnabled",
-            "disabledTypes",
-            "dismissedUntil"
-          ],
+        "required": [ "policyVersion", "revision", "invitationsEnabled", "disabledTypes", "dismissedUntil" ],
         "properties":
           {
             "policyVersion": { "type": "string", "enum": [ "prompts/1" ] },
@@ -2033,32 +1914,26 @@ components:
         countdownEligible:
           {
             type: boolean,
-            description: Legacy timetable has explicit recognised operating days and
-              user-selected Africa/Harare timezone; this is not canonical
-              approval.
+            description: Explicit applicable operating days and timezone yield an unambiguous next instant.
+              Missing days or ambiguous local DST time have no countdown.
           }
         nextDepartureAt: { type: string, format: date-time }
-        scheduleTimezone: { type: string, enum: [ Africa/Harare ] }
+        scheduleTimezone:
+          type: string
         timedDepartureEligible:
           type: boolean
-          description: False for these original community reports and legacy schedules.
-            Canonical service calendar/timezone publication remains a separate
-            gate.
+          description: True only for a currently eligible registered reviewed timetable; Search eligibility
+            alone is insufficient.
         coreCorrections:
           type: array
           maxItems: 4
           items:
             $ref: "#/components/schemas/V2CoreCorrection"
+        timetable:
+          $ref: "#/components/schemas/V2ReviewedTimetable"
     V2DepartureBoard:
       type: object
-      required:
-        [
-          origins,
-          selectedOriginKey,
-          selectionUnavailable,
-          hasHiddenRoutes,
-          entries
-        ]
+      required: [ origins, selectedOriginKey, selectionUnavailable, hasHiddenRoutes, entries ]
       properties:
         generatedAt: { type: string, format: date-time }
         origins:
@@ -2080,16 +1955,7 @@ components:
 
     AuthUser:
       type: object
-      required:
-        [
-          id,
-          email,
-          firstName,
-          lastName,
-          profileImageUrl,
-          displayName,
-          lastNameChange
-        ]
+      required: [ id, email, firstName, lastName, profileImageUrl, displayName, lastNameChange ]
       properties:
         id:
           type: string
@@ -2415,15 +2281,7 @@ components:
 
     JourneyDetails:
       type: object
-      required:
-        [
-          comments,
-          priceToday,
-          priceYesterday,
-          badTreatmentCount,
-          breakdownCount,
-          delays
-        ]
+      required: [ comments, priceToday, priceYesterday, badTreatmentCount, breakdownCount, delays ]
       properties:
         comments:
           type: array
@@ -2802,15 +2660,7 @@ components:
             {
                 "type": "object",
                 "additionalProperties": false,
-                "required":
-                  [
-                    "status",
-                    "invitationId",
-                    "questionKey",
-                    "formSchemaId",
-                    "expiresAt",
-                    "route"
-                  ],
+                "required": [ "status", "invitationId", "questionKey", "formSchemaId", "expiresAt", "route" ],
                 "properties":
                   {
                     "status": { "type": "string", "enum": [ "offered", "opened" ] },
@@ -2831,11 +2681,7 @@ components:
         "properties":
           {
             "clientEventId": { "type": "string", "format": "uuid" },
-            "outcome":
-              {
-                "type": "string",
-                "enum": [ "shown", "opened", "skip", "dismiss", "unknown" ]
-              },
+            "outcome": { "type": "string", "enum": [ "shown", "opened", "skip", "dismiss", "unknown" ] },
             "timezone": { "type": "string", "minLength": 1, "maxLength": 100 }
           }
       }
@@ -2860,6 +2706,8 @@ components:
         pickupQuestionsEnabled: { type: boolean }
         pickupInvitationsEnabled: { type: boolean }
         promptControlsEnabled: { type: boolean }
+        reviewedTimetablesEnabled:
+          type: boolean
     V2City:
       type: object
       additionalProperties: false
@@ -2886,8 +2734,8 @@ components:
           type: string
           minLength: 1
           maxLength: 120
-          description: A trimmed reported bus company name. Unknown, n/a, dash and control
-            characters are invalid. A name is not a resolved operator identity.
+          description: A trimmed reported bus company name. Unknown, n/a, dash and control characters are
+            invalid. A name is not a resolved operator identity.
     V2MinimumLeadCore:
       type: object
       additionalProperties: false
@@ -2898,9 +2746,8 @@ components:
         departureTime:
           type: string
           pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
-          description: Explicit clock answer. Midnight is valid only when explicitly
-            entered. No default, recurring calendar, date or timezone is
-            inferred.
+          description: Explicit clock answer. Midnight is valid only when explicitly entered. No default,
+            recurring calendar, date or timezone is inferred.
         operator: { $ref: '#/components/schemas/V2NamedOperator' }
     V2MinimumLeadTarget:
       type: object
@@ -2921,9 +2768,8 @@ components:
           type: array
           maxItems: 0
           items: { type: object, additionalProperties: false }
-          description: This capability accepts the four minimum answers only. Optional
-            typed facts remain in the full roadmap and are not discarded into
-            legacy fields.
+          description: This capability accepts the four minimum answers only. Optional typed facts remain in
+            the full roadmap and are not discarded into legacy fields.
     V2LeadReceipt:
       type: object
       additionalProperties: false
@@ -3076,11 +2922,7 @@ components:
             "sourceDate": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
             "effectiveFrom": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
             "effectiveTo": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-            "passengerCategory":
-              {
-                "type": "string",
-                "enum": [ "adult", "child", "concession", "other", "unknown" ]
-              },
+            "passengerCategory": { "type": "string", "enum": [ "adult", "child", "concession", "other", "unknown" ] },
             "passengerLabel": { "type": "string", "minLength": 1, "maxLength": 120 },
             "ticketBasis": { "type": "string", "enum": [ "one_way", "return", "other", "unknown" ] },
             "ticketLabel": { "type": "string", "minLength": 1, "maxLength": 120 },
@@ -3140,13 +2982,7 @@ components:
           {
             "fieldKey": { "type": "string", "enum": [ "operator.reported" ] },
             "value": { "$ref": "#/components/schemas/V2NamedOperator" },
-            "scope":
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {}
-              },
+            "scope": { "type": "object", "additionalProperties": false, "required": [], "properties": {} },
             "knowledgeBasis":
               {
                 "type": "string",
@@ -3182,13 +3018,7 @@ components:
           {
             "fieldKey": { "type": "string", "enum": [ "boarding.pickup", "alighting.dropoff" ] },
             "value": { "$ref": "#/components/schemas/V2ActualPlace" },
-            "scope":
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {}
-              },
+            "scope": { "type": "object", "additionalProperties": false, "required": [], "properties": {} },
             "knowledgeBasis":
               {
                 "type": "string",
@@ -3230,12 +3060,7 @@ components:
                 "required": [ "amount", "currency" ],
                 "properties":
                   {
-                    "amount":
-                      {
-                        "type": "string",
-                        "pattern": "^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$",
-                        "maxLength": 13
-                      },
+                    "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$", "maxLength": 13 },
                     "currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
                   }
               },
@@ -3280,14 +3105,7 @@ components:
       {
         "type": "object",
         "additionalProperties": false,
-        "required":
-          [
-            "schemaVersion",
-            "clientSubmissionId",
-            "entrySurface",
-            "target",
-            "observations"
-          ],
+        "required": [ "schemaVersion", "clientSubmissionId", "entrySurface", "target", "observations" ],
         "properties":
           {
             "schemaVersion": { "type": "string", "enum": [ "1.0" ] },
@@ -3295,14 +3113,7 @@ components:
             "entrySurface":
               {
                 "type": "string",
-                "enum":
-                  [
-                    "contribute_tab",
-                    "search_empty",
-                    "search_result",
-                    "route_detail",
-                    "own_contribution"
-                  ]
+                "enum": [ "contribute_tab", "search_empty", "search_result", "route_detail", "own_contribution" ]
               },
             "target": { "$ref": "#/components/schemas/V2ActualTarget" },
             "observations":
@@ -3369,12 +3180,7 @@ components:
           {
             "id": { "type": "string", "format": "uuid" },
             "kind": { "type": "string", "enum": [ "paid", "quoted", "advertised" ] },
-            "amount":
-              {
-                "type": "string",
-                "pattern": "^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$",
-                "maxLength": 13
-              },
+            "amount": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,9})([.][0-9]{1,2})?$", "maxLength": 13 },
             "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
             "scope": { "$ref": "#/components/schemas/V2ActualFareScope" },
             "basis":
@@ -3391,31 +3197,10 @@ components:
                     "legacy_import"
                   ]
               },
-            "observedDate":
-              {
-                "anyOf":
-                  [
-                    { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-                    { "type": "null" }
-                  ]
-              },
+            "observedDate": { "anyOf": [ { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" } ] },
             "receivedAt": { "type": "string", "format": "date-time" },
-            "oldestEvidenceDate":
-              {
-                "anyOf":
-                  [
-                    { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-                    { "type": "null" }
-                  ]
-              },
-            "newestEvidenceDate":
-              {
-                "anyOf":
-                  [
-                    { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-                    { "type": "null" }
-                  ]
-              },
+            "oldestEvidenceDate": { "anyOf": [ { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" } ] },
+            "newestEvidenceDate": { "anyOf": [ { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" } ] },
             "status": { "type": "string", "enum": [ "reported", "needs_review" ] },
             "freshness": { "type": "string", "enum": [ "current", "recheck_due", "unknown" ] },
             "temporalClass": { "type": "string", "enum": [ "historical", "ongoing" ] },
@@ -3443,35 +3228,35 @@ components:
       }
     V2ApprovedCardFact:
       type: object
-      required: [id, freshness]
+      required: [ id, freshness ]
       properties:
-        id: {type: string, format: uuid}
-        observedDate: {type: string, nullable: true, minLength: 10, maxLength: 10}
-        freshness: {type: string, enum: [fresh, older, unknown]}
+        id: { type: string, format: uuid }
+        observedDate: { type: string, nullable: true, minLength: 10, maxLength: 10 }
+        freshness: { type: string, enum: [ fresh, older, unknown ] }
     V2ApprovedCardPlace:
       allOf:
         - $ref: '#/components/schemas/V2ApprovedCardFact'
         - type: object
-          required: [name]
+          required: [ name ]
           properties:
-            name: {type: string, maxLength: 180}
+            name: { type: string, maxLength: 180 }
     V2ApprovedCardFare:
       allOf:
         - $ref: '#/components/schemas/V2ApprovedCardFact'
         - type: object
-          required: [kind, amount, currency, scope]
+          required: [ kind, amount, currency, scope ]
           properties:
-            kind: {type: string, enum: [paid, quoted, advertised]}
-            amount: {type: string}
-            currency: {type: string}
-            scope: {type: object, additionalProperties: true}
+            kind: { type: string, enum: [ paid, quoted, advertised ] }
+            amount: { type: string }
+            currency: { type: string }
+            scope: { type: object, additionalProperties: true }
     V2ApprovedCardDetails:
       type: object
       additionalProperties: false
       properties:
-        fare: {$ref: '#/components/schemas/V2ApprovedCardFare'}
-        pickup: {$ref: '#/components/schemas/V2ApprovedCardPlace'}
-        dropoff: {$ref: '#/components/schemas/V2ApprovedCardPlace'}
+        fare: { $ref: '#/components/schemas/V2ApprovedCardFare' }
+        pickup: { $ref: '#/components/schemas/V2ApprovedCardPlace' }
+        dropoff: { $ref: '#/components/schemas/V2ApprovedCardPlace' }
     V2PublicLead:
       {
         "type": "object",
@@ -3499,26 +3284,18 @@ components:
             "destination": { "$ref": "#/components/schemas/V2City" },
             "operatorReport": { "$ref": "#/components/schemas/V2PublicOperatorReport" },
             "reportedTime": { "$ref": "#/components/schemas/V2PublicClockReport" },
-            "publicationStatus": { "type": "string", "enum": [ "details_needed" ] },
-            "timedDepartureEligible": { "type": "boolean", "enum": [ false ] },
+            "publicationStatus": { "type": "string", "enum": [ details_needed, reviewed_timetable ] },
+            "timedDepartureEligible": { "type": "boolean" },
             "contributionTargetEligible": { "type": "boolean" },
             "missingDetails":
               {
                 "type": "array",
                 "uniqueItems": true,
-                "items":
-                  {
-                    "type": "string",
-                    "enum": [ "selected_fare", "operating_days", "boarding_location" ]
-                  }
+                "items": { "type": "string", "enum": [ "selected_fare", "operating_days", "boarding_location" ] }
               },
             cardDetails: { $ref: "#/components/schemas/V2ApprovedCardDetails" },
-            coreCorrections:
-              {
-                type: array,
-                maxItems: 4,
-                items: { $ref: "#/components/schemas/V2CoreCorrection" }
-              }
+            coreCorrections: { type: array, maxItems: 4, items: { $ref: "#/components/schemas/V2CoreCorrection" } },
+            timetable: { $ref: "#/components/schemas/V2ReviewedTimetable" }
           }
       }
     V2PublicSearch:
@@ -3528,15 +3305,10 @@ components:
         "required": [ "items", "hasHiddenResults" ],
         "properties":
           {
-            "items":
-              {
-                "type": "array",
-                "maxItems": 20,
-                "items": { "$ref": "#/components/schemas/V2PublicLead" }
-              },
+            "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/V2PublicLead" } },
             "hasHiddenResults": { "type": "boolean" },
-            matchingCount: {type: integer, minimum: 0},
-            operators: {type: array, uniqueItems: true, items: {type: string}},
+            matchingCount: { type: integer, minimum: 0 },
+            operators: { type: array, uniqueItems: true, items: { type: string } },
             "nextCursor": { "type": "string", "format": "uuid" }
           }
       }
@@ -3555,11 +3327,7 @@ components:
         "properties":
           {
             "action": { "type": "string", "enum": [ "report", "block" ] },
-            "reason":
-              {
-                "type": "string",
-                "enum": [ "spam", "inaccurate", "offensive", "unsafe", "other" ]
-              }
+            "reason": { "type": "string", "enum": [ "spam", "inaccurate", "offensive", "unsafe", "other" ] }
           }
       }
     V2RouteSafetyResult:
@@ -3567,10 +3335,7 @@ components:
         "type": "object",
         "additionalProperties": false,
         "required": [ "status" ],
-        "properties":
-          {
-            "status": { "type": "string", "enum": [ "reported", "blocked", "unblocked" ] }
-          }
+        "properties": { "status": { "type": "string", "enum": [ "reported", "blocked", "unblocked" ] } }
       }
     V2RouteBlock:
       {
@@ -3590,12 +3355,7 @@ components:
         "required": [ "blocks" ],
         "properties":
           {
-            "blocks":
-              {
-                "type": "array",
-                "maxItems": 200,
-                "items": { "$ref": "#/components/schemas/V2RouteBlock" }
-              }
+            "blocks": { "type": "array", "maxItems": 200, "items": { "$ref": "#/components/schemas/V2RouteBlock" } }
           }
       }
     V2OwnRoute:
@@ -3633,19 +3393,13 @@ components:
         "required": [ "routes" ],
         "properties":
           {
-            "routes":
-              {
-                "type": "array",
-                "maxItems": 20,
-                "items": { "$ref": "#/components/schemas/V2OwnRoute" }
-              },
+            "routes": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/V2OwnRoute" } },
             "nextCursor":
               {
                 "type": "string",
                 "maxLength": 73,
-                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-\
-                  fA-F]{12}\\.[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9\
-                  a-fA-F]{4}-[0-9a-fA-F]{12}$"
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.[0-9a-fA\
+                  -F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
               }
           }
       }
@@ -3711,13 +3465,7 @@ components:
           {
             "fieldKey": { "type": "string", "enum": [ "boarding.pickup", "alighting.dropoff" ] },
             "value": { "$ref": "#/components/schemas/V2ActualPlace" },
-            "scope":
-              {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {}
-              },
+            "scope": { "type": "object", "additionalProperties": false, "required": [], "properties": {} },
             "knowledgeBasis":
               {
                 "type": "string",
@@ -3745,14 +3493,7 @@ components:
       {
         "type": "object",
         "additionalProperties": false,
-        "required":
-          [
-            "schemaVersion",
-            "clientSubmissionId",
-            "entrySurface",
-            "target",
-            "observations"
-          ],
+        "required": [ "schemaVersion", "clientSubmissionId", "entrySurface", "target", "observations" ],
         "properties":
           {
             "schemaVersion": { "type": "string", "enum": [ "1.0" ] },
@@ -3811,14 +3552,7 @@ components:
                     "legacy_import"
                   ]
               },
-            "observedDate":
-              {
-                "anyOf":
-                  [
-                    { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
-                    { "type": "null" }
-                  ]
-              },
+            "observedDate": { "anyOf": [ { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }, { "type": "null" } ] },
             "receivedAt": { "type": "string", "format": "date-time" },
             "status": { "type": "string", "enum": [ "saved", "reported", "needs_review" ] },
             "freshness": { "type": "string", "enum": [ "current", "recheck_due", "unknown" ] },
@@ -3833,12 +3567,7 @@ components:
         "properties":
           {
             "subjectId": { "type": "string", "format": "uuid" },
-            "items":
-              {
-                "type": "array",
-                "maxItems": 20,
-                "items": { "$ref": "#/components/schemas/V2PlaceReport" }
-              },
+            "items": { "type": "array", "maxItems": 20, "items": { "$ref": "#/components/schemas/V2PlaceReport" } },
             "hasPendingReports": { "type": "boolean" },
             "hasHiddenResults": { "type": "boolean" },
             "nextCursor": { "type": "string", "format": "uuid" }
@@ -3877,10 +3606,54 @@ components:
             - type: string
               pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             - type: "null"
+    V2ReviewedTimetable:
+      type: object
+      additionalProperties: false
+      required:
+        - runId
+        - departureSeconds
+        - arrivalSeconds
+        - calendar
+      properties:
+        runId:
+          type: string
+          format: uuid
+        departureSeconds:
+          type: integer
+          minimum: 0
+          maximum: 86399
+        arrivalSeconds:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 172799
+        calendar:
+          type: object
+          additionalProperties: false
+          required:
+            - timezone
+            - weekdays
+            - validFrom
+            - validUntil
+          properties:
+            timezone:
+              type: string
+              minLength: 1
+              maxLength: 100
+            weekdays:
+              type: integer
+              minimum: 1
+              maximum: 127
+              description: Monday bit 0 through Sunday bit 6; explicitly supplied service days.
+            validFrom:
+              type: string
+              pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+            validUntil:
+              type: string
+              pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
   responses:
     V2Error:
-      description: Safe error with no raw payload, database message, token or private
-        evidence
+      description: Safe error with no raw payload, database message, token or private evidence
       content:
         application/json:
           schema: { $ref: '#/components/schemas/V2Error' }

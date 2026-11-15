@@ -41,3 +41,31 @@ export function nextLegacyDeparture(clock:string|null|undefined,operatingDays:st
  for(const date of dates){const departure=instant(date,clock);if(departure!==null&&departure+seconds*1000>now)return new Date(departure+seconds*1000).toISOString();}
  return null;
 }
+
+export type ReviewedTimetable={runId:string;departureSeconds:number;arrivalSeconds:number|null;calendar:{timezone:string;weekdays:number;validFrom:string;validUntil:string}};
+/** Resolve explicit local service time by round-trip. Gaps/folds are held rather
+ * than choosing a DST offset the source never supplied. Server time owns this. */
+export function nextTimetableDeparture(t:ReviewedTimetable,now:number):string|null{
+ if(!Number.isFinite(now)||!Number.isInteger(t.departureSeconds)||t.departureSeconds<0||t.departureSeconds>=86400||!t.calendar||
+ !Number.isInteger(t.calendar.weekdays)||t.calendar.weekdays<1||t.calendar.weekdays>127)return null;
+ const c=t.calendar;
+ const date=(s:string)=>/^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
+ try{
+  if(!date(c.validFrom)||!date(c.validUntil)||c.validFrom>c.validUntil)return null;
+  const format=new Intl.DateTimeFormat('en-GB',{timeZone:c.timezone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'});
+  const local=(ms:number)=>{const p=Object.fromEntries(format.formatToParts(ms).filter(p=>p.type!=='literal').map(p=>[p.type,Number(p.value)]));return Date.UTC(p.year,p.month-1,p.day,p.hour,p.minute,p.second);};
+  const localNow=local(now),today=new Date(localNow).toISOString().slice(0,10),start=today<c.validFrom?c.validFrom:today;
+  for(let i=0;i<8;i++){
+   const day=Date.parse(start+'T00:00:00Z')+i*86400000,ymd=new Date(day).toISOString().slice(0,10);
+   if(ymd>c.validUntil)return null;
+   const isoDay=(new Date(day).getUTCDay()+6)%7;
+   if(!(c.weekdays&(1<<isoDay)))continue;
+   const target=day+t.departureSeconds*1000,offsets=new Set<number>();
+   for(let h=-36;h<=36;h+=6){const sample=target+h*3600000;offsets.add(local(sample)-sample);}
+   const matches=[...offsets].map(offset=>target-offset).filter(ms=>local(ms)===target).sort((a,b)=>a-b);
+   if(matches.length!==1){if(matches.length&&matches.every(ms=>ms<now)||!matches.length&&target<localNow)continue;return null;}
+   if(matches[0]>=now)return new Date(matches[0]).toISOString();
+  }
+ }catch{/* invalid timezone/date */}
+ return null;
+}

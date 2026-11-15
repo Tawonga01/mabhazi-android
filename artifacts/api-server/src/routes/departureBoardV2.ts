@@ -1,9 +1,9 @@
-import {reviewedRoutesAvailable,reviewedRoutesHeader,reviewedRoutesVersion} from '../lib/reviewedRoutes';
+import {reviewedRoutesAvailable,reviewedRoutesHeader,modernRouteDisplay,validRouteDisplay,timetableRoutesVersion,timetableRoutesAvailable} from '../lib/reviewedRoutes';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { GetV2DepartureBoardQueryParams, GetV2DepartureBoardResponse } from '@workspace/api-zod';
 import { parseBlockedIds } from './routeSafetyV2';
-import { nextLegacyDeparture, legacyScheduleTimezone } from '../lib/departureSchedule';
+import { nextLegacyDeparture, legacyScheduleTimezone, nextTimetableDeparture, type ReviewedTimetable } from '../lib/departureSchedule';
 
 const router: IRouter = Router();
 // Origins and rows share one statement/snapshot and the same visibility rules.
@@ -13,12 +13,12 @@ const boardSql = `WITH candidates AS (
  p.subject_id::text subject_id,NULL::integer journey_id,p.origin_city_id city_id,
  p.origin->>'name' origin_name,p.destination->>'name' destination,
  p.operator_report->>'value' operator,p.reported_time->>'value' reported_time,
- __CORE_COLUMN__ core_corrections,NULL::text data_status,NULL::text scheduled_days,NULL::text pickup_point,NULL::text legacy_city,p.author_user_id author_id
+ __TIMETABLE_COLUMN__ timetable,__CORE_COLUMN__ core_corrections,NULL::text data_status,NULL::text scheduled_days,__PICKUP_COLUMN__ pickup_point,NULL::text legacy_city,p.author_user_id author_id
  FROM public.v2_public_lead_reports p WHERE $3::boolean
  UNION ALL
  SELECT 'legacy:'||j.id::text,'legacy',NULL,j.id,c.id,
  coalesce(c.name,btrim(j.from_city)),btrim(j.to_city),nullif(btrim(j.bus_company),''),
- j.departure_time,'[]'::jsonb,j.data_status::text,nullif(btrim(j.travel_date),''),nullif(btrim(j.pickup_point),''),btrim(j.from_city),j.contributed_by
+ j.departure_time,NULL::jsonb,'[]'::jsonb,j.data_status::text,nullif(btrim(j.travel_date),''),nullif(btrim(j.pickup_point),''),btrim(j.from_city),j.contributed_by
  FROM public.journeys j
  LEFT JOIN LATERAL (SELECT min(r.id) id FROM public.cities r
    WHERE lower(btrim(r.name))=lower(btrim(j.from_city)) HAVING count(*)=1) ref_match ON true
@@ -55,7 +55,7 @@ SELECT jsonb_build_object(
    'key',v.entry_key,'kind',v.kind,'originKey',v.origin_key,
    'subjectId',v.subject_id,'journeyId',v.journey_id,
    'destination',v.destination,'operator',v.operator,'reportedTime',v.clock,
-   'coreCorrections',v.core_corrections,'scheduledDays',v.scheduled_days,'pickupPoint',v.pickup_point,'scheduleClock',CASE WHEN v.kind='legacy' AND v.data_status='active' THEN v.reported_time ELSE NULL END,'timedDepartureEligible',false))
+   'coreCorrections',v.core_corrections,'scheduledDays',v.scheduled_days,'pickupPoint',v.pickup_point,'timetable',v.timetable,'scheduleClock',CASE WHEN v.kind='legacy' AND v.data_status='active' THEN v.reported_time ELSE NULL END,'timedDepartureEligible',v.timetable IS NOT NULL))
    ORDER BY coalesce(v.clock,'99:99'),lower(v.destination),lower(v.operator),v.entry_key)
    FROM visible v JOIN chosen c ON c.origin_key=v.origin_key),'[]'::jsonb)
 ) board`;
@@ -72,9 +72,9 @@ router.get('/departure-board', async (req, res) => {
   const query=GetV2DepartureBoardQueryParams.strict().safeParse(req.query);
   if(!query.success||req.query.originKey!==undefined&&typeof req.query.originKey!=='string'){res.status(400).json({code:'INVALID_QUERY',error:'Choose a departure city again.'});return;}
   try {
-    res.vary(reviewedRoutesHeader);const display=req.get(reviewedRoutesHeader);if(display!==undefined&&display!==reviewedRoutesVersion){res.status(400).json({code:'INVALID_DISPLAY_VERSION',error:'Update the app and try again.'});return;}
-    const modern=display===reviewedRoutesVersion&&await reviewedRoutesAvailable();
-    const sql=boardSql.replace('__CORE_COLUMN__',modern?'p.core_corrections':"'[]'::jsonb").replace('FROM public.v2_public_lead_reports p',modern?'FROM public.v2_public_reviewed_lead_reports p':'FROM public.v2_public_lead_reports p');
+    res.vary(reviewedRoutesHeader);const display=req.get(reviewedRoutesHeader);if(!validRouteDisplay(display)){res.status(400).json({code:'INVALID_DISPLAY_VERSION',error:'Update the app and try again.'});return;}
+    const modern=modernRouteDisplay(display)&&await reviewedRoutesAvailable(),timetables=modern&&display===timetableRoutesVersion&&await timetableRoutesAvailable();
+    const sql=boardSql.replace('__PICKUP_COLUMN__',timetables?"(SELECT original_value->>'name' FROM public.v2_api_timetable_card_claims(ARRAY[p.subject_id]) WHERE field_key='boarding.pickup')":'NULL::text').replace('__TIMETABLE_COLUMN__',timetables?'p.timetable':'NULL::jsonb').replace('__CORE_COLUMN__',modern?'p.core_corrections':"'[]'::jsonb").replace('FROM public.v2_public_lead_reports p',timetables?'FROM public.v2_public_supported_route_reports p':modern?'FROM public.v2_public_reviewed_lead_reports p':'FROM public.v2_public_lead_reports p');
     const {rows}=await pool.query(sql,[blocked,req.isAuthenticated()?req.user.id:null,
       process.env.CONTRIBUTION_MINIMUM_LEAD_ENABLED==='true',query.data.originKey??null]);
     const raw=rows[0]?.board,board=GetV2DepartureBoardResponse.parse(raw),now=Date.now();
@@ -82,8 +82,8 @@ router.get('/departure-board', async (req, res) => {
     const entries=board.entries.map(entry=>{
       // Search eligibility is not proof of a schedule: only a legacy timetable
       // with explicit recognised operating days gets a derived instant.
-      const next=entry.kind==='legacy'?nextLegacyDeparture(clocks.get(entry.key),entry.scheduledDays,now):null;
-      return {...entry,countdownEligible:!!next,...(next?{nextDepartureAt:next,scheduleTimezone:legacyScheduleTimezone}:{})};
+      const next=entry.timetable?nextTimetableDeparture(entry.timetable as ReviewedTimetable,now):entry.kind==='legacy'?nextLegacyDeparture(clocks.get(entry.key),entry.scheduledDays,now):null;
+      return {...entry,countdownEligible:!!next,...(next?{nextDepartureAt:next,scheduleTimezone:entry.timetable?.calendar.timezone??legacyScheduleTimezone}:{})};
     }).sort((a,b)=>(a.nextDepartureAt?Date.parse(String(a.nextDepartureAt)):Infinity)-(b.nextDepartureAt?Date.parse(String(b.nextDepartureAt)):Infinity)||0);
     res.json(GetV2DepartureBoardResponse.parse({...board,generatedAt:new Date(now).toISOString(),entries}));
   }catch{res.status(503).json({code:'TEMPORARILY_UNAVAILABLE',error:'The departure board could not load. Try again.'});}

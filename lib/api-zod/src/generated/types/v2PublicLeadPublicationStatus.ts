@@ -11,4 +11,5 @@ export type V2PublicLeadPublicationStatus =
 
 export const V2PublicLeadPublicationStatus = {
   details_needed: "details_needed",
+  reviewed_timetable: "reviewed_timetable",
 } as const;
