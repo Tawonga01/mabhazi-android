@@ -229,6 +229,19 @@ export function registerTimetableCommandTests(context:()=>Context){
   const present=await discovery(subject);if(!present){const diag=(await q("SELECT jsonb_build_object('command',(SELECT to_jsonb(t)-'proposal' FROM v2_admin_timetables t WHERE id=$1),'lead',(SELECT to_jsonb(l) FROM v2_leads l WHERE subject_id=$2),'removals',(SELECT jsonb_agg(to_jsonb(a)) FROM v2_admin_active_route_removals a WHERE route_subject_id=$2),'properties',(SELECT jsonb_agg(jsonb_build_array(field_key,v2_timetable_property_current(run_subject_id,field_key))) FROM v2_admin_timetable_properties WHERE run_subject_id=$3)) r",[f.request,subject,r.entries[0].runId])).rows[0].r;assert.ok(present,JSON.stringify({state:diag,native:await diagnosis(r.entries[0].runId)}));}
   assert.deepEqual((await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal,original);
  });
+ test('timetable discovery: native structural changes advance the real source alias revision and keep a bounded provenance cycle',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run),before=(await q('SELECT revision FROM v2_subjects WHERE id=$1',[subject])).rows[0].revision;
+  const dependent=(await q('SELECT v2_transport_dependents(ARRAY[$1::uuid]) ids',[run])).rows[0].ids as string[];
+  assert.deepEqual(new Set(dependent),new Set([run,subject]));
+  await q('UPDATE v2_runs SET departure_seconds=departure_seconds+60 WHERE subject_id=$1',[run]);
+  assert.ok(BigInt((await q('SELECT revision FROM v2_subjects WHERE id=$1',[subject])).rows[0].revision)>BigInt(before));assert.equal(await discovery(subject),null);
+ });
+ test('timetable discovery: restore never revives a genuinely changed native schedule',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run),removed=await visibility(f,subject);
+  await q('UPDATE v2_runs SET departure_seconds=departure_seconds+60 WHERE subject_id=$1',[run]);
+  assert.equal((await visibility(f,subject,'restore',removed.id)).outcome,'restored');assert.equal(await discovery(subject),null);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,false);
+ });
  test('timetable discovery: restoring an administrator removal cannot clear an independent safety hide',async()=>{
   const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),removed=await visibility(f,subject);
   const report=(await q("INSERT INTO abuse_reports(reporter_id,target_type,target_id,reason) VALUES($1,'transport_subject',$2,'unsafe') RETURNING id",[context().user,subject])).rows[0].id;

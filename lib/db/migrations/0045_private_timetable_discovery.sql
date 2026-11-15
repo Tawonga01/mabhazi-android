@@ -1,6 +1,28 @@
 -- Private timetable discovery and registered-source restorable management.
 -- No new grants; source-only until full public/client adapters are installed.
 ALTER TABLE public.v2_admin_timetable_entries ADD CONSTRAINT v2_timetable_unique_source UNIQUE(source_subject_id);
+CREATE OR REPLACE FUNCTION public.v2_transport_dependents(roots uuid[]) RETURNS uuid[] LANGUAGE sql STABLE SET search_path=pg_catalog AS $$
+ WITH RECURSIVE edges(parent,child) AS (
+  SELECT operator_subject_id,subject_id FROM public.v2_leads WHERE operator_subject_id IS NOT NULL
+  UNION SELECT operator_subject_id,subject_id FROM public.v2_routes
+  UNION SELECT route_subject_id,subject_id FROM public.v2_patterns
+  UNION SELECT pattern_subject_id,subject_id FROM public.v2_service_plans
+  UNION SELECT service_plan_subject_id,subject_id FROM public.v2_runs
+  UNION SELECT pattern_subject_id,subject_id FROM public.v2_runs
+  UNION SELECT run_subject_id,source_subject_id FROM public.v2_admin_timetable_entries
+  UNION SELECT parent_stop_id,subject_id FROM public.v2_stops WHERE parent_stop_id IS NOT NULL
+  UNION SELECT ps.stop_subject_id,ps.pattern_subject_id FROM public.v2_pattern_stops ps JOIN public.v2_pattern_versions pv ON pv.pattern_subject_id=ps.pattern_subject_id AND pv.version=ps.pattern_version WHERE pv.sealed
+  UNION SELECT intended_subject_id,subject_id FROM public.v2_actual_journeys WHERE intended_subject_id IS NOT NULL
+  UNION SELECT matched_run_subject_id,subject_id FROM public.v2_actual_journeys WHERE matched_run_subject_id IS NOT NULL
+  UNION SELECT x.ref_id,o.original_subject_id FROM public.v2_observation_refs r JOIN public.v2_observations o ON o.id=r.observation_id CROSS JOIN LATERAL unnest(ARRAY[r.operator_id,r.stop_id]) x(ref_id) WHERE x.ref_id IS NOT NULL
+  UNION SELECT x.ref_id,public.v2_observation_subject(r.observation_id) FROM public.v2_observation_refs r CROSS JOIN LATERAL unnest(ARRAY[r.operator_id,r.stop_id]) x(ref_id) WHERE x.ref_id IS NOT NULL
+  UNION SELECT p.source_subject_id,p.target_subject_id FROM public.v2_transport_creations p JOIN public.v2_transport_creation_origins o ON o.creation_id=p.id
+  UNION SELECT from_subject_id,to_subject_id FROM public.v2_association_links
+  UNION SELECT to_subject_id,from_subject_id FROM public.v2_association_links
+ ), reached(id) AS (SELECT unnest(roots) UNION SELECT e.child FROM edges e JOIN reached r ON r.id=e.parent)
+ SELECT COALESCE(array_agg(s.id ORDER BY s.id),'{}'::uuid[]) FROM reached r JOIN public.v2_subjects s ON s.id=r.id;
+$$;
+
 -- Private discovery projection prerequisite. No client/backend grant here.
 -- The public HTTP/native capability and compatible contribution adapters must
 -- be installed before exposing it. Staff scaffolds never become public leads.
@@ -151,3 +173,26 @@ BEGIN
  VALUES(request,actor,digest,operation,reason,route,source,expected,removal_ref,result);
  RETURN public.v2_api_admin_route_action_receipt(actor,request);
 END;$$;
+
+-- Removing a registered presentation row changes publication, not the reviewed
+-- native facts. The generic path follows native source->created-run provenance
+-- edges and irreversibly invalidates that creation head on a visibility toggle.
+-- Keep the public gate closed while removed, advance the alias revision/tasks,
+-- and let restoration re-evaluate unchanged native proof. Real structural or
+-- evidence changes still use their original invalidation paths.
+CREATE OR REPLACE FUNCTION public.v2_admin_route_action_propagate() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.outcome IN('removed','restored') THEN
+  IF EXISTS(SELECT 1 FROM public.v2_admin_timetable_entries e JOIN public.v2_leads l ON l.subject_id=e.source_subject_id
+   WHERE e.source_subject_id=NEW.route_subject_id AND l.intake_kind='staff') THEN
+   PERFORM public.v2_target_recompute_subjects(ARRAY[NEW.route_subject_id],NEW.id,false);
+   INSERT INTO public.v2_jobs(kind,subject_id,requested_generation,policy_version,trigger_id)
+    SELECT 'refresh_tasks',id,input_generation,'prompts/1',NEW.id FROM public.v2_subjects WHERE id=NEW.route_subject_id;
+  ELSE
+   PERFORM public.v2_transport_propagate(ARRAY[NEW.route_subject_id],'v2_admin_route_actions','UPDATE',ARRAY['public_visibility']);
+  END IF;
+ END IF;
+ RETURN NEW;
+END;$$;
+
