@@ -25,6 +25,29 @@ BEGIN
  RETURN observation;
 END;$$;
 
+-- A new citation changes its observation's footprint, not the footprints of
+-- every earlier observation citing that source. Recompute its actual targets
+-- and advance the graph fence. Source identity changes and deletions still
+-- invalidate the whole connected component through the existing path.
+-- Without this distinction, adding an arrival from the same document advances
+-- an unchanged parent plan's epoch and invalidates an already reviewed run.
+CREATE OR REPLACE FUNCTION public.v2_source_citation_changed() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+  PERFORM public.v2_source_changed(ARRAY[]::uuid[],ARRAY[NEW.observation_id],false);RETURN NEW;
+ ELSE
+  PERFORM public.v2_source_changed(ARRAY[OLD.source_id],ARRAY[OLD.observation_id],true);RETURN OLD;
+ END IF;
+END;$$;
+REVOKE ALL ON FUNCTION public.v2_source_citation_changed() FROM PUBLIC,mabhazi_api;
+DO $$ DECLARE r text;BEGIN
+ FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
+  IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN EXECUTE format('REVOKE ALL ON FUNCTION public.v2_source_citation_changed() FROM %I',r);END IF;
+ END LOOP;
+END;$$;
+
+
 -- Draft command/proof storage for the narrow atomic facade. No public/backend
 -- table access. Source facts live in typed observations/domain transport tables;
 -- these rows bind immutable commands and exact independent review references.
@@ -84,6 +107,18 @@ BEGIN
  RETURN OLD;
 END;$$;
 CREATE TRIGGER timetable_forget_payload BEFORE DELETE ON public.v2_contributions FOR EACH ROW EXECUTE FUNCTION public.v2_timetable_forget_payload();
+CREATE FUNCTION public.v2_timetable_forget_source() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM public.users WHERE id=OLD.owner_user_id) THEN
+  UPDATE public.v2_admin_timetables SET proposal=NULL,request_digest=NULL,erased=true
+   WHERE actor_user_id=OLD.owner_user_id AND NOT erased AND id IN(
+    SELECT CASE WHEN public.v2_json_uuid(c.payload->'timetableCommandId') THEN (c.payload->>'timetableCommandId')::uuid END
+    FROM public.v2_observation_sources os JOIN public.v2_observations o ON o.id=os.observation_id
+    JOIN public.v2_contributions c ON c.id=o.contribution_id WHERE os.source_id=OLD.id);
+ END IF;
+ RETURN OLD;
+END;$$;
+CREATE TRIGGER aa_timetable_forget_source BEFORE DELETE ON public.v2_sources FOR EACH ROW EXECUTE FUNCTION public.v2_timetable_forget_source();
 DO $$ DECLARE t text;r text;BEGIN
  FOREACH t IN ARRAY ARRAY['v2_admin_timetables','v2_admin_timetable_entries','v2_admin_timetable_properties'] LOOP
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',t);
@@ -96,10 +131,12 @@ DO $$ DECLARE t text;r text;BEGIN
  END LOOP;
  REVOKE ALL ON FUNCTION public.v2_timetable_history_guard() FROM PUBLIC,mabhazi_api;
  REVOKE ALL ON FUNCTION public.v2_timetable_forget_payload() FROM PUBLIC,mabhazi_api;
+ REVOKE ALL ON FUNCTION public.v2_timetable_forget_source() FROM PUBLIC,mabhazi_api;
  FOREACH r IN ARRAY ARRAY['anon','authenticated'] LOOP
   IF EXISTS(SELECT 1 FROM pg_roles WHERE rolname=r) THEN
    EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_history_guard() FROM %I',r);
    EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_forget_payload() FROM %I',r);
+   EXECUTE format('REVOKE ALL ON FUNCTION public.v2_timetable_forget_source() FROM %I',r);
   END IF;
  END LOOP;
 END;$$;

@@ -1,4 +1,5 @@
 import '../lib/adminTimetable.test';
+import {registerAdminTimetableApiTests} from './adminTimetables.cases';
 import {registerAdminCoreApiTests} from './adminCore.cases';
 import {registerAdminConsoleTests} from './adminConsole.cases';
 import {registerAdminEvidenceTests} from './adminEvidence.cases';
@@ -264,3 +265,4 @@ registerAdminEvidenceTests(()=>({admin,base,accounts,tokens,cities,leadBody:body
 registerAdminActionTests(()=>({admin,base,accounts,tokens,leadBody:body}));
 
 registerAdminCoreApiTests(()=>({admin,base,accounts,tokens,leadBody:body}));
+registerAdminTimetableApiTests(()=>({admin,base,accounts,tokens,cities}));

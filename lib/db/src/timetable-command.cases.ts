@@ -153,6 +153,27 @@ export function registerTimetableCommandTests(context:()=>Context){
   assert.equal((await q('SELECT v2_timetable_proposal_valid($1) r',[{...f.p,departures:[{...f.p.departures[0],fare:{amount:'12',currency:'USD',kind:'paid'}}]}])).rows[0].r,false);
   await invalid(()=>q('SELECT v2_api_admin_timetable_preview($1,$2)',[f.actor,{...f.p,weekdays:[]}]));
  });
+ test('timetable command: an extra citation to the same document preserves unchanged parent epochs and native proof',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId;
+  const parent=(await q('SELECT service_plan_subject_id FROM v2_runs WHERE subject_id=$1',[run])).rows[0].service_plan_subject_id;
+  const before=(await q('SELECT revision,input_generation FROM v2_subjects WHERE id=$1',[parent])).rows[0];
+  const source=(await q("SELECT os.source_id FROM v2_admin_timetable_properties p JOIN v2_observation_sources os ON os.observation_id=p.observation_id WHERE p.run_subject_id=$1 AND p.field_key='departure.scheduled'",[run])).rows[0].source_id;
+  const graph=(await q('SELECT revision FROM v2_source_graph WHERE id')).rows[0].revision;
+  const extra=(await q('SELECT v2_timetable_source($1,$2,$3,$4,$5) r',[f.actor,randomUUID(),f.p,{name:f.p.operator},source])).rows[0].r;
+  assert.deepEqual((await q('SELECT revision,input_generation FROM v2_subjects WHERE id=$1',[parent])).rows[0],before);
+  assert.ok(BigInt((await q('SELECT revision FROM v2_source_graph WHERE id')).rows[0].revision)>BigInt(graph));
+  assert.ok(BigInt((await q('SELECT input_generation FROM v2_subjects WHERE id=$1',[extra.subjectId])).rows[0].input_generation)>1n);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,true);
+ });
+ test('timetable command: source-only erasure redacts copied proposal and invalidates all dependent timetable proof',async()=>{
+  const f=await setup(),b=await input(f),r=await apply(f,b),run=r.entries[0].runId;
+  const source=(await q("SELECT os.source_id FROM v2_admin_timetable_properties p JOIN v2_observation_sources os ON os.observation_id=p.observation_id WHERE p.run_subject_id=$1 AND p.field_key='departure.scheduled'",[run])).rows[0].source_id;
+  await q('DELETE FROM v2_sources WHERE id=$1',[source]);
+  assert.equal((await q('SELECT v2_current_reviewed_creation($1) r',[run])).rows[0].r,false);
+  assert.equal((await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal,null);
+  assert.equal((await q("SELECT v2_timetable_property_current($1,'boarding.pickup') r",[run])).rows[0].r,false);
+  await invalid(()=>apply(f,b));
+ });
  test('timetable command: raw backend and public roles cannot invoke private importers or read command proposals',async()=>{
   const f=await setup(),b=await input(f);for(const role of ['mabhazi_api','anon','authenticated']){
    await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_api_admin_timetable_action($1,$2,$3)',[f.actor,f.request,b]),['42501']);
