@@ -481,6 +481,8 @@ before(async () => {
    ["CREATE OR REPLACE VIEW public.v2_admin_current_core AS SELECT DISTINCT ON(a.route_subject_id,a.field_key) a.* FROM public.v2_admin_core_actions a WHERE false ORDER BY a.route_subject_id,a.field_key,a.position DESC",'core_view_changed'],
    ["UPDATE mabhazi_migrations.applied SET checksum='drift' WHERE name='0040_admin_route_visibility.sql'",'core_preview_baseline_changed']
   ]){await db.query('BEGIN');await db.query(change!);await assert.rejects(()=>db.query(coreApply),(e:unknown)=>e instanceof Error&&e.message.includes(message!));await db.query('ROLLBACK');}
+  try {
+  await db.query("SET log_min_error_statement='panic'");
   // Exercise the exact hosted0041 ->0047 script on this disposable populated database.
   await db.query("SELECT set_config('mabhazi.activation_fixture','ci-only',false)");
   const timetableApply=await readFile(new URL('../scripts/preview-apply-timetables-0042-0047.sql',import.meta.url),'utf8');
@@ -493,6 +495,8 @@ before(async () => {
   // Runtime migrations intentionally keep private management ungranted; only
   // the explicit hosted activation adds these rights. Restore the CI baseline.
   for(const f of ["public.v2_api_admin_timetable_preview(varchar,jsonb)","public.v2_api_admin_timetable_action(varchar,uuid,jsonb)","public.v2_api_admin_timetable_receipt(varchar,uuid)","public.v2_api_admin_timetable_operators(varchar,text)","public.v2_api_admin_timetable_records(varchar,uuid)","public.v2_api_admin_timetable_command(varchar,uuid,jsonb)","public.v2_api_admin_timetable_command_receipt(varchar,uuid)"])await db.query('REVOKE ALL ON FUNCTION '+f+' FROM mabhazi_api');
+  }catch(error){const e=error as {message?:string;code?:string;where?:string};console.log('MABHAZI_TIMETABLE_ACTIVATION_FAILURE '+JSON.stringify({message:e.message,code:e.code,where:e.where?.slice(0,500)}));await db.query('ROLLBACK').catch(()=>{});throw Error('Timetable activation guard: '+e.message);}
+  finally{await db.query('RESET log_min_error_statement').catch(()=>{});}
   const upgradeLog = previousStageLog + await migrate();
   assert.deepEqual(await workerSnapshot(), beforeWorker);
   assert.deepEqual(await associationUpgradeSnapshot(),beforeAssociation);
