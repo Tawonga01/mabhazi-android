@@ -78,9 +78,9 @@ DO $$ DECLARE definition text;BEGIN
  EXECUTE replace(definition,'public.v2_public_reviewed_lead_reports','public.v2_public_supported_route_reports');
  EXECUTE 'CREATE OR REPLACE VIEW public.v2_fare_report_context AS '||replace(pg_get_viewdef('public.v2_fare_report_context'::regclass,true),'v2_public_lead_reports','v2_public_contributable_route_reports');
  definition:=pg_get_viewdef('public.v2_place_report_context'::regclass,true);
- IF strpos(definition,"l.intake_kind = 'community'")=0 OR strpos(definition,'v2_prompt_identity(l.subject_id)')=0 THEN RAISE EXCEPTION 'timetable_place_baseline_changed';END IF;
- definition:=replace(definition,"l.intake_kind = 'community'::text","(l.intake_kind = 'community'::text OR (l.intake_kind = 'staff'::text AND v2_timetable_discovery(l.subject_id) IS NOT NULL))");
- definition:=replace(definition,'v2_prompt_identity(l.subject_id)',"CASE WHEN l.intake_kind='staff' THEN v2_timetable_identity(l.subject_id) ELSE v2_prompt_identity(l.subject_id) END");
+ IF strpos(definition,$anchor$l.intake_kind = 'community'$anchor$)=0 OR strpos(definition,'v2_prompt_identity(l.subject_id)')=0 THEN RAISE EXCEPTION 'timetable_place_baseline_changed';END IF;
+ definition:=replace(definition,$anchor$l.intake_kind = 'community'::text$anchor$,$replacement$(l.intake_kind = 'community'::text OR (l.intake_kind = 'staff'::text AND v2_timetable_discovery(l.subject_id) IS NOT NULL))$replacement$);
+ definition:=replace(definition,'v2_prompt_identity(l.subject_id)',$replacement$CASE WHEN l.intake_kind='staff' THEN v2_timetable_identity(l.subject_id) ELSE v2_prompt_identity(l.subject_id) END$replacement$);
  EXECUTE 'CREATE OR REPLACE VIEW public.v2_place_report_context AS '||definition;
  definition:=pg_get_functiondef('public.v2_api_place_report_action(character varying,uuid,uuid,text,text,character varying[])'::regprocedure);
  EXECUTE replace(definition,'public.v2_public_lead_reports','public.v2_public_contributable_route_reports');
