@@ -174,6 +174,81 @@ export function registerTimetableCommandTests(context:()=>Context){
   assert.equal((await q("SELECT v2_timetable_property_current($1,'boarding.pickup') r",[run])).rows[0].r,false);
   await invalid(()=>apply(f,b));
  });
+ const discovery=async(subject:string,at:string|null=null)=>(await q(at?'SELECT v2_timetable_discovery($1,$2::timestamptz) r':'SELECT v2_timetable_discovery($1) r',at?[subject,at]:[subject])).rows[0].r;
+ const alias=async(run:string)=>(await q('SELECT source_subject_id FROM v2_admin_timetable_entries WHERE run_subject_id=$1',[run])).rows[0].source_subject_id as string;
+ async function reverseProperty(f:Fixture,run:string,field:string){
+  const p=(await q('SELECT p.*,c.revision case_revision,s.revision subject_revision FROM v2_admin_timetable_properties p JOIN v2_review_cases c ON c.id=p.writer_id JOIN v2_subjects s ON s.id=p.subject_id WHERE p.run_subject_id=$1 AND p.field_key=$2',[run,field])).rows[0];
+  await q('SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision DEFERRED');
+  await q("SELECT v2_record_review($1,$2,$3,$4,'reverse','decision_incorrect',NULL,ARRAY[]::uuid[],'timetable-import/1',$5)",[f.actor,p.writer_id,p.case_revision,p.subject_revision,p.review_id]);
+  await q('SET CONSTRAINTS public.v2_decision_subtype,public.v2_review_subtype,public.v2_review_last_decision IMMEDIATE');
+ }
+ async function visibility(f:Fixture,subject:string,operation='remove',removalId:string|null=null){
+  const revision=(await q('SELECT revision::text r FROM v2_subjects WHERE id=$1',[subject])).rows[0].r;
+  return(await q('SELECT v2_api_admin_route_action($1,$2,$3) r',[f.actor,randomUUID(),{routeId:subject,revision,operation,reason:operation==='remove'?'inaccurate':'record_rechecked',removalId,expiresAt:Date.now()+300000}])).rows[0].r;
+ }
+ test('timetable discovery: only a registered real source lead exposes reviewed native context and genuine unknowns',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run),d=await discovery(subject);
+  assert.ok(d);assert.equal(d.subjectId,subject);assert.equal(d.runId,run);assert.equal(d.provenance,'reviewed_timetable');
+  assert.equal(d.origin.id,f.p.originCityId);assert.equal(d.destination.id,f.p.destinationCityId);assert.equal(d.operator.name,f.p.operator);
+  assert.equal(d.departureSeconds,25200);assert.equal(d.arrivalSeconds,null);assert.equal(d.dropoff,null);assert.equal(d.pickup.name,f.p.pickup);
+  assert.equal(d.calendar.weekdays,21);assert.equal(d.calendar.timezone,'Africa/Harare');assert.ok(!d.approvedFacts.some((p:{field:string})=>p.field.startsWith('fare.')));
+  assert.ok(!JSON.stringify(d).includes(f.p.source.reference));assert.ok(!JSON.stringify(d).includes(f.actor));assert.equal(await discovery(run),null);
+ });
+ test('timetable discovery: reviewed overnight arrival and zero advertised fare retain actual scope and observation date',async()=>{
+  const f=await setup();f.p.departures=[{departure:'23:30',arrival:'01:15',arrivalDay:1,fare:{amount:'0',currency:'USD',kind:'advertised'}}];
+  const r=await saved(f),d=await discovery(await alias(r.entries[0].runId));assert.ok(d);assert.equal(d.arrivalSeconds,90900);
+  const fare=d.approvedFacts.find((p:{field:string})=>p.field==='fare.advertised');assert.deepEqual(fare.value,{amount:'0',currency:'USD'});
+  assert.equal(fare.scope.passengerCategory,'unknown');assert.equal(fare.scope.ticketBasis,'unknown');assert.equal(fare.observedDate,f.p.source.checkedOn);
+ });
+ test('timetable discovery: a future window stays unavailable today and expires at its actual local end',async()=>{
+  const f=await setup(),dates=(await q('SELECT ($1::date+2)::text start,($1::date+5)::text finish',[f.p.validFrom])).rows[0];f.p.validFrom=dates.start;f.p.validUntil=dates.finish;
+  const r=await saved(f),subject=await alias(r.entries[0].runId);assert.equal(await discovery(subject),null);
+  assert.ok(await discovery(subject,f.p.validFrom+'T12:00:00+02:00'));
+  const after=(await q('SELECT ($1::date+1)::text d',[f.p.validUntil])).rows[0].d;assert.equal(await discovery(subject,after+'T00:00:00+02:00'),null);
+ });
+ test('timetable discovery: critical schedule follows existing evidence-policy recheck boundary rather than approval time',async()=>{
+  const f=await setup(),h=(await q('SELECT p.schedule_days FROM v2_evidence_policy_state s JOIN v2_evidence_policies p ON p.version=s.version WHERE s.id')).rows[0].schedule_days;
+  f.p.validUntil=(await q('SELECT ($1::date+$2::integer+3)::text d',[f.p.validFrom,h])).rows[0].d;
+  const r=await saved(f),subject=await alias(r.entries[0].runId),times=(await q("SELECT (v2_assessment_day_end($1::date,$2::integer,'Africa/Harare')-interval '1 millisecond')::text before,v2_assessment_day_end($1::date,$2::integer,'Africa/Harare')::text due",[f.p.source.checkedOn,h])).rows[0];
+  assert.ok(await discovery(subject,times.before));assert.equal(await discovery(subject,times.due),null);
+ });
+ test('timetable discovery: a fare-only reversal removes its card fact while preserving the exact boarding and clock',async()=>{
+  const f=await setup();f.p.departures[0].fare={amount:'18',currency:'USD',kind:'quoted'};const r=await saved(f),run=r.entries[0].runId,subject=await alias(run);
+  assert.ok((await discovery(subject)).approvedFacts.some((p:{field:string})=>p.field==='fare.quoted'));
+  await reverseProperty(f,run,'fare.quoted');const d=await discovery(subject);assert.ok(d);assert.equal(d.departureSeconds,25200);assert.equal(d.pickup.name,f.p.pickup);
+  assert.ok(!d.approvedFacts.some((p:{field:string})=>p.field==='fare.quoted'));
+ });
+ test('timetable discovery: withdrawing required boarding evidence suppresses the unsafe timed record',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run);assert.ok(await discovery(subject));
+  await reverseProperty(f,run,'boarding.pickup');assert.equal(await discovery(subject),null);
+ });
+ test('timetable discovery: removal and restore preserve originals and re-evaluate real eligibility',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),original=(await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal;
+  const removed=await visibility(f,subject);assert.equal(removed.outcome,'removed');assert.equal(await discovery(subject),null);
+  assert.equal((await visibility(f,subject,'restore',removed.id)).outcome,'restored');assert.ok(await discovery(subject));
+  assert.deepEqual((await q('SELECT proposal FROM v2_admin_timetables WHERE id=$1',[f.request])).rows[0].proposal,original);
+ });
+ test('timetable discovery: restoring an administrator removal cannot clear an independent safety hide',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId),removed=await visibility(f,subject);
+  const report=(await q("INSERT INTO abuse_reports(reporter_id,target_type,target_id,reason) VALUES($1,'transport_subject',$2,'unsafe') RETURNING id",[context().user,subject])).rows[0].id;
+  await q('INSERT INTO v2_public_lead_hides(subject_id,report_id) VALUES($1,$2)',[subject,report]);
+  assert.equal((await visibility(f,subject,'restore',removed.id)).outcome,'restored');assert.equal(await discovery(subject),null);
+ });
+ test('timetable discovery: current critical conflicts suppress output without manufacturing a selected timetable',async()=>{
+  const f=await setup(),r=await saved(f),run=r.entries[0].runId,subject=await alias(run);
+  const scope=(await q("SELECT o.scope_key FROM v2_admin_timetable_properties p JOIN v2_observations o ON o.id=p.observation_id WHERE p.run_subject_id=$1 AND p.field_key='departure.scheduled'",[run])).rows[0].scope_key;
+  await q("SELECT v2_open_review_case($1,$2,'conflict','departure.scheduled',$3)",[f.actor,subject,scope]);assert.equal(await discovery(subject),null);
+ });
+ test('timetable discovery: changing the presentation core cannot display an old native schedule under a new route',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId);await q('UPDATE v2_leads SET reported_departure_seconds=reported_departure_seconds+60 WHERE subject_id=$1',[subject]);
+  assert.equal(await discovery(subject),null);
+ });
+ test('timetable discovery: raw roles cannot call the private projection or remove an unregistered staff scaffold',async()=>{
+  const f=await setup(),r=await saved(f),subject=await alias(r.entries[0].runId);
+  const scaffold=(await q("SELECT original_subject_id FROM v2_contributions WHERE payload->>'timetableCommandId'=$1 AND original_subject_id<>$2 AND original_subject_id IN(SELECT subject_id FROM v2_leads) LIMIT 1",[f.request,subject])).rows[0].original_subject_id;
+  assert.equal(await discovery(scaffold),null);assert.equal((await visibility(f,scaffold)).outcome,'unavailable');
+  for(const role of ['mabhazi_api','anon','authenticated']){await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_timetable_discovery($1)',[subject]),['42501']);await q('RESET ROLE');}
+ });
  test('timetable command: raw backend and public roles cannot invoke private importers or read command proposals',async()=>{
   const f=await setup(),b=await input(f);for(const role of ['mabhazi_api','anon','authenticated']){
    await q('SET LOCAL ROLE '+role);await invalid(()=>q('SELECT v2_api_admin_timetable_action($1,$2,$3)',[f.actor,f.request,b]),['42501']);
