@@ -30,3 +30,9 @@ test('minimum save: serialisation retries use the same actor, Terms and frozen i
   const failing:IntakePool={connect:async()=>({query:async()=>{throw Object.assign(new Error('retry'),{code:'40001'});},release:()=>{connections++;}})};
   connections=0;await assert.rejects(saveMinimumLead('actor',{},failing));assert.equal(connections,3);
 });
+
+test('pickup answer save: same frozen invitation/account/body and safety bind through commit ambiguity',async()=>{
+ const events:string[]=[],id=randomUUID(),blocked=['fixture-hidden'];
+ const database:IntakePool={connect:async()=>({query:async(sql,values)=>{events.push(sql);if(sql.startsWith('SELECT')){assert.ok(sql.includes('v2_api_submit_pickup_question_answer($1,$2,$3::jsonb,$4::varchar[],$5::uuid)'));assert.deepEqual(values,['server-actor','2026-09-12',JSON.stringify({frozen:true}),blocked,id]);return {rows:[{receipt}]};}if(sql==='COMMIT')throw new Error('pickup-commit-lost');return {rows:[]};},release:()=>events.push('release')})};
+ await assert.rejects(saveIntake('server-actor',{frozen:true},'v2_api_submit_pickup_question_answer',database,blocked,id),/pickup-commit-lost/);assert.deepEqual(events.slice(-3),['COMMIT','ROLLBACK','release']);
+});

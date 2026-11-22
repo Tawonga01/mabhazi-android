@@ -6,7 +6,12 @@ import pg from "pg";
 import { fieldResolutionTables } from "./schema/fieldResolution";
 
 type Context = { db: pg.Client; connectionString: string; user: string; other: string; origin: number; destination: number; corridor: string };
-const at = "2026-10-02T12:00:00.000Z";
+// Review commands use the real database clock. Keep ordinary examples recent
+// while retaining the relative dates and explicit expired-schedule case.
+const fixtureClock = Date.now();
+const fixtureDay = new Date(fixtureClock-2*86400000).toISOString().slice(0,10);
+const observedDay = new Date(fixtureClock-3*86400000).toISOString().slice(0,10);
+const at = fixtureDay+"T12:00:00.000Z";
 const assessSQL = "SELECT v2_assess_field($1,$2,$3,$4,$5,$6,$7,$8,$9) id";
 type Options = { owner?: string; date?: string | null; sourceDate?: string | null; basis?: string; sources?: string[]; supersedes?: string; effectiveFrom?: string; effectiveTo?: string };
 export function registerFieldResolutionTests(context: () => Context) {
@@ -36,13 +41,13 @@ export function registerFieldResolutionTests(context: () => Context) {
     const owner = options.owner ?? context().user, c = await contribution(id, owner);
     const observation = (await q(`INSERT INTO v2_observations(contribution_id,original_subject_id,field_key,value,scope,scope_key,value_key,knowledge_basis,observed_from,supersedes_id,effective_from,effective_to)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`, [c, id, field, value, scope, await hash(scope), await hash(value), options.basis ?? "observed_sign",
-      options.date === undefined ? "2026-10-01" : options.date, options.supersedes ?? null, options.effectiveFrom ?? null, options.effectiveTo ?? null])).rows[0].id as string;
+      options.date === undefined ? observedDay : options.date, options.supersedes ?? null, options.effectiveFrom ?? null, options.effectiveTo ?? null])).rows[0].id as string;
     const sources = options.sources ?? [await source(owner, options.sourceDate ?? null)];
     for (const s of sources) await q("INSERT INTO v2_observation_sources VALUES($1,$2,'direct')", [observation, s]);
     return { observation, sources, id, field, value, scope, owner };
   }
   const fareScope = (extra: Record<string, unknown> = {}) => ({ schemaVersion: "1.0", segment: { kind: "city_pair", originCityId: context().origin, destinationCityId: context().destination },
-    passengerCategory: "adult", ticketBasis: "one_way", paymentMethod: "cash", luggageIncluded: true, timeBasis: "scheduled", quotationDate: "2026-10-01", ...extra });
+    passengerCategory: "adult", ticketBasis: "one_way", paymentMethod: "cash", luggageIncluded: true, timeBasis: "scheduled", quotationDate: observedDay, ...extra });
   const fare = (amount = "25.00", currency = "USD") => ({ amount, currency });
   const evaluate = async (id: string, field: string, scope: unknown = {}, when = at) => (await q("SELECT v2_evaluate_assessment($1,$2,$3,$4,'evidence/1') r", [id, field, scope, when])).rows[0].r;
   async function args(id: string, field: string, scope: unknown = {}, when = at) {
@@ -90,13 +95,13 @@ export function registerFieldResolutionTests(context: () => Context) {
     const id = await lead(), scope = fareScope(); await report(id, "fare.quoted", fare(), scope); await report(id, "fare.quoted", fare(), scope, { owner: context().other });
     const a = await record(id, "fare.quoted", scope), d = await process(a); assert.equal(await process(a), d);
     const r = await fieldRead(id, scope); assert.equal(r.support, "corroborated"); assert.equal(r.publication, "provisional"); assert.equal(r.reviewed, false);
-    const b = await record(id, "fare.quoted", scope, "2026-10-02T13:00:00Z"); assert.equal(await process(b), d);
+    const b = await record(id, "fare.quoted", scope, fixtureDay+"T13:00:00Z"); assert.equal(await process(b), d);
     assert.equal((await q("SELECT count(*) FROM v2_field_decisions WHERE subject_id=$1", [id])).rows[0].count, "1");
   });
   test("field resolution: conflicts open one durable case and withhold a winner", async () => {
     const f = await conflict(); const c = await thread(f.id); assert.equal(c.state, "open");
     const r = await fieldRead(f.id, f.scope); assert.equal(r.value, null); assert.equal(r.dispute, "open"); assert.equal(r.status, "review_required");
-    assert.equal(r.candidates.length,2); assert.ok(r.candidates.every((x:Record<string,unknown>)=>x.oldestDate==="2026-10-01" && !Object.hasOwn(x,"witnesses")));
+    assert.equal(r.candidates.length,2); assert.ok(r.candidates.every((x:Record<string,unknown>)=>x.oldestDate===observedDay && !Object.hasOwn(x,"witnesses")));
     assert.ok(!JSON.stringify(r).includes(f.a.observation)); assert.ok(!JSON.stringify(r).includes("Synthetic private rationale"));
     await process(f.assessment); assert.equal((await q("SELECT count(*) FROM v2_field_case_events WHERE case_id=$1", [c.id])).rows[0].count, "1");
   });
@@ -113,8 +118,8 @@ export function registerFieldResolutionTests(context: () => Context) {
   });
   test("field resolution: unchanged rejected evidence does not reopen on a new assessment timestamp", async () => {
     const f = await conflict(); await resolve(f.assessment, f.a.observation, [f.b.observation]); const c = await thread(f.id);
-    const a = await record(f.id, "fare.quoted", f.scope, "2026-10-02T13:00:00Z"); await process(a);
-    assert.equal((await thread(f.id)).revision, c.revision); assert.equal((await fieldRead(f.id, f.scope, "2026-10-02T13:00:00Z")).dispute, "resolved");
+    const a = await record(f.id, "fare.quoted", f.scope, fixtureDay+"T13:00:00Z"); await process(a);
+    assert.equal((await thread(f.id)).revision, c.revision); assert.equal((await fieldRead(f.id, f.scope, fixtureDay+"T13:00:00Z")).dispute, "resolved");
   });
   test("field resolution: a new contradictory report reopens and clears the reviewed winner", async () => {
     const f = await conflict(); await resolve(f.assessment, f.a.observation, [f.b.observation]);
@@ -162,10 +167,10 @@ export function registerFieldResolutionTests(context: () => Context) {
     await invalid(() => resolve(f.assessment,f.a.observation,[f.a.observation]));
   });
   test("field resolution: an expired assessment cannot be reviewed and reads do not serve stale selections", async () => {
-    const t = await transport(), scope = { schemaVersion:"1.0",serviceDate:"2026-10-02",timezone:"Africa/Harare" };
+    const t = await transport(), scope = { schemaVersion:"1.0",serviceDate:fixtureDay,timezone:"Africa/Harare" };
     const o = await report(t.run,"departure.scheduled",{seconds:28800},scope); const a=await record(t.run,"departure.scheduled",scope); await process(a); await reviewer();
     await invalid(() => resolve(a,o.observation),["40001"]);
-    assert.equal((await fieldRead(t.run,scope,"2026-10-02T22:00:00Z","departure.scheduled")).status,"recheck_required");
+    assert.equal((await fieldRead(t.run,scope,fixtureDay+"T22:00:00Z","departure.scheduled")).status,"recheck_required");
   });
   test("field resolution: historical paid fare conflicts can be reviewed without current-price claims", async () => {
     const t=await transport(), scope=fareScope({quotationDate:undefined,serviceDate:"2020-01-01",timeBasis:"actual"});

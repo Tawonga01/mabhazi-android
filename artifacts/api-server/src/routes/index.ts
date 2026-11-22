@@ -4,6 +4,7 @@ import authRouter from "./auth";
 import journeysRouter from "./journeys";
 import associationsRouter from "./associations";
 import adminRouter from "./admin";
+import adminConsoleRouter from "./adminConsole";
 import busCompaniesRouter from "./busCompanies";
 import legalRouter from "./legal";
 import contributionsV2Router from "./contributionsV2";
@@ -17,6 +18,7 @@ router.use(authRouter);
 router.use(journeysRouter);
 router.use(associationsRouter);
 router.use(busCompaniesRouter);
+router.use(adminConsoleRouter);
 router.use(adminRouter);
 router.use(legalRouter);
 

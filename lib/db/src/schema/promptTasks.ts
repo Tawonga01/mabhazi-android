@@ -96,4 +96,12 @@ export const v2PromptMetricsTable = pgTable("v2_prompt_metrics", {
   outcome: text("outcome").notNull(),
   count: bigint("count", { mode: "bigint" }).notNull(),
 }, t => [primaryKey({ columns: [t.policyVersion, t.registryKey, t.outcome] })]);
-export const promptTables = [v2PromptPoliciesTable, v2QuestionRegistryTable, v2QuestionTasksTable, v2PromptPreferencesTable, v2PromptSuppressionsTable, v2PromptSessionsTable, v2PromptRequestsTable, v2PromptInvitationsTable, v2PromptEventsTable, v2PromptMetricsTable];
+export const v2PickupAnswerRequestsTable = pgTable("v2_pickup_answer_requests", {
+  userId: varchar("user_id").notNull(),
+  clientSubmissionId: uuid("client_submission_id").notNull(),
+  invitationId: uuid("invitation_id").notNull(),
+  contributionId: uuid("contribution_id").notNull(),
+  observationId: uuid("observation_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.clientSubmissionId] })]);
+export const promptTables = [v2PromptPoliciesTable, v2QuestionRegistryTable, v2QuestionTasksTable, v2PromptPreferencesTable, v2PromptSuppressionsTable, v2PromptSessionsTable, v2PromptRequestsTable, v2PromptInvitationsTable, v2PromptEventsTable, v2PromptMetricsTable, v2PickupAnswerRequestsTable];

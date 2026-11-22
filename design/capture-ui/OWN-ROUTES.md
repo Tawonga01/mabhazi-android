@@ -1,0 +1,13 @@
+# My routes — account-owned submitted-route history
+
+Private WP08 route history, entered from Contribute → My routes. It lists the account's original community-route submissions, including before approval. Actual journey reports, public results and a moderation queue are not represented as owned routes here.
+
+GET /api/v2/my-routes returns up to20 routes and an optional cursor. GET /api/v2/my-routes/{clientSubmissionId} rechecks owned context before opening the shared actual/Fare form. Both require real authentication and X-Mabhazi-Account agreement; reads remain available if new intake is paused. Server filters both receipt namespace members, original contribution and owned attributable community lead. DTO exposes only route identifiers, reference cities, reported operator/clock, receipt submission date and separate live availability/revision. No raw payload/private evidence or historical receipt status is passed off as current publication state.
+
+Cards say Submitted, or Unavailable for retired routes. Submitted proves saved intake only; optional About submitted routes explains the distinction. Erased attribution and deleted initial contributions cannot be listed or selected. The UI distinguishes failed/loading/empty results, supports Refresh and Load more, and rechecks selected data. No form opens automatically. Closing a pending read must not open a late report. Another account receives a new keyed screen and cannot adopt old responses.
+
+Keyset pagination uses precise PostgreSQL timestamp/UUID tuples with first and last owned receipt anchors. A new newer submission does not enter an in-progress page set. Cursors are navigation references, never authority. Both anchors are resolved through the same account-filtered query. Deleted/erased anchors require Refresh; no timestamp is rounded through JavaScript Date.
+
+Shared capture host retains single-draft-writer ownership. Existing independent/unrelated/frozen drafts win over a newly selected route. Own route labels and city identity do not infer travel, an actual clock, operator observation, price, currency, basis or date. Existing Terms/submission/receipt-first target recovery remains unchanged. No database migration, new permission, credential or signing change.
+
+Required evidence: API privacy/strict query/keyset/concurrent newer row/current revision/retirement/erasure/deletion checks; rendered fresh-session reopen→Fare→close/resume→one real save, failed list vs empty, newly retired selection, unrelated draft, guest/other account. Native phone acceptance remains a separate delivery gate. Full WP08/WP09/WP10 and R01–R14 remain.

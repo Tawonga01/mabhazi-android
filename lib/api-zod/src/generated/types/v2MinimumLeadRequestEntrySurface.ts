@@ -11,4 +11,5 @@ export type V2MinimumLeadRequestEntrySurface =
 
 export const V2MinimumLeadRequestEntrySurface = {
   contribute_tab: "contribute_tab",
+  search_empty: "search_empty",
 } as const;

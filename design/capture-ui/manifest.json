@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-22",
+  "kind": "User-supplied UI design references; no live integration",
+  "archive": "Mabhazi-contribution-screen-designs.zip",
+  "archiveBytes": 1886634,
+  "archiveSha256": "4d4ee064033475b19df501e1b4fff501787efb8bf9dabeb6efeff7bc008df5bb",
+  "sourceFiles": 14,
+  "entryComponents": 8,
+  "sourceBytesPreserved": true,
+  "visualTestsExecutedOnImport": false,
+  "applicationChanged": false,
+  "files": [
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/_group.css",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/_group.css",
+      "bytes": 10357,
+      "sha256": "4b7a6a183c7fc579cb9c2dc6c79b3c242343df0bdbcd31e05f44b44166cb06df",
+      "gitBlob": "b78cf1befa712177fcd185f9415688e598188ab9"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/_shared/Prototype.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/_shared/Prototype.tsx",
+      "bytes": 29180,
+      "sha256": "86780e99f6458916401f6adb16f22e6521c3fedb674a2a33ed0df02b749888f2",
+      "gitBlob": "7d489837ee190e01793c0a14a96981939c9430cb"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/AddRoute.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/AddRoute.tsx",
+      "bytes": 116,
+      "sha256": "0507a5baa2138a115739d630628b1a88d085e691be067bc6baa6a56f8deeee09",
+      "gitBlob": "de4b5962d29521118155f101b6b3a7c9baa7d0a5"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/Contribute.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/Contribute.tsx",
+      "bytes": 118,
+      "sha256": "8d61bca7c26f498d717b1e0685aaac542ccef4b6bad736e5cab78bc0ba58fd02",
+      "gitBlob": "745f021e269abb510921488671ef0d867f509736"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/DESIGN-NOTES.md",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/DESIGN-NOTES.md",
+      "bytes": 6019,
+      "sha256": "ff7200028c6abc363da032601027d35315002b059343ebb52ebd7e8624ad826b",
+      "gitBlob": "9ea8e75ea4b7fe67a0b530d0b148c22e3ae01db9"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/Fare.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/Fare.tsx",
+      "bytes": 111,
+      "sha256": "cf82ae2cae7d0e175d177a6269bc1e28fe2e2f8386ed4ff0827c7ce4429b5cd7",
+      "gitBlob": "73de2d10a8e183db48c98bb1de647c2381227a3c"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/FocusedFare.css",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/FocusedFare.css",
+      "bytes": 6928,
+      "sha256": "6cf6526d76c2829d5228bff3e8e83f3e4c77d343513ef38d70b212a264e0aa4a",
+      "gitBlob": "20d252df6bd8ea603229e46c103a1ca80ccad97b"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/FocusedFare.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/FocusedFare.tsx",
+      "bytes": 5469,
+      "sha256": "73ed79573ba93f985786033d2bc64f4a315514a533721fc7a45a733ff1a66e44",
+      "gitBlob": "5c9413227ee732ba59dab30f35a5fa20bdebde39"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/Journey.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/Journey.tsx",
+      "bytes": 117,
+      "sha256": "fe557d5d641344fa1ffe61c22d539871ca5a29644bcb8458a44d6b15c87d0641",
+      "gitBlob": "fea9bf8f20a346d42d4f14198a015ba03231c8cc"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/LiveLocation.css",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/LiveLocation.css",
+      "bytes": 5842,
+      "sha256": "498619812fb99a8ab1c4c340cba081fc91109ac9d7ff05675f888ac2d997ef8a",
+      "gitBlob": "19cf8de1090af245460c9ef5a34b142b93cbba69"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/LiveLocation.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/LiveLocation.tsx",
+      "bytes": 7251,
+      "sha256": "886c05b2ad2e021ca775a4698b734d23e78e70d31bbd7b6a3bbb9d74369d3670",
+      "gitBlob": "dfc64b541f26ff3efdaa9b27784db0c8b73d6086"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/Recovery.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/Recovery.tsx",
+      "bytes": 119,
+      "sha256": "121ab5a187e334b35359dd21876c615c5bcfafd9ef1ff5e9933426dbdd87c7e2",
+      "gitBlob": "37ab1b5f703bffd1dcbabdcea83283b56e29b093"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/RouteBulletin.css",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/RouteBulletin.css",
+      "bytes": 7750,
+      "sha256": "397f8885c947e1e0e3ca6eddb5a4c41175d72619cfb4ab511b8df4cf42088a3b",
+      "gitBlob": "5a6d11fe0d57db2bba09cdfef6e6ebec7b194b98"
+    },
+    {
+      "repositoryPath": "design/capture-ui/references/2026-10-22/mabhazi/RouteBulletin.tsx",
+      "originalPath": "artifacts/mockup-sandbox/src/components/mockups/mabhazi/RouteBulletin.tsx",
+      "bytes": 4799,
+      "sha256": "9885b749942c0f870d06dc8ec8393ee6f9c8e9f87454786da215ad4cdce7ccc7",
+      "gitBlob": "c7450a64ab546a88e5d047e6c64c67bcd458369e"
+    }
+  ]
+}
