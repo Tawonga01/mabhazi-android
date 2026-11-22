@@ -20,6 +20,7 @@ export type AdminClaim = {
   basis:string; submittedAt:string; observedFrom:string|null; observedTo:string|null;
   effectiveFrom:string|null; effectiveTo:string|null; subjectRevision:string;
   observationRevision:string|null; targetRevision:string|null; state:string;
+  segmentNames?:{origin:string|null;destination:string|null}|null;
   digest:string; review:'pending'|'approved'|'rejected'; reviewId:string|null;
   assessmentId:string|null; caseRevision:string; attention:string|null;
 };
@@ -67,7 +68,7 @@ const evidenceSql=`WITH authority AS MATERIALIZED (
  JOIN public.v2_observation_states os ON os.observation_id=o.id
  JOIN public.v2_observation_targets t ON t.observation_id=o.id
 )
-SELECT c.*,current_field.field_decision_id,
+SELECT c.*,CASE WHEN c.scope#>>'{segment,kind}'='city_pair' THEN jsonb_build_object('origin',(SELECT name FROM public.cities WHERE id=(c.scope#>>'{segment,originCityId}')::integer),'destination',(SELECT name FROM public.cities WHERE id=(c.scope#>>'{segment,destinationCityId}')::integer)) END segment_names,current_field.field_decision_id,
  CASE WHEN c.observation_id IS NOT NULL THEN public.v2_read_field(c.subject_id,c.field_key,c.scope_key) END field_read,
  d.assessment_id,d.invalidated,d.erased,d.review_blocked,d.dispute_status,d.next_recheck_at,
  coalesce(core_review.id,resolution.review_id) review_id,resolution.chosen_observation_id,resolution.erased resolution_erased,
@@ -108,7 +109,7 @@ export async function readAdminClaims(actor:string,routeIds:string[]):Promise<{c
       r.dispute_status==='open'?'Conflicting evidence':r.next_recheck_at&&new Date(r.next_recheck_at).getTime()<=Date.now()?'Assessment needs refreshing':null;
     const claim={id:r.observation_id??r.route_id+':'+field,routeId:r.route_id,subjectId:r.subject_id,
       contributionId:r.contribution_id,observationId:r.observation_id,field,label:adminFields[field as AdminField]??field,
-      value:r.value,scope:r.scope,basis:r.knowledge_basis,submittedAt:new Date(r.submitted_at).toISOString(),
+      value:r.value,scope:r.scope,segmentNames:r.segment_names??null,basis:r.knowledge_basis,submittedAt:new Date(r.submitted_at).toISOString(),
       observedFrom:date(r.observed_from),observedTo:date(r.observed_to),effectiveFrom:date(r.effective_from),effectiveTo:date(r.effective_to),
       subjectRevision:String(r.subject_revision),observationRevision:r.observation_revision===null?null:String(r.observation_revision),
       targetRevision:r.target_revision===null?null:String(r.target_revision),state:r.status,review,
@@ -118,11 +119,22 @@ export async function readAdminClaims(actor:string,routeIds:string[]):Promise<{c
   return {claims,routes:[...new Set(claims.map(c=>c.routeId))]};
 }
 
-export function parseAdminSelection(value:unknown):{routeIds:string[];fields:AdminField[]}|null {
+export type AdminSelection={routeIds:string[];fields:AdminField[];observationIds?:string[]};
+export function parseAdminSelection(value:unknown):AdminSelection|null {
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   const input=value as Record<string,unknown>;
-  if(Object.keys(input).sort().join(',')!=='fields,routeIds'||!Array.isArray(input.routeIds)||!Array.isArray(input.fields))return null;
+  if(Object.keys(input).some(k=>!['fields','routeIds','observationIds'].includes(k))||!Array.isArray(input.routeIds)||!Array.isArray(input.fields))return null;
   if(!input.routeIds.length||input.routeIds.length>100||!input.routeIds.every(validAdminId)||new Set(input.routeIds).size!==input.routeIds.length)return null;
   if(!input.fields.length||input.fields.length>Object.keys(adminFields).length||input.fields.some(f=>typeof f!=='string'||!Object.hasOwn(adminFields,f))||new Set(input.fields).size!==input.fields.length)return null;
-  return {routeIds:input.routeIds,fields:input.fields as AdminField[]};
+  if(Object.hasOwn(input,'observationIds')&&(!Array.isArray(input.observationIds)||!input.observationIds.length||input.observationIds.length>2000||!input.observationIds.every(validAdminId)||new Set(input.observationIds).size!==input.observationIds.length))return null;
+  return {routeIds:input.routeIds,fields:input.fields as AdminField[],...(Array.isArray(input.observationIds)?{observationIds:input.observationIds}:{})};
+}
+
+// Exact observation selection narrows a named preview; it never resolves arbitrary
+// IDs outside the current route/field evidence read. Missing IDs fail closed.
+export function selectAdminClaims(input:AdminSelection,claims:AdminClaim[]):AdminClaim[]|null {
+ const eligible=claims.filter(c=>input.routeIds.includes(c.routeId)&&input.fields.includes(c.field as AdminField));
+ if(!input.observationIds)return eligible;
+ const selected=eligible.filter(c=>c.observationId!==null&&input.observationIds!.includes(c.observationId));
+ return new Set(selected.map(c=>c.observationId)).size===input.observationIds.length?selected:null;
 }

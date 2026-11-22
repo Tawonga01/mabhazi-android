@@ -1,3 +1,4 @@
+import {reportCategoryBrowser} from './admin-report-categories-browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -873,6 +874,8 @@ try {
     const d=await session(null,false,'departures');await d.page.getByRole('button',{name:'Choose departure city',exact:true}).click();await d.page.getByLabel('Search available departure cities',{exact:true}).fill('Timetable Origin fixture');await d.page.getByRole('button',{name:'Departures from Timetable Origin fixture',exact:true}).click();await d.page.getByText('7:00 AM',{exact:true}).waitFor();assert.equal(await d.page.getByText('Details needed',{exact:true}).count(),0);await takeShot(d.page,'reviewed-timetable-board.png');await d.context.close();
     results.push('reviewed timetable shares the genuine dynamic departure origin and countdown board; no fake daily inference or matched actual service');
   }
+
+  await reportCategoryBrowser({browser,admin,users,tokens,publicCities,seedPublic,takeShot,results,consoleErrors});
 
   // Owned public web pages: actual local backend HTML with the same real
   // CSS, without signing in, sending mail or changing administrative records.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {test} from 'node:test';
 import type pg from 'pg';
-import {adminDigest,parseAdminSelection} from '../lib/adminEvidence';
+import {adminDigest,parseAdminSelection,selectAdminClaims} from '../lib/adminEvidence';
 
 type Context={admin:pg.Client;base:string;accounts:string[];tokens:string[];cities:number[];leadBody:()=>Record<string,unknown>};
 export function registerAdminEvidenceTests(context:()=>Context){
@@ -80,6 +80,43 @@ export function registerAdminEvidenceTests(context:()=>Context){
   assert.equal(parseAdminSelection({routeIds:[],fields:['operator.reported']}),null);
   assert.equal(parseAdminSelection({routeIds:Array.from({length:101},()=>randomUUID()),fields:['operator.reported']}),null);
   assert.equal(parseAdminSelection({routeIds:[randomUUID()],fields:['operator.reported','operator.reported']}),null);
+ });
+ test('admin evidence: exact observation previews isolate one currency and reject foreign or wrong-field identifiers',async()=>{
+  const evidence=await call('/evidence?record='+route),fares=evidence.value.claims.filter((c:any)=>c.field==='fare.paid');
+  const selected=fares.find((c:any)=>c.value.currency==='USD');assert.ok(selected);
+  const selection={routeIds:[route],fields:['fare.paid'],observationIds:[selected.observationId]};
+  const exact=await call('/preview',selection);assert.equal(exact.status,200);assert.deepEqual(exact.value.selection,selection);assert.equal(exact.value.claims.length,1);assert.equal(exact.value.claims[0].value.currency,'USD');
+  assert.equal(typeof exact.value.claims[0].segmentNames.origin,'string');assert.equal(typeof exact.value.claims[0].segmentNames.destination,'string');
+  assert.equal((await call('/preview',{...selection,observationIds:[randomUUID()]})).status,409);
+  assert.equal((await call('/preview',{...selection,fields:['boarding.pickup']})).status,409);
+  assert.equal((await call('/preview',{...selection,routeIds:[second]})).status,409);
+  assert.equal((await call('/preview',{...selection,observationIds:[selected.observationId,selected.observationId]})).status,422);
+  assert.equal((await call('/preview',{...selection,observationIds:[]})).status,422);
+  assert.equal((await call('/preview',{...selection,actor:owner})).status,422);
+ });
+ test('admin evidence: exact scoped approval and reversal leave neighbouring currencies and core properties pending',async()=>{
+  const previous=process.env.NAMED_ADMIN_CONSOLE_ENABLED;process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';
+  try{
+   for(let n=0;n<4;n++)for(const kind of ['normalise','associate','assess'])await query('SELECT v2_worker_drain_'+kind+'(20)');
+   const fares=(await call('/evidence?record='+route)).value.claims.filter((c:any)=>c.field==='fare.paid'),usd=fares.find((c:any)=>c.value.currency==='USD');
+   const preview=await call('/preview',{routeIds:[route],fields:['fare.paid'],observationIds:[usd.observationId]});assert.equal(preview.status,200);
+   const proof=preview.value as any;assert.equal(proof.ready,1);assert.ok(proof.previewToken);
+   const body={clientRequestId:randomUUID(),previewToken:proof.previewToken,reason:'evidence_checked'},saved=await call('/actions',body);assert.equal(saved.status,200);
+   const receipt=saved.value as any;assert.equal(receipt.items.length,1);assert.equal(receipt.items[0].outcome,'approved');assert.equal(receipt.items[0].observationId,usd.observationId);
+   assert.deepEqual((await call('/actions',body)).value,receipt);
+   const current=(await call('/evidence?record='+route)).value.claims;assert.equal(current.find((c:any)=>c.observationId===usd.observationId).review,'approved');assert.equal(current.find((c:any)=>c.field==='fare.paid'&&c.value.currency==='ZAR').review,'pending');assert.equal(current.find((c:any)=>c.field==='operator.reported').review,'pending');
+   const rev=await call('/reverse-preview',{batchId:receipt.id,reviewIds:[receipt.items[0].reviewId]});assert.equal(rev.status,200);assert.equal((rev.value as any).ready,1);
+   const undone=await call('/actions',{clientRequestId:randomUUID(),previewToken:(rev.value as any).previewToken,reason:'decision_incorrect'});assert.equal(undone.status,200);assert.equal((undone.value as any).items[0].outcome,'reversed');
+   const after=(await call('/evidence?record='+route)).value.claims;assert.equal(after.find((c:any)=>c.observationId===usd.observationId).review,'pending');assert.equal(after.find((c:any)=>c.field==='fare.paid'&&c.value.currency==='ZAR').review,'pending');
+  }finally{if(previous===undefined)delete process.env.NAMED_ADMIN_CONSOLE_ENABLED;else process.env.NAMED_ADMIN_CONSOLE_ENABLED=previous;}
+ });
+ test('admin evidence: observation narrowing is bounded, exact and cannot widen a supplied route or field set',()=>{
+  const id=randomUUID(),other=randomUUID(),routeId=randomUUID(),claim={routeId,field:'fare.paid',observationId:id} as any;
+  const selection={routeIds:[routeId],fields:['fare.paid'] as ['fare.paid'],observationIds:[id]};
+  assert.deepEqual(selectAdminClaims(selection,[claim]),[claim]);assert.equal(selectAdminClaims({...selection,observationIds:[other]},[claim]),null);
+  assert.equal(selectAdminClaims({...selection,routeIds:[randomUUID()]},[claim]),null);assert.equal(selectAdminClaims({...selection,fields:['boarding.pickup']},[claim]),null);
+  for(const observationIds of [null,undefined,[],['bad'],[id,id],Array.from({length:2001},()=>randomUUID())])assert.equal(parseAdminSelection({...selection,observationIds}),null);
+  assert.ok(parseAdminSelection(selection));assert.ok(parseAdminSelection({routeIds:[routeId],fields:['route.origin']}));
  });
  test('admin evidence: current role revocation and deleted identity close reads and previews',async()=>{
   await query("UPDATE v2_review_roles SET revoked_at=now(),revoked_by_user_id=$1 WHERE user_id=$1 AND revoked_at IS NULL",[owner]);

@@ -4,7 +4,7 @@ import {adminTimetablesEnabled} from './adminTimetables';
 import { Router, type IRouter } from 'express';
 import { pool } from '@workspace/db';
 import { renderAdminConsole, renderConsoleAccess, type ConsoleRoute } from './adminConsoleView';
-import {readAdminClaims,parseAdminSelection,adminDigest,validAdminId} from '../lib/adminEvidence';
+import {readAdminClaims,parseAdminSelection,selectAdminClaims,adminDigest,validAdminId} from '../lib/adminEvidence';
 import {getOrigin} from '../lib/auth';
 import adminReviewActions,{adminActionsEnabled} from './adminReviewActions';
 import {createReviewPreview,type AdminReviewItem} from '../lib/adminReviewToken';
@@ -159,7 +159,8 @@ router.post('/admin-console/preview',async(req,res)=>{
   try{
     const data=await readAdminClaims(req.user.id,input.routeIds);
     if(data.routes.length!==input.routeIds.length){res.status(409).json({code:'SELECTION_CHANGED',error:'Some selected reports changed or are unavailable. Refresh the selection.'});return;}
-    const claims=data.claims.filter(c=>input.fields.includes(c.field as typeof input.fields[number]));
+    const claims=selectAdminClaims(input,data.claims);
+    if(!claims){res.status(409).json({code:'SELECTION_CHANGED',error:'A selected report changed or is unavailable. Refresh the selection.'});return;}
     const missing=input.routeIds.flatMap(id=>input.fields.filter(f=>!claims.some(c=>c.routeId===id&&c.field===f)).map(field=>({routeId:id,field})));
     const writable=await adminActionsEnabled();
     const items:AdminReviewItem[]=claims.filter(c=>c.review==='pending'&&!c.attention).map(c=>({routeId:c.routeId,subjectId:c.subjectId,
