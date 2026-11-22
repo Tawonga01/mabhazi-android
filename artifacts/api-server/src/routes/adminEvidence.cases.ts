@@ -40,7 +40,7 @@ export function registerAdminEvidenceTests(context:()=>Context){
  });
  test('admin evidence: separately scoped fares keep their own currency, service date and segment',async()=>{
   const revision=Number((await query('SELECT revision FROM v2_subjects WHERE id=$1',[route])).rows[0].revision);
-  const serviceDate=new Date().toISOString().slice(0,10);
+  const serviceDate=(await query("SELECT to_char(statement_timestamp()-interval '2 days','YYYY-MM-DD') d")).rows[0].d;
   for(const [amount,currency] of [['15','USD'],['270','ZAR']]){
    const input={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',
     target:{newActualJourney:{intendedSubject:{id:route,kind:'lead',expectedRevision:revision}}},
