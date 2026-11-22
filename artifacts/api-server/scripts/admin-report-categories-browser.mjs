@@ -7,7 +7,7 @@ export async function reportCategoryBrowser({browser,admin,users,tokens,publicCi
  assert.equal(new URL(process.env.DATABASE_URL).hostname,'localhost');
  const prior=process.env.NAMED_ADMIN_CONSOLE_ENABLED;process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';
  const local='http://127.0.0.1:5000',owner=users[0],transport=randomUUID(),transportToken=randomBytes(32).toString('hex');
- const headers={Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':owner,'Content-Type':'application/json',Origin:'https://api.mabhazi.com'};
+ const headers={Authorization:'Bearer '+tokens[0],'X-Mabhazi-Account':owner,'Content-Type':'application/json',Origin:'http://127.0.0.1:5000'};
  const api=async(path,body)=>{const response=await fetch(local+'/api/admin-console'+path,{method:body===undefined?'GET':'POST',headers,...(body===undefined?{}:{body:JSON.stringify(body)})});assert.equal(response.status,200,path);return await response.json();};
  let context;
  try{
@@ -25,7 +25,7 @@ export async function reportCategoryBrowser({browser,admin,users,tokens,publicCi
   for(let n=0;n<4;n++)for(const kind of ['normalise','associate','assess'])assert.equal((await admin.query('SELECT v2_worker_drain_'+kind+'(20) r')).rows[0].r.failedAttempts,0);
   context=await browser.newContext({viewport:{width:1440,height:1000},extraHTTPHeaders:{Authorization:'Bearer '+tokens[0]}});
   let lose=true,posts=0,firstReceipt;const previews=[];
-  await context.route('**/*',async route=>{const request=route.request(),url=new URL(request.url());if(url.origin!==local){await route.abort();return;}const h={...request.headers(),...(request.method()==='POST'?{origin:'https://api.mabhazi.com'}:{})};
+  await context.route('**/*',async route=>{const request=route.request(),url=new URL(request.url());if(url.origin!==local){await route.abort();return;}const h={...request.headers(),...(request.method()==='POST'?{origin:'http://127.0.0.1:5000'}:{})};
    if(url.pathname==='/api/admin-console/preview'&&request.method()==='POST')previews.push(request.postDataJSON());
    if(url.pathname==='/api/admin-console/actions'&&request.method()==='POST'){posts++;const response=await route.fetch({headers:h});if(lose){lose=false;assert.equal(response.status(),200);firstReceipt=await response.json();await route.abort('failed');return;}await route.fulfill({response});return;}
    await route.continue({headers:h});

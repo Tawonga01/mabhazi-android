@@ -44,7 +44,7 @@ export function registerAdminEvidenceTests(context:()=>Context){
   for(const [amount,currency] of [['15','USD'],['270','ZAR']]){
    const input={schemaVersion:'1.0',clientSubmissionId:randomUUID(),entrySurface:'contribute_tab',
     target:{newActualJourney:{intendedSubject:{id:route,kind:'lead',expectedRevision:revision}}},
-    observations:[{fieldKey:'fare.paid',value:{amount,currency},scope:{schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:context().cities[0],destinationCityId:context().cities[1]},serviceDate,passengerCategory:'unknown',ticketBasis:'unknown'}}]};
+    observations:[{fieldKey:'fare.paid',value:{amount,currency},scope:{schemaVersion:'1.0',segment:{kind:'city_pair',originCityId:context().cities[0],destinationCityId:context().cities[1]},serviceDate,passengerCategory:'adult',ticketBasis:'one_way'}}]};
    const saved=await fetch(context().base+'/v2/actual-journeys',{method:'POST',headers:{Authorization:'Bearer '+context().tokens[0],'X-Mabhazi-Account':context().accounts[0],'Content-Type':'application/json'},body:JSON.stringify(input)});
    assert.equal(saved.status,200);
   }
@@ -106,7 +106,7 @@ export function registerAdminEvidenceTests(context:()=>Context){
    const preview=await call('/preview',{routeIds:[route],fields:['fare.paid'],observationIds:[usd.observationId]});assert.equal(preview.status,200);
    const proof=preview.value as any;assert.equal(proof.ready,1,JSON.stringify(proof.claims));assert.ok(proof.previewToken);
    const body={clientRequestId:randomUUID(),previewToken:proof.previewToken,reason:'evidence_checked'},saved=await call('/actions',body);assert.equal(saved.status,200);
-   const receipt=saved.value as any;assert.equal(receipt.items.length,1);assert.equal(receipt.items[0].outcome,'approved');assert.equal(receipt.items[0].observationId,usd.observationId);
+   const receipt=saved.value as any;assert.equal(receipt.items.length,1);assert.equal(receipt.items[0].outcome,'approved',JSON.stringify(receipt));assert.equal(receipt.items[0].observationId,usd.observationId);
    assert.deepEqual((await call('/actions',body)).value,receipt);
    const current=(await call('/evidence?record='+route)).value.claims;assert.equal(current.find((c:any)=>c.observationId===usd.observationId).review,'approved');assert.equal(current.find((c:any)=>c.field==='fare.paid'&&c.value.currency==='ZAR').review,'pending');assert.equal(current.find((c:any)=>c.field==='operator.reported').review,'pending');
    const rev=await call('/reverse-preview',{batchId:receipt.id,reviewIds:[receipt.items[0].reviewId]});assert.equal(rev.status,200);assert.equal((rev.value as any).ready,1);
