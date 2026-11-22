@@ -97,10 +97,14 @@ export function registerAdminEvidenceTests(context:()=>Context){
  test('admin evidence: exact scoped approval and reversal leave neighbouring currencies and core properties pending',async()=>{
   const previous=process.env.NAMED_ADMIN_CONSOLE_ENABLED;process.env.NAMED_ADMIN_CONSOLE_ENABLED='true';
   try{
-   for(let n=0;n<4;n++)for(const kind of ['normalise','associate','assess'])await query('SELECT v2_worker_drain_'+kind+'(20)');
+   const targets=(await query('SELECT subject_id FROM v2_actual_journeys WHERE intended_subject_id=$1 UNION SELECT $1::uuid subject_id',[route])).rows.map((r:any)=>r.subject_id);
+   const deferred=(await query("SELECT id,available_at FROM v2_jobs WHERE state='pending' AND available_at<=clock_timestamp() AND NOT(subject_id=ANY($1::uuid[]))",[targets])).rows;
+   try{await query("UPDATE v2_jobs SET available_at=clock_timestamp()+interval '1 day' WHERE id=ANY($1::uuid[])",[deferred.map((r:any)=>r.id)]);
+    for(let n=0;n<4;n++)for(const kind of ['normalise','associate','assess'])assert.equal((await query('SELECT v2_worker_drain_'+kind+'(20) r')).rows[0].r.failedAttempts,0);
+   }finally{for(const job of deferred)await query("UPDATE v2_jobs SET available_at=$2 WHERE id=$1 AND state='pending'",[job.id,job.available_at]);}
    const fares=(await call('/evidence?record='+route)).value.claims.filter((c:any)=>c.field==='fare.paid'),usd=fares.find((c:any)=>c.value.currency==='USD');
    const preview=await call('/preview',{routeIds:[route],fields:['fare.paid'],observationIds:[usd.observationId]});assert.equal(preview.status,200);
-   const proof=preview.value as any;assert.equal(proof.ready,1);assert.ok(proof.previewToken);
+   const proof=preview.value as any;assert.equal(proof.ready,1,JSON.stringify(proof.claims));assert.ok(proof.previewToken);
    const body={clientRequestId:randomUUID(),previewToken:proof.previewToken,reason:'evidence_checked'},saved=await call('/actions',body);assert.equal(saved.status,200);
    const receipt=saved.value as any;assert.equal(receipt.items.length,1);assert.equal(receipt.items[0].outcome,'approved');assert.equal(receipt.items[0].observationId,usd.observationId);
    assert.deepEqual((await call('/actions',body)).value,receipt);
